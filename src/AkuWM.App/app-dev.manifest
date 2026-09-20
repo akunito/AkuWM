@@ -10,6 +10,11 @@
   <assemblyIdentity version="1.0.0.0" processorArchitecture="amd64" name="AkuWM" type="win32" />
 
   <!--
+    THE DEVELOPMENT MANIFEST. Identical to app.manifest except that uiAccess is
+    off, so a build can be run straight from its output directory instead of
+    being signed and installed into Program Files first. Chords over a game do
+    not work with it - that is what the other one is for.
+
     uiAccess is what lets AkuWM's keyboard hook see the keys typed into a
     window running at a higher integrity level than it does - which is what
     every game is. Measured, not assumed: with it off, an elevated window was
@@ -31,7 +36,7 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <requestedExecutionLevel level="asInvoker" uiAccess="true" />
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

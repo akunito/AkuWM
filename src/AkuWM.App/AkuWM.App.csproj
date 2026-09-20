@@ -15,8 +15,13 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
-    <!-- Declares uiAccess and PerMonitorV2 DPI. See the manifest for why. -->
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Declares uiAccess and PerMonitorV2 DPI. See the manifest for why.
+         A uiAccess binary only starts when it is signed AND in a secure
+         directory, so a build that is going to be run from the output folder
+         has to say -p:UiAccess=false. -->
+    <UiAccess Condition="'$(UiAccess)' == ''">true</UiAccess>
+    <ApplicationManifest Condition="'$(UiAccess)' == 'true'">app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(UiAccess)' != 'true'">app-dev.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
