@@ -46,6 +46,7 @@ public static class Spikes
         }
 
         Dictionary<string, string?> options = Core.Ipc.CommandLine.Options(args, 2);
+        options.TryGetValue("out", out string? outFile);
 
         int code = args[1].ToLowerInvariant() switch
         {
@@ -60,7 +61,7 @@ public static class Spikes
             _ => Fail($"'{args[1]}' is not one of s1, s2, s12, s3, s4, s5"),
         };
 
-        Save();
+        Save(outFile);
         return code;
     }
 
@@ -605,11 +606,34 @@ public static class Spikes
         Transcript.AppendLine(line);
     }
 
-    private static void Save()
+    /// <summary>
+    /// Keeps the transcript, because an interactive measurement that scrolls
+    /// off a console is not a measurement.
+    /// </summary>
+    /// <remarks>
+    /// Next to the runtime state, not next to the executable: once AkuWM is
+    /// installed where uiAccess requires it to be, the directory it runs from
+    /// is one nothing may write to.
+    /// </remarks>
+    private static void Save(string? alsoTo = null)
     {
+        if (alsoTo is { Length: > 0 })
+        {
+            try
+            {
+                File.WriteAllText(alsoTo, Transcript.ToString());
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"could not write {alsoTo}: {ex.Message}");
+            }
+        }
+
         try
         {
-            string path = Path.Combine(AppContext.BaseDirectory, "spike-results.txt");
+            string directory = Core.Config.ConfigPaths.Discover().RuntimeDir;
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(directory, "spike-results.txt");
             File.AppendAllText(
                 path,
                 $"--- {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---{Environment.NewLine}{Transcript}{Environment.NewLine}");
