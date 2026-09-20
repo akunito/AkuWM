@@ -1,0 +1,14 @@
+# .NET
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+.vs/
+
+# Published output
+publish/
+
+# Local runtime state (never committed: per machine, changes every minute)
+*.log
+state/

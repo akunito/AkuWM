@@ -1,0 +1,141 @@
+# GlazeWM for DESK_W11: the Sway setup (user/wm/sway) on Windows. Workspaces
+# bound per monitor and independent of each other (10-19 main, 20-29 vertical,
+# Sway's swaysome numbers), tiling by default with the same gaps, and the same
+# window rules: the apps that float and follow you between workspaces in Sway
+# do it here too. Alt+drag/resize stay in AHK.
+# No keybindings here: hyper-desktops.ahk calls `glazewm command ...`.
+# No `move --workspace` rules on purpose: a config reload re-evaluates rules and
+# would drag windows back to their assigned workspace.
+# Loaded through the GLAZEWM_CONFIG_PATH user env var -> this file in the Windows
+# clone (C:\Users\<user>\.dotfiles). Reload only when this file changes.
+general:
+  # vd-merge.ahk folds any stray native virtual desktop back into the first one,
+  # so every window is where GlazeWM can see it (see desk-w11-wsl.md).
+  startup_commands: ['shell-exec C:\Users\diego\.dotfiles\templates\windows\DESK_W11\vd-merge.ahk']
+  shutdown_commands: []
+  config_reload_commands: ['shell-exec C:\Users\diego\.dotfiles\templates\windows\DESK_W11\vd-merge.ahk']
+  # Off: measured 2026-09-18, GlazeWM's own implementation does not actually
+  # focus the window under the pointer here (and needs a restart, not a config
+  # reload, to change). The native Windows tracking does the job --
+  # focus-follows-mouse.ps1, without raising on hover -- and the fork makes a
+  # cloaked window click-through so hovering can no longer drag you back to the
+  # workspace you just left.
+  focus_follows_cursor: false
+  toggle_workspace_on_refocus: true      # sway: workspace_auto_back_and_forth yes
+  cursor_jump:
+    enabled: false
+    trigger: 'monitor_focus'
+  hide_method: 'cloak'
+  show_all_in_taskbar: false             # taskbar shows only the visible workspaces
+
+# sway: `gaps inner 8`, no outer gaps.
+gaps:
+  scale_with_dpi: true
+  inner_gap: '8px'
+  outer_gap: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+
+window_effects:
+  focused_window:
+    border: { enabled: true, color: '#c4a7e7' }   # sway's focused border, Rosé Pine iris
+    hide_title_bar: { enabled: false }
+    corner_style: { enabled: false, style: 'square' }
+    transparency: { enabled: false, opacity: '95%' }
+  other_windows:
+    border: { enabled: false, color: '#3b4252' }
+    hide_title_bar: { enabled: false }
+    corner_style: { enabled: false, style: 'square' }
+    transparency: { enabled: false, opacity: '0%' }
+
+window_behavior:
+  # Tiling like sway. The apps that float there float here too, by rule below.
+  initial_state: 'tiling'
+  state_defaults:
+    floating:
+      centered: false                    # keep the position the app asked for
+      # sway keeps the floating layer above the tiling one, so a floating
+      # terminal or Telegram is never buried under a tiled window. On Windows
+      # that is HWND_TOPMOST. The fork checks the fullscreen rule first, so a
+      # window sharing a workspace with a game still goes UNDER the game and
+      # leaves it its direct path to the screen.
+      shown_on_top: true
+    fullscreen:
+      # false on purpose (2026-09-17): with `true`, a borderless fullscreen game
+      # is judged against `frame.inset(1).contains(workspace_rect)`, which fails
+      # when the frame equals the monitor and the taskbar shrinks the working
+      # area -> GlazeWM demotes the game to floating and tries to maximize and
+      # resize it. With `false` it stays fullscreen and is left alone.
+      maximized: false
+      shown_on_top: false
+
+# Monitor 0 = primary (left), monitor 1 = the vertical one (right).
+# Verify with `glazewm query monitors` after a display change.
+workspaces:
+  - { name: '11', bind_to_monitor: 0 }
+  - { name: '12', bind_to_monitor: 0 }
+  - { name: '13', bind_to_monitor: 0 }
+  - { name: '14', bind_to_monitor: 0 }
+  - { name: '15', bind_to_monitor: 0 }
+  - { name: '16', bind_to_monitor: 0 }
+  - { name: '17', bind_to_monitor: 0 }
+  - { name: '18', bind_to_monitor: 0 }
+  - { name: '19', bind_to_monitor: 0 }
+  - { name: '10', bind_to_monitor: 0 }
+  - { name: '21', bind_to_monitor: 1 }
+  - { name: '22', bind_to_monitor: 1 }
+  - { name: '23', bind_to_monitor: 1 }
+  - { name: '24', bind_to_monitor: 1 }
+  - { name: '25', bind_to_monitor: 1 }
+  - { name: '26', bind_to_monitor: 1 }
+  - { name: '27', bind_to_monitor: 1 }
+  - { name: '28', bind_to_monitor: 1 }
+  - { name: '29', bind_to_monitor: 1 }
+  - { name: '20', bind_to_monitor: 1 }
+
+window_rules:
+  # Never managed: overlays, launchers, popups, the tools that must stay put.
+  - commands: ['ignore']
+    match:
+      - window_process: { equals: 'zebar' }
+      - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
+        window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
+      - window_process: { equals: 'PowerToys' }
+        window_class: { regex: 'HwndWrapper\[PowerToys\.PowerAccent.*?\]' }
+      - window_title: { equals: 'Command Palette' }
+        window_class: { equals: 'WinUIDesktopWin32WindowClass' }
+      - window_process: { equals: 'PowerToys' }
+        window_title: { regex: '.*? - Peek' }
+      - window_process: { equals: 'ShareX' }
+      - window_process: { equals: 'AutoHotkey64_UIA' }
+
+  # Floating + sticky, the same set as sway's `floating enable, sticky enable`
+  # -- taken from the LIVE rules, user/wm/sway/apps/common.json, which is what
+  # sway-apps applies on DESK (swayfx-config.nix only holds the legacy copy).
+  # Sticky = shown on every workspace of its monitor, so they follow you around
+  # instead of being parked on one workspace.
+  - commands: ['set-floating', 'set-sticky']
+    match:
+      - window_process: { equals: 'WindowsTerminal' } # sway: kitty
+      - window_process: { equals: 'alacritty' }       # sway: Alacritty
+      - window_process: { equals: 'Telegram' }        # sway: org.telegram.desktop
+      - window_process: { equals: 'Bitwarden' }       # sway: bitwarden
+      - window_process: { equals: 'Spotify' }         # sway: spotify
+      - window_process: { equals: 'Element' }         # sway: title ^Element
+      - window_process: { equals: 'Taskmgr' }         # sway: MissionCenter
+      # The calculator is a store app: every one of those is hosted by
+      # ApplicationFrameHost, so it can only be told apart by its title.
+      - window_class: { equals: 'ApplicationFrameWindow' }
+        window_title: { equals: 'Calculator' }   # sway: org.gnome.Calculator
+      - window_process: { equals: 'tailscale-ipn' }   # sway: dev.deedles.Trayscale
+      - window_process: { equals: 'SystemSettings' }  # sway: blueman / nwg-displays
+      - window_process: { equals: 'SndVol' }          # sway: pavucontrol
+      - window_process: { equals: 'explorer' }        # sway: org.kde.dolphin
+        window_class: { equals: 'CabinetWClass' }
+
+  # Floating only (sway floats these without sticky).
+  - commands: ['set-floating']
+    match:
+      - window_process: { equals: 'ApplicationFrameHost' }   # store-app hosts
+      - window_class: { equals: '#32770' }                   # plain dialogs
+
+binding_modes: []
+keybindings: []

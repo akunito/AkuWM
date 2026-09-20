@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure logic: the configuration, the rule matcher, the importers, the
+       model. No Win32, no COM, no P/Invoke, so every line here is unit-tested
+       on Linux (WSL and CI ubuntu). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AkuWM.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The importers' helpers (expression translation, pixel parsing, path
+         mapping) are internal and are tested directly: they are where the
+         Python prototype's two bugs lived. -->
+    <InternalsVisibleTo Include="AkuWM.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only for the one-time import of the GlazeWM config (section 6 of the
+         plan). AkuWM's own configuration is JSON. -->
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
+  </ItemGroup>
+
+</Project>

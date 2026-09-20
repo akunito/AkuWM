@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything that touches Win32, COM and DWM. Targets net8.0-windows and
+       builds anywhere; it only *runs* on Windows. Filled in at M1 (hooks, EDID
+       monitors, cloak read-back); M0 carries the shape only. -->
+  <PropertyGroup>
+    <!-- Windows 10 2004 is the floor: that is where the display-configuration
+         and cloak APIs AkuWM needs are all present. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>AkuWM.Platform</RootNamespace>
+    <!-- The whole point of building from WSL: a Windows-targeted assembly is
+         produced on Linux. It cannot run there, which is what AkuWM.Core being
+         platform-free is for. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
+  </ItemGroup>
+
+</Project>

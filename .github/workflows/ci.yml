@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The pure projects, where most of AkuWM's logic lives, are built and tested
+  # on Linux: that is where they are written, and it keeps them honest about
+  # having no Win32 in them.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Licence tripwire
+        run: ./tools/licence-tripwire.sh
+
+      - name: Build
+        run: dotnet build AkuWM.sln --configuration Release
+
+      - name: Test
+        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal"
+
+      - name: Formatting
+        run: dotnet format AkuWM.sln --verify-no-changes --severity warn
+
+      - name: Publish win-x64 from Linux
+        run: dotnet publish src/AkuWM.App/AkuWM.App.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: akuwm-win-x64
+          path: publish/akuwm.exe
+
+  # And again on Windows, where it actually runs. The platform tests that need
+  # a desktop skip themselves; what this proves is that the Windows-targeted
+  # assemblies build and the suite passes on the real runtime.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build AkuWM.sln --configuration Release
+
+      - name: Test
+        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The host: the daemon (pipe server, and from M2 the WebSocket server on
+       6123), plus every command that can be answered without one.
+       TargetFramework is net8.0 while M0 has no Win32 in it, which is what
+       lets `akuwm config import glazewm` and `akuwm doctor` run from WSL. It
+       becomes net8.0-windows at M1, when it references AkuWM.Platform. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AkuWM.App</RootNamespace>
+    <AssemblyName>akuwm</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
+    <ProjectReference Include="../AkuWM.Cli/AkuWM.Cli.csproj" />
+  </ItemGroup>
+
+</Project>

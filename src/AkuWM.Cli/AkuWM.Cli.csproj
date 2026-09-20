@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The thin client: parses a command line, talks to the named pipe, prints
+       the reply. Built both as its own executable (what the `glazewm` shim
+       calls) and into AkuWM.App, so `akuwm <cmd>` works from one binary. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AkuWM.Cli</RootNamespace>
+    <AssemblyName>akuwm-cli</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
+  </ItemGroup>
+
+</Project>
