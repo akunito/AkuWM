@@ -171,7 +171,12 @@ if (-not (Test-Path $shim)) {
 }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $marker -Parent) | Out-Null
-Set-Content -Path $marker -Value $shim -Encoding UTF8 -NoNewline
+# WriteAllText with an encoding that emits no preamble, not Set-Content:
+# Windows PowerShell 5.1's -Encoding UTF8 writes a BOM, and every reader of
+# this file then has three invisible bytes in front of the path. AutoHotkey's
+# FileExist would fail on it and the hotkeys would quietly keep talking to
+# GlazeWM with nothing in any log to say why.
+[IO.File]::WriteAllText($marker, $shim, (New-Object Text.UTF8Encoding $false))
 Say '  the hotkeys now talk to AkuWM'
 
 Start-Process -FilePath $akuwm -ArgumentList 'daemon' -WindowStyle Hidden

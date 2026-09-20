@@ -377,6 +377,79 @@ public class CompatTests
     }
 
     [Fact]
+    public void The_repair_that_moves_a_workspace_between_monitors_is_accepted_and_does_nothing()
+    {
+        _fixture.Open(1);
+        Guid workspace = _fixture.Desk.Workspace("11")!.Id;
+
+        // `lib-repair.ahk` sends this when it believes a workspace is on the
+        // wrong monitor. Under AkuWM it cannot be, and the repair loop must
+        // not fail on the attempt.
+        ExecResult result = _executor.Command($"--id {workspace} move-workspace --direction right");
+
+        Assert.True(result.Success);
+        Assert.Equal("main", _fixture.Desk.Workspace("11")!.MonitorRole);
+    }
+
+    [Fact]
+    public void The_monitors_query_matches_the_pattern_the_repair_reads_it_with()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        string json = Compact(_executor.Query("monitors").Data);
+
+        // GlazeMonitors() out of lib-glaze.ahk, verbatim: one alternation
+        // walked left to right, so the ORDER of the keys is the contract.
+        // `deviceName` after the monitor's children, a workspace's
+        // `isDisplayed` after its own, and the three workspace keys adjacent.
+        const string pattern =
+            "\"type\":\"monitor\""
+            + "|\"type\":\"workspace\",\"id\":\"[^\"]+\",\"name\":\"([^\"]+)\""
+            + "|\"isDisplayed\":(true|false)"
+            + "|\"deviceName\":\"((?:[^\"\\\\]|\\\\.)*)\"";
+
+        List<(string Device, List<(string Name, bool Displayed)> Workspaces)> monitors = [];
+
+        foreach (Match match in Regex.Matches(json, pattern))
+        {
+            if (match.Value.Contains("\"type\":\"monitor\"", StringComparison.Ordinal))
+            {
+                monitors.Add((string.Empty, []));
+            }
+            else if (monitors.Count == 0)
+            {
+                continue;
+            }
+            else if (match.Groups[1].Success)
+            {
+                monitors[^1].Workspaces.Add((match.Groups[1].Value, false));
+            }
+            else if (match.Groups[2].Success && monitors[^1].Workspaces.Count > 0)
+            {
+                List<(string Name, bool Displayed)> found = monitors[^1].Workspaces;
+                found[^1] = (found[^1].Name, match.Groups[2].Value == "true");
+            }
+            else if (match.Groups[3].Success && monitors[^1].Device.Length == 0)
+            {
+                monitors[^1] = (match.Groups[3].Value.Replace("\\\\", "\\", StringComparison.Ordinal),
+                    monitors[^1].Workspaces);
+            }
+        }
+
+        Assert.Equal(2, monitors.Count);
+
+        // The backslashes survive the JSON escaping the script undoes by hand.
+        Assert.Equal(@"\\.\DISPLAY2", monitors[0].Device);
+        Assert.Equal(@"\\.\DISPLAY1", monitors[1].Device);
+
+        Assert.Equal(["11", "12", "13"], monitors[0].Workspaces.Select(w => w.Name));
+        Assert.Single(monitors[0].Workspaces, w => w.Displayed);
+        Assert.Equal("11", monitors[0].Workspaces.First(w => w.Displayed).Name);
+        Assert.Single(monitors[1].Workspaces, w => w.Displayed);
+    }
+
+    [Fact]
     public void The_app_answers_who_it_is()
     {
         JsonNode? data = _executor.Query("app-metadata").Data;

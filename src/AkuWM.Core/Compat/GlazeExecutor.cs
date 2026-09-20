@@ -179,6 +179,20 @@ public sealed class GlazeExecutor
             case "wm-reload-config":
                 return ExecResult.Ok();
 
+            case "move-workspace":
+                // `lib-repair.ahk` moves a workspace back when it finds one on
+                // the wrong monitor -- a thing that happens to the window
+                // manager AkuWM replaces after a display change. AkuWM binds
+                // every workspace to a monitor ROLE matched by EDID, so a
+                // workspace is only ever on the monitor its role names and
+                // there is nothing to move. Accepted so the repair loop does
+                // not fail on it, and warned about because if it ever fires,
+                // the premise above is the thing that is wrong.
+                Log.Warn(
+                    "'move-workspace' was asked for; AkuWM keeps each workspace on the monitor its " +
+                    "role names, so nothing was moved");
+                return ExecResult.Ok(parsed.Subject);
+
             case "ignore":
             case "adjust-borders":
             case "set-title-bar-visibility":

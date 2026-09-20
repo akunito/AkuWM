@@ -61,8 +61,14 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         _handle = handle;
     }
 
-    /// <summary>Every request that arrives, for the capture that answers what the bar needs.</summary>
-    public event Action<string>? Requested;
+    /// <summary>
+    /// Every frame, both ways, for the capture that answers what the bar needs.
+    /// </summary>
+    /// <remarks>
+    /// Raised on the connection's thread, so a handler must not block: the
+    /// capture queues and writes elsewhere.
+    /// </remarks>
+    public event Action<bool, string>? Traffic;
 
     public int Connections
     {
@@ -250,8 +256,10 @@ public sealed class GlazeIpcServer : IAsyncDisposable
                 continue;
             }
 
-            Requested?.Invoke(request);
-            await Send(subscriber, Answer(request, subscriber)).ConfigureAwait(false);
+            Traffic?.Invoke(false, request);
+            string reply = Answer(request, subscriber);
+            Traffic?.Invoke(true, reply);
+            await Send(subscriber, reply).ConfigureAwait(false);
         }
     }
 
@@ -363,10 +371,9 @@ public sealed class GlazeIpcServer : IAsyncDisposable
 
         foreach ((Subscriber subscriber, Guid id) in targets)
         {
-            await Send(
-                subscriber,
-                GlazeProtocol.Event(id, eventType, payload).ToJsonString(GlazeProtocol.Compact))
-                .ConfigureAwait(false);
+            string frame = GlazeProtocol.Event(id, eventType, payload).ToJsonString(GlazeProtocol.Compact);
+            Traffic?.Invoke(true, frame);
+            await Send(subscriber, frame).ConfigureAwait(false);
         }
     }
 

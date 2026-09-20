@@ -197,6 +197,14 @@ public static class Program
         var manager = new WindowManager(
             loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args));
 
+        // `--capture <file>`: every frame the bar exchanges, written down, so
+        // what Zebar asks for becomes a test instead of a memory.
+        using AkuWM.Core.Compat.TrafficCapture? capture =
+            Flag(args, "--capture") is { } captureFile
+                ? AkuWM.Core.Compat.TrafficCapture.Open(captureFile)
+                : null;
+        capture?.Watch(manager.Compat);
+
         var stopping = new ManualResetEventSlim(false);
         var server = new PipeServer(Router(paths, manager));
         server.ExitRequested += () => stopping.Set();
@@ -285,12 +293,16 @@ public static class Program
     /// window manager it replaces still holds 6123 -- which is the only way to
     /// test the bar's side of it without switching the desk over first.
     /// </remarks>
-    private static int CompatPort(string[] args)
-    {
-        int at = Array.FindIndex(args, a => a.Equals("--compat-port", StringComparison.OrdinalIgnoreCase));
-        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out int port)
+    private static int CompatPort(string[] args) =>
+        Flag(args, "--compat-port") is { } text && int.TryParse(text, out int port)
             ? port
             : AkuWM.Core.Compat.GlazeProtocol.Port;
+
+    /// <summary>The value after <c>--name</c>, or null.</summary>
+    private static string? Flag(string[] args, string name)
+    {
+        int at = Array.FindIndex(args, a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
     }
 
     /// <summary>The seconds asked for by <c>--stall-test</c>, or null.</summary>
@@ -500,7 +512,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("usage: akuwm <command>");
         Console.WriteLine();
-        Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--compat-port <n>]");
+        Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--compat-port <n>] [--capture <file>]");
         Console.WriteLine("                          run the window manager");
         Console.WriteLine("  spike <s1..s9>          what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)

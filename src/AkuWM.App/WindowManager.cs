@@ -90,7 +90,7 @@ public sealed class WindowManager : IAsyncDisposable
         // on the wm thread, so a query never sees a half-applied workspace
         // switch.
         _server = new GlazeIpcServer(compatPort, request => Ask(request).GetAwaiter().GetResult());
-        _server.Requested += request => Log.Debug(() => $"compat: {request}");
+        _server.Traffic += (outbound, text) => Log.Debug(() => (outbound ? "compat > " : "compat < ") + text);
     }
 
     /// <summary>Whether the bar and the scripts can reach AkuWM.</summary>
