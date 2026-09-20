@@ -17,6 +17,14 @@ namespace AkuWM.Core.Commands;
 /// </remarks>
 public sealed class QueryCommands
 {
+    /// <summary>
+    /// Read here rather than on every window of every enumeration: it is one
+    /// out-of-process COM call to the shell, and this is its only consumer.
+    /// </summary>
+    private Func<WindowHandle, string?>? _virtualDesktopOf;
+
+    public void ReadsVirtualDesktopWith(Func<WindowHandle, string?> read) => _virtualDesktopOf = read;
+
     private readonly IPlatform _platform;
     private readonly ConfigPaths _paths;
 
@@ -88,7 +96,7 @@ public sealed class QueryCommands
 
         IEnumerable<ManagedWindow> windows = all ? view.Windows : view.Managed;
 
-        return CommandResponse.Ok(line, windows.Select(Describe).ToList());
+        return CommandResponse.Ok(line, windows.Select(w => Describe(w, _virtualDesktopOf)).ToList());
     }
 
     private CommandResponse Focused(string line)
@@ -98,10 +106,10 @@ public sealed class QueryCommands
 
         return focused is null
             ? CommandResponse.Ok(line, new { handle = view.Foreground.Value, managed = false })
-            : CommandResponse.Ok(line, Describe(focused));
+            : CommandResponse.Ok(line, Describe(focused, _virtualDesktopOf));
     }
 
-    public static JsonObject Describe(ManagedWindow managed)
+    public static JsonObject Describe(ManagedWindow managed, Func<WindowHandle, string?>? virtualDesktopOf = null)
     {
         WindowSnapshot window = managed.Window;
         (int top, int right, int bottom, int left) = window.BorderDelta;
@@ -133,7 +141,7 @@ public sealed class QueryCommands
             },
             ["cloak"] = window.Cloak.ToString(),
             ["onCurrentDesktop"] = window.OnCurrentVirtualDesktop,
-            ["virtualDesktop"] = window.VirtualDesktop,
+            ["virtualDesktop"] = virtualDesktopOf?.Invoke(window.Handle) ?? window.VirtualDesktop,
             ["minimized"] = window.IsMinimized,
             ["maximized"] = window.IsMaximized,
             ["topmost"] = window.IsTopmost,

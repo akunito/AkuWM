@@ -76,6 +76,8 @@ public sealed class WindowManager : IAsyncDisposable
             CanPositionElevated = Win32Token.HasUiAccess(),
         };
 
+        _applier.ReadsFrom(h => _desk.Window(h)?.Snapshot);
+
         // A window that has closed is not one AkuWM has to put back.
         _desk.Forgotten += journal.Forget;
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
@@ -203,6 +205,27 @@ public sealed class WindowManager : IAsyncDisposable
         switch (WmEvents.Decide(platformEvent.Kind))
         {
             case EventResponse.ReadTheDesk:
+                _resync = true;
+                break;
+
+            case EventResponse.ReadTheDeskIfItCouldBeOurs:
+                // Three cheap calls against a hundred-window enumeration.
+                if (!Win32Windows.CouldBeManaged(platformEvent.Handle))
+                {
+                    return;
+                }
+
+                _resync = true;
+                break;
+
+            case EventResponse.ReadTheDeskIfWeKnowIt:
+                // A dictionary lookup, and never the candidate test: a
+                // destroyed window fails that, and would never be forgotten.
+                if (_desk.Window(platformEvent.Handle) is null)
+                {
+                    return;
+                }
+
                 _resync = true;
                 break;
 

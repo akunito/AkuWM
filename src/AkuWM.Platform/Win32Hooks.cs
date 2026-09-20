@@ -59,6 +59,7 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
     private WINEVENTPROC? _callback;
     private Thread? _thread;
     private uint _threadId;
+    private Win32MessageWindow? _messages;
 
     public event Action<PlatformEvent>? Event;
 
@@ -124,12 +125,20 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
             }
         }
 
+        // The screens only talk to a window, so the platform thread owns one.
+        _messages = new Win32MessageWindow();
+        _messages.Event += e => Event?.Invoke(e);
+        _messages.Create();
+
         Log.Info($"platform thread up, {_hooks.Count} window-event hooks installed");
         _running.Set();
 
         // The loop is what makes the hooks fire: out-of-context callbacks are
         // delivered to this thread's queue.
         Win32MessageLoop.Pump();
+
+        _messages?.Dispose();
+        _messages = null;
 
         foreach (UnhookWinEventSafeHandle hook in _hooks)
         {

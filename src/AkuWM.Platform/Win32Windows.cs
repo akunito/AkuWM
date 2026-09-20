@@ -71,6 +71,10 @@ public static class Win32Windows
 
     public static WindowSnapshot? Read(WindowHandle handle) => Read(new HWND((IntPtr)handle.Value));
 
+    /// <summary>Could this handle be a window AkuWM would manage? Three cheap calls.</summary>
+    public static bool CouldBeManaged(WindowHandle handle) =>
+        IsCandidate(new HWND((IntPtr)handle.Value));
+
     /// <summary>One call: does that handle still name a window?</summary>
     public static bool IsWindow(WindowHandle handle) =>
         PInvoke.IsWindow(new HWND((IntPtr)handle.Value));

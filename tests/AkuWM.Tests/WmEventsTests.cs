@@ -10,10 +10,10 @@ namespace AkuWM.Tests;
 public class WmEventsTests
 {
     [Theory]
-    [InlineData(PlatformEventKind.WindowCreated, EventResponse.ReadTheDesk)]
-    [InlineData(PlatformEventKind.WindowDestroyed, EventResponse.ReadTheDesk)]
-    [InlineData(PlatformEventKind.WindowShown, EventResponse.ReadTheDesk)]
-    [InlineData(PlatformEventKind.WindowHidden, EventResponse.ReadTheDesk)]
+    [InlineData(PlatformEventKind.WindowCreated, EventResponse.ReadTheDeskIfItCouldBeOurs)]
+    [InlineData(PlatformEventKind.WindowDestroyed, EventResponse.ReadTheDeskIfWeKnowIt)]
+    [InlineData(PlatformEventKind.WindowShown, EventResponse.ReadTheDeskIfItCouldBeOurs)]
+    [InlineData(PlatformEventKind.WindowHidden, EventResponse.ReadTheDeskIfWeKnowIt)]
     [InlineData(PlatformEventKind.ForegroundChanged, EventResponse.TheFocusMoved)]
     [InlineData(PlatformEventKind.DisplayChanged, EventResponse.TheScreensChanged)]
     [InlineData(PlatformEventKind.SettingsChanged, EventResponse.TheScreensChanged)]
@@ -40,6 +40,18 @@ public class WmEventsTests
                 Enum.IsDefined(WmEvents.Decide(kind)),
                 $"{kind} has no answer");
         }
+    }
+
+    [Fact]
+    public void A_window_going_away_is_never_tested_for_being_a_candidate()
+    {
+        // A destroyed window fails every candidate check, so the two
+        // directions cannot share a test: asking "could it be ours" about one
+        // means never forgetting it.
+        Assert.Equal(EventResponse.ReadTheDeskIfWeKnowIt, WmEvents.Decide(PlatformEventKind.WindowDestroyed));
+        Assert.Equal(EventResponse.ReadTheDeskIfWeKnowIt, WmEvents.Decide(PlatformEventKind.WindowHidden));
+        Assert.Equal(EventResponse.ReadTheDeskIfItCouldBeOurs, WmEvents.Decide(PlatformEventKind.WindowCreated));
+        Assert.Equal(EventResponse.ReadTheDeskIfItCouldBeOurs, WmEvents.Decide(PlatformEventKind.WindowShown));
     }
 
     [Fact]

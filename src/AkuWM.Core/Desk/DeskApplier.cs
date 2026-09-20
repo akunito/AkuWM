@@ -53,6 +53,11 @@ public sealed class DeskApplier
     /// </summary>
     private readonly Func<WindowHandle, IEnumerable<(string What, string? Error)>>? _lastResort;
 
+    /// <summary>The snapshot the model already holds, when it holds one.</summary>
+    private Func<WindowHandle, WindowSnapshot?>? _known;
+
+    public void ReadsFrom(Func<WindowHandle, WindowSnapshot?> known) => _known = known;
+
     private Proof _proof = Proof.Untried;
 
     private enum Proof
@@ -91,6 +96,18 @@ public sealed class DeskApplier
     /// bad desk; a window that cannot be brought back is a lost one.
     /// </remarks>
     public bool CanHide => _proof != Proof.OneWay;
+
+    /// <summary>
+    /// What the model already holds, or a read when it does not.
+    /// </summary>
+    /// <remarks>
+    /// The desk has a snapshot of every window it manages. Asking Windows again
+    /// for facts we are holding cost ~560 Win32 calls per workspace switch.
+    /// The read-BACK after a cloak is different and stays a real read: the
+    /// shell has a spelling of that call which reports success and does
+    /// nothing.
+    /// </remarks>
+    private WindowSnapshot? Look(WindowHandle window) => _known?.Invoke(window) ?? _platform.Window(window);
 
     public ApplyResult Apply(Redraw redraw)
     {
@@ -138,9 +155,17 @@ public sealed class DeskApplier
             return 0;
         }
 
+        // A full window read is fourteen Win32 calls plus a COM one. After the
+        // first redraw of a run the journal already knows every window being
+        // moved, so all of them were waste.
         foreach (Placement placement in placements)
         {
-            if (_platform.Window(placement.Window) is { } snapshot)
+            if (_journal.Knows(placement.Window))
+            {
+                continue;
+            }
+
+            if (Look(placement.Window) is { } snapshot)
             {
                 _journal.Remember(snapshot);
             }
@@ -228,7 +253,7 @@ public sealed class DeskApplier
 
         foreach (WindowHandle handle in windows)
         {
-            WindowSnapshot? before = _platform.Window(handle);
+            WindowSnapshot? before = Look(handle);
             if (before is null)
             {
                 continue;

@@ -84,6 +84,16 @@ DISPLAYCONFIG_SOURCE_DEVICE_NAME
 DISPLAYCONFIG_DEVICE_INFO_TYPE
 QUERY_DISPLAY_CONFIG_FLAGS
 
+// --- the message window that hears about the screens --------------------
+CreateWindowExW
+DestroyWindow
+DefWindowProcW
+RegisterClassExW
+UnregisterClassW
+WNDCLASSEXW
+HWND_MESSAGE
+GetModuleHandleW
+
 // --- events and hooks --------------------------------------------------
 SetWinEventHook
 UnhookWinEvent

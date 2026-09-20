@@ -32,11 +32,17 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
         return window is null ? null : WithDesktop(window);
     }
 
+    // One COM call to the shell, not two. DesktopOf is consumed by exactly one
+    // caller -- the human-readable `query windows` -- and it was being paid for
+    // every window of every enumeration, an out-of-process call each.
     private WindowSnapshot WithDesktop(WindowSnapshot window) => window with
     {
         OnCurrentVirtualDesktop = _desktops.IsOnCurrentDesktop(window.Handle),
-        VirtualDesktop = _desktops.DesktopOf(window.Handle)?.ToString("N")[..8],
     };
+
+    /// <summary>Which native virtual desktop, for the query that prints it.</summary>
+    public string? VirtualDesktopOf(WindowHandle window) =>
+        _desktops.DesktopOf(window)?.ToString("N")[..8];
 
     /// <summary>Hides or shows somebody else's window, through the shell.</summary>
     public string? SetCloak(WindowHandle window, bool cloaked) => _shell.SetCloak(window, cloaked);

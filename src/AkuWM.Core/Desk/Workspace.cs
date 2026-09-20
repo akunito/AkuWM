@@ -67,7 +67,10 @@ public sealed class Workspace
 
     public bool IsEmpty => !Windows.Any();
 
-    public bool Contains(WindowHandle window) => Windows.Contains(window);
+    // Straight at the three containers: the Concat/Distinct chain allocated a
+    // kilobyte per call, and Compute calls it for every workspace.
+    public bool Contains(WindowHandle window) =>
+        Fullscreen == window || Floating.Contains(window) || Tiling.Contains(window);
 
     /// <summary>Puts a window at the front of the focus order.</summary>
     public void Touch(WindowHandle window)

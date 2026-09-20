@@ -71,6 +71,15 @@ public sealed class GeometryJournal
         }
     }
 
+    /// <summary>Already remembered? Saves the caller a full window read.</summary>
+    public bool Knows(WindowHandle window)
+    {
+        lock (_gate)
+        {
+            return _entries.ContainsKey(window.Value);
+        }
+    }
+
     public IReadOnlyCollection<OriginalGeometry> Entries
     {
         get

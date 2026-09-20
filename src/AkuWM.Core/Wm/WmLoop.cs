@@ -100,7 +100,7 @@ public sealed class WmLoop : IAsyncDisposable
     /// back in well under a millisecond or Windows removes the hook.
     /// </summary>
     public void Enqueue(PlatformEvent platformEvent) =>
-        Offer(new WorkItem(platformEvent.ToString(), null, platformEvent));
+        Offer(new WorkItem(null, null, platformEvent));
 
     /// <summary>Runs something on the wm thread and waits for the answer.</summary>
     public Task<T> Post<T>(string what, Func<T> work)
@@ -201,7 +201,9 @@ public sealed class WmLoop : IAsyncDisposable
         catch (Exception ex)
         {
             Refused++;
-            Log.Error($"'{item.What}' failed and was refused; the desk is unchanged", ex);
+            // Formatted here, not at enqueue: the hook thread must be back in
+            // well under a millisecond, and a drag produces hundreds a second.
+            Log.Error($"'{item.What ?? item.Event?.ToString()}' failed and was refused; the desk is unchanged", ex);
 
             // The caller hears about its own failure. Nobody else is punished
             // for it.
@@ -225,7 +227,7 @@ public sealed class WmLoop : IAsyncDisposable
     }
 
     private readonly record struct WorkItem(
-        string What,
+        string? What,
         Func<object?>? Work = null,
         PlatformEvent? Event = null,
         TaskCompletionSource<object?>? Done = null);

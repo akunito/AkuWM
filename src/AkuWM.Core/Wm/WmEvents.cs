@@ -8,6 +8,27 @@ public enum EventResponse
     /// <summary>Read the whole desk again: the set of windows has changed.</summary>
     ReadTheDesk,
 
+    /// <summary>
+    /// A window appeared. Read the desk only if this one could be ours.
+    /// </summary>
+    /// <remarks>
+    /// Every menu, dropdown, tooltip, flyout and toast on the machine raises
+    /// this. Reading a hundred windows for each of them is the largest
+    /// recurring cost on an idle desk, and it can land immediately before a
+    /// gesture.
+    /// </remarks>
+    ReadTheDeskIfItCouldBeOurs,
+
+    /// <summary>
+    /// A window went away. Read the desk only if it was one of ours.
+    /// </summary>
+    /// <remarks>
+    /// Not the same test as the one above, and the difference matters: a
+    /// destroyed window fails every candidate check, so asking whether it
+    /// could be ours would mean never forgetting it.
+    /// </remarks>
+    ReadTheDeskIfWeKnowIt,
+
     /// <summary>Read one window: something about it changed.</summary>
     ReadTheWindow,
 
@@ -35,10 +56,10 @@ public static class WmEvents
     public static EventResponse Decide(PlatformEventKind kind) => kind switch
     {
         // The set of windows changed, so the set is read again.
-        PlatformEventKind.WindowCreated => EventResponse.ReadTheDesk,
-        PlatformEventKind.WindowDestroyed => EventResponse.ReadTheDesk,
-        PlatformEventKind.WindowShown => EventResponse.ReadTheDesk,
-        PlatformEventKind.WindowHidden => EventResponse.ReadTheDesk,
+        PlatformEventKind.WindowCreated => EventResponse.ReadTheDeskIfItCouldBeOurs,
+        PlatformEventKind.WindowShown => EventResponse.ReadTheDeskIfItCouldBeOurs,
+        PlatformEventKind.WindowDestroyed => EventResponse.ReadTheDeskIfWeKnowIt,
+        PlatformEventKind.WindowHidden => EventResponse.ReadTheDeskIfWeKnowIt,
 
         PlatformEventKind.ForegroundChanged => EventResponse.TheFocusMoved,
 

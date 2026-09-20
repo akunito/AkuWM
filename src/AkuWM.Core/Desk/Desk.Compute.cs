@@ -323,6 +323,7 @@ public sealed partial class Desk
             if (Window(handle) is { } window && refused?.Contains(handle) != true)
             {
                 window.Hidden = true;
+                RecordHidden(handle, true);
             }
         }
 
@@ -331,6 +332,7 @@ public sealed partial class Desk
             if (Window(handle) is { } window && refused?.Contains(handle) != true)
             {
                 window.Hidden = false;
+                RecordHidden(handle, false);
             }
         }
 

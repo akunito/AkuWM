@@ -61,7 +61,7 @@ public sealed class ShadowCommand
             }),
             managed = view.Managed.Count(),
             unmanaged = view.Windows.Count(w => !w.Managed),
-            windows = view.Windows.Select(QueryCommands.Describe).ToList(),
+            windows = view.Windows.Select(w => QueryCommands.Describe(w)).ToList(),
         });
     }
 

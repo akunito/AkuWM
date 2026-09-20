@@ -307,6 +307,7 @@ public static class Program
         var windows = new WindowsPlatform();
         IPlatform platform = windows;
         var query = new QueryCommands(platform, paths);
+        query.ReadsVirtualDesktopWith(windows.VirtualDesktopOf);
         var ledger = new CloakLedger(paths.CloakLedgerFile);
 
         return new CommandRouter(
