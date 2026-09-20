@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="AkuWM.App" />
+
+  <!--
+    uiAccess is what lets AkuWM's keyboard hook see the keys typed into a
+    window that runs at a higher integrity level than it does -- which is what
+    every game on this desk is. Measured, not assumed: with it off, an elevated
+    window was in front for 14 of 30 seconds, was typed into, and not one
+    keystroke reached the hook (spike S1).
+
+    It is not elevation. The process still runs as the user (asInvoker); it is
+    only allowed to drive the user interface of higher-integrity windows, which
+    is the accessibility case this flag exists for. Windows grants it only to a
+    binary that is Authenticode-signed with a trusted certificate AND sits in a
+    secure directory (Program Files or System32) -- tools/install-uiaccess.ps1
+    does both.
+
+    If either condition is missing, Windows refuses to start the process at all
+    rather than starting it without uiAccess, which is why `akuwm doctor`
+    checks for it.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="true" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- Per-monitor v2: without it Windows virtualises every coordinate on the
+       150 % monitor and a layout computed from those numbers is wrong. Set in
+       code as well, so it holds however the binary is published. -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+
+  <!-- Windows 10 and 11: without this the OS reports itself as Windows 8. -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>

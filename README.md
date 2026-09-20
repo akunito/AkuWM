@@ -55,6 +55,14 @@ The configuration is two JSON layers in the dotfiles repository —
 — found through `AKUWM_STATE_DIR`. Logs and the journal live in
 `%LOCALAPPDATA%\akuwm\`.
 
+## Games
+
+AkuWM watches the keyboard and runs with `uiAccess`, so it is worth knowing
+exactly what it does to input before playing anything with an anti-cheat:
+[docs/input-and-anticheat.md](docs/input-and-anticheat.md). The short version
+is that it observes, never fabricates input while a game is in front, never
+reads another process's memory, and has no macro features at all.
+
 ## Licence
 
 MIT. AkuWM replaces GPL programs and contains no line of them; the procedure

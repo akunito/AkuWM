@@ -15,6 +15,8 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
+    <!-- Declares uiAccess and PerMonitorV2 DPI. See the manifest for why. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

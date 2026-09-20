@@ -21,6 +21,12 @@ public enum FocusRoute
     /// <summary>A keystroke had to be injected to claim the right.</summary>
     InjectedInput,
 
+    /// <summary>
+    /// The last resort was available but deliberately not taken, because a
+    /// game had the foreground. See <see cref="Win32Focus"/>.
+    /// </summary>
+    RefusedNearGame,
+
     /// <summary>Nothing worked.</summary>
     Refused,
 }
@@ -29,7 +35,7 @@ public enum FocusRoute
 /// <param name="Detail">What happened, for the log and the spike.</param>
 public readonly record struct FocusResult(FocusRoute Route, string Detail)
 {
-    public bool Succeeded => Route != FocusRoute.Refused;
+    public bool Succeeded => Route is not (FocusRoute.Refused or FocusRoute.RefusedNearGame);
 }
 
 /// <summary>
@@ -50,6 +56,13 @@ public readonly record struct FocusResult(FocusRoute Route, string Detail)
 /// the keystroke the user pressed. The two fallbacks are for the times it does
 /// not -- a command arriving over the pipe, a repair after a display change.
 /// </para>
+/// <para>
+/// The third route fabricates a keystroke, and is <strong>never</strong> taken
+/// while a game has the foreground: synthetic input is the one thing an
+/// anti-cheat is built to catch, and no window-manager convenience is worth
+/// being indistinguishable from a macro. Not moving the focus is the cheaper
+/// failure.
+/// </para>
 /// </remarks>
 public static class Win32Focus
 {
@@ -59,6 +72,13 @@ public static class Win32Focus
     /// did not happen.
     /// </summary>
     private const int SettleMs = 40;
+
+    /// <summary>
+    /// Whether the foreground window is something no synthetic input may go
+    /// near. Supplied by the caller, because only the model knows what is a
+    /// game.
+    /// </summary>
+    public static Func<bool>? GameInFront { get; set; }
 
     public static FocusResult Focus(WindowHandle handle)
     {
@@ -82,6 +102,17 @@ public static class Win32Focus
         if (WithAttachedInput(hwnd))
         {
             return new FocusResult(FocusRoute.AttachedInput, "attaching the input queues did it");
+        }
+
+        // The last route fabricates a keystroke. That is exactly the shape of
+        // input an anti-cheat is built to notice, and a window manager has no
+        // business making one while a game is in front. Giving up on the focus
+        // is the cheaper mistake by a wide margin.
+        if (GameInFront?.Invoke() == true)
+        {
+            return new FocusResult(
+                FocusRoute.RefusedNearGame,
+                "refused: the remaining route injects a keystroke, and a game has the foreground");
         }
 
         if (WithInjectedInput(hwnd))
