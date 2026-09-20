@@ -16,15 +16,20 @@ namespace AkuWM.Tests;
 /// </remarks>
 public sealed class DeskFixture
 {
+    private long _now;
+
     public DeskFixture(AkuWmConfig? config = null)
     {
         Platform = new FakePlatform();
         Platform.MonitorList.Add(FakePlatform.MainMonitor());
         Platform.MonitorList.Add(FakePlatform.SecondMonitor());
 
-        Desk = new Desk(config ?? Configuration());
+        Desk = new Desk(config ?? Configuration(), clock: () => _now);
         Desk.SetMonitors(Platform.Monitors());
     }
+
+    /// <summary>Lets time pass without taking any.</summary>
+    public void Wait(int milliseconds) => _now += milliseconds;
 
     public FakePlatform Platform { get; }
 

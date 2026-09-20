@@ -17,6 +17,7 @@ public sealed class CommandRouter
     private readonly UncloakCommand? _uncloak;
     private readonly BenchCommand? _bench;
     private readonly RescueCommand? _rescue;
+    private readonly CompatCommand? _compat;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -31,7 +32,8 @@ public sealed class CommandRouter
         MonitorCommands? monitors = null,
         UncloakCommand? uncloak = null,
         BenchCommand? bench = null,
-        RescueCommand? rescue = null)
+        RescueCommand? rescue = null,
+        CompatCommand? compat = null)
     {
         _config = config;
         _doctor = doctor;
@@ -41,6 +43,7 @@ public sealed class CommandRouter
         _uncloak = uncloak;
         _bench = bench;
         _rescue = rescue;
+        _compat = compat;
     }
 
     /// <summary>
@@ -97,6 +100,8 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to uncloak with"),
                 "rescue" => _rescue?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to rescue"),
+                "compat" => _compat?.Execute(line, tokens)
+                    ?? CommandResponse.Fail(line, "AkuWM is not managing the desk, so there is nothing to ask"),
                 "doctor" => _doctor.Execute(line),
                 "version" => CommandResponse.Ok(line, new { version = Build.Version, build = Build.Description }),
                 "help" => CommandResponse.Ok(line, new { commands = Help }),
@@ -128,6 +133,7 @@ public sealed class CommandRouter
         "monitors identify [--dry-run]",
         "uncloak-all",
         "rescue [--all] [--keep-daemon] [--forgive]",
+        "compat <query|command> ...   (what the glazewm shim sends)",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",
         "doctor",

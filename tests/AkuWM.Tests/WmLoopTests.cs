@@ -109,6 +109,48 @@ public class WmLoopTests
     }
 
     [Fact]
+    public async Task A_burst_of_events_is_answered_once()
+    {
+        int redraws = 0;
+        await using var loop = new WmLoop(
+            beatEvery: TimeSpan.FromSeconds(30), onBatchEnd: () => redraws++);
+        loop.Start();
+
+        // Moving one window on a real desk produces dozens of these. A batch
+        // of window moves per event would be a desk that never stops
+        // twitching.
+        for (int i = 0; i < 40; i++)
+        {
+            loop.Enqueue(new PlatformEvent(PlatformEventKind.WindowMoved, new WindowHandle(1), 0));
+        }
+
+        await loop.Post("drain", () => { });
+        await Task.Delay(50);
+
+        Assert.InRange(redraws, 1, 3);
+    }
+
+    [Fact]
+    public async Task A_redraw_that_throws_does_not_stop_the_loop()
+    {
+        int calls = 0;
+        await using var loop = new WmLoop(
+            beatEvery: TimeSpan.FromMilliseconds(20),
+            onBatchEnd: () =>
+            {
+                if (++calls == 1)
+                {
+                    throw new InvalidOperationException("a bad rectangle");
+                }
+            });
+        loop.Start();
+
+        await Task.Delay(150);
+
+        Assert.True(calls > 1, "the loop stopped after the first failure");
+    }
+
+    [Fact]
     public async Task A_stopped_loop_refuses_work_instead_of_swallowing_it()
     {
         var loop = new WmLoop();

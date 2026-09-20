@@ -47,6 +47,9 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     /// <summary>Windows the fake refuses to uncloak, for the shell that lies.</summary>
     public HashSet<long> RefusesToUncloak { get; } = [];
 
+    /// <summary>Windows that will not take the size they are given, like the real ones that do not.</summary>
+    public HashSet<long> Stubborn { get; } = [];
+
     public List<string> Calls { get; } = [];
 
     public string? SetCloak(WindowHandle window, bool cloaked)
@@ -71,6 +74,12 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         foreach (Placement placement in placements)
         {
             Calls.Add($"place {placement.Window.Value} {placement.Frame}");
+
+            if (Stubborn.Contains(placement.Window.Value))
+            {
+                continue;
+            }
+
             Replace(placement.Window, w => w with
             {
                 FrameBounds = placement.Frame,

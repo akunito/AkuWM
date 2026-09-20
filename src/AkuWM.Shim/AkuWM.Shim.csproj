@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The drop-in replacement for the CLI of the window manager AkuWM
+       replaces. Named glazewm.exe on purpose: a dozen scripts and two test
+       suites call that name, and M2's whole shape is that they keep working
+       while what answers them is replaced. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AkuWM.Shim</RootNamespace>
+    <AssemblyName>glazewm</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
+  </ItemGroup>
+
+</Project>

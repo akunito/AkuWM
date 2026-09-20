@@ -16,6 +16,9 @@ public sealed class DeskWindow
 {
     public DeskWindow(WindowSnapshot snapshot) => Snapshot = snapshot;
 
+    /// <summary>The container id the bar and the scripts address it by.</summary>
+    public Guid Id { get; } = Guid.NewGuid();
+
     public WindowHandle Handle => Snapshot.Handle;
 
     public WindowSnapshot Snapshot { get; set; }
@@ -58,6 +61,21 @@ public sealed class DeskWindow
 
     /// <summary>Where AkuWM last put it, so an unchanged rectangle is not sent again.</summary>
     public Rect? Placed { get; set; }
+
+    /// <summary>When that was, in milliseconds, so a move that never lands is noticed.</summary>
+    public long PlacedAt { get; set; }
+
+    /// <summary>
+    /// It was asked to go somewhere, it did not, and AkuWM has stopped asking.
+    /// </summary>
+    /// <remarks>
+    /// Some windows will not take the size they are given -- a minimum size of
+    /// their own, a frame they draw themselves. Asking again every time the
+    /// answer comes back wrong is an argument the window always wins, at the
+    /// cost of a window manager that never stops working. It is logged once
+    /// and shown by <c>doctor</c> instead.
+    /// </remarks>
+    public bool PlacementRefused { get; set; }
 
     /// <summary>Whether AkuWM last put it in the always-on-top band.</summary>
     public bool? Banded { get; set; }

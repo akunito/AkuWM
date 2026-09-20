@@ -477,6 +477,27 @@ public class DeskTests
         Assert.False(Desk.Focus(DeskFixture.W(1)));
     }
 
+    [Fact]
+    public void A_window_that_will_not_be_moved_is_not_argued_with_for_ever()
+    {
+        // A window with a minimum size of its own: it takes the position and
+        // refuses the size, for ever.
+        _fixture.Open(1, frame: new Rect(0, 42, 3840, 2118));
+        _fixture.Open(2);
+        _fixture.Platform.Stubborn.Add(2);
+
+        _fixture.Turn();
+        Assert.NotEmpty(Desk.Compute().Place);
+
+        _fixture.Wait(3000);
+        _fixture.Turn();
+
+        // Asking again every time is an argument the window always wins, at
+        // the cost of a window manager that never stops working.
+        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
+        Assert.True(_fixture.Managed(2)!.PlacementRefused);
+    }
+
     // ---- direction --------------------------------------------------------
 
     [Fact]

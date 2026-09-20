@@ -291,7 +291,10 @@ public sealed class TilingTree
     /// search walks up until it finds a split that has something on that side
     /// to take from.
     /// </remarks>
-    /// <param name="by">A fraction of the split, e.g. 0.05 for five points.</param>
+    /// <param name="by">
+    /// A fraction of the split, e.g. 0.05 for five points. Negative moves the
+    /// edge the other way, which is what <c>resize --width -5%</c> means.
+    /// </param>
     public bool Resize(WindowHandle window, Direction direction, double by)
     {
         Tile? node = Root?.Find(window);
@@ -306,9 +309,14 @@ public sealed class TilingTree
             if (parent.Direction == axis && neighbourAt >= 0 && neighbourAt < parent.Children.Count)
             {
                 Tile other = parent.Children[neighbourAt];
-                double give = Math.Min(by, other.Share - MinimumShare);
 
-                if (give <= 0)
+                // Neither side may be squeezed out of existence, whichever way
+                // the edge is travelling.
+                double give = by > 0
+                    ? Math.Min(by, other.Share - MinimumShare)
+                    : Math.Max(by, MinimumShare - node.Share);
+
+                if (Math.Abs(give) < 1e-9)
                 {
                     return false;
                 }

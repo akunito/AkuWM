@@ -33,6 +33,7 @@ AttachThreadInput
 GetCurrentThreadId
 ShowWindow
 SetWindowPos
+PostMessageW
 BeginDeferWindowPos
 DeferWindowPos
 EndDeferWindowPos
@@ -102,6 +103,12 @@ TranslateMessage
 DispatchMessageW
 PostQuitMessage
 PostThreadMessageW
+
+// --- the taskbar -------------------------------------------------------
+// MarkFullscreenWindow is how the taskbar is told to drop behind a game.
+// Without it the bar stays over a borderless fullscreen window.
+ITaskbarList2
+TaskbarList
 
 // --- input -------------------------------------------------------------
 SendInput

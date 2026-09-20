@@ -20,6 +20,9 @@ public sealed class DeskMonitor
         Role = role;
     }
 
+    /// <summary>The container id the bar and the scripts address it by.</summary>
+    public Guid Id { get; } = Guid.NewGuid();
+
     public MonitorSnapshot Snapshot { get; set; }
 
     public string Role { get; }

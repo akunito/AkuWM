@@ -83,7 +83,10 @@ public static class Program
         return Print(Router(paths).Execute(line), verb, args, outFile);
     }
 
-    private static int Daemon(ConfigPaths paths, string[] args)
+    private static int Daemon(ConfigPaths paths, string[] args) =>
+        DaemonAsync(paths, args).GetAwaiter().GetResult();
+
+    private static async Task<int> DaemonAsync(ConfigPaths paths, string[] args)
     {
         Log.ToDirectory(paths.LogDir);
         Log.Console = args.Contains("--foreground");
@@ -160,11 +163,6 @@ public static class Program
                 $"{recovery.Stale.Count + restored.Stale.Count} stale entries dropped");
         }
 
-        var stopping = new ManualResetEventSlim(false);
-        var server = new PipeServer(Router(paths));
-        server.ExitRequested += () => stopping.Set();
-        server.Start();
-
         // The desk goes back however this process ends: on request, on Ctrl+C,
         // on an exception nobody caught, or because the loop stopped answering
         // and the watchdog gave up on it. Each path runs the same restore, and
@@ -191,10 +189,20 @@ public static class Program
                 Environment.Exit(3);
             });
 
-        // The one thread allowed to change the desk, and the heartbeat the
-        // watchdog reads. Nothing is managed yet; what exists is the spine.
-        var loop = new WmLoop(beat: watchdog.Beat);
-        loop.Start();
+        // Managing unless something says otherwise: safe mode after two bad
+        // endings, or --shadow, which watches and changes nothing.
+        bool shadow = args.Contains("--shadow");
+        bool manage = !shadow && (!verdict.SafeMode || force);
+
+        await using var manager = new WindowManager(
+            loaded.Effective, platform, ledger, journal, watchdog, manage);
+
+        var stopping = new ManualResetEventSlim(false);
+        var server = new PipeServer(Router(paths, manager));
+        server.ExitRequested += () => stopping.Set();
+        server.Start();
+
+        manager.Start();
         watchdog.Start();
 
         // Proof rather than a promise: `akuwm daemon --stall-test 30` wedges
@@ -203,7 +211,11 @@ public static class Program
         if (StallTest(args) is { } seconds)
         {
             Log.Warn($"--stall-test: wedging the window-manager loop for {seconds}s on purpose");
-            _ = loop.Post("the deliberate stall", () => Thread.Sleep(TimeSpan.FromSeconds(seconds)));
+            _ = manager.Do<object?>("the deliberate stall", _ =>
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(seconds));
+                return null;
+            });
         }
 
         Console.CancelKeyPress += (_, e) =>
@@ -230,15 +242,24 @@ public static class Program
             GiveTheDeskBack("an unhandled exception");
         };
 
+        if (!manager.Compat.Listening)
+        {
+            Log.Warn(
+                $"the compatibility server is not up ({manager.Compat.Unavailable}); "
+                + "the bar and the scripts cannot reach AkuWM. Stop the old window manager first.");
+        }
+
         Log.Info(
-            verdict.SafeMode && !force
-                ? "up, in safe mode: AkuWM manages nothing until it is started with --force."
-                : "up, in shadow mode: AkuWM watches the desk and changes nothing.");
+            manage
+                ? "up, and managing the desk."
+                : verdict.SafeMode && !force
+                    ? "up, in safe mode: AkuWM manages nothing until it is started with --force."
+                    : "up, watching: AkuWM changes nothing (--shadow).");
         stopping.Wait();
 
         Log.Info("stopping");
         server.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        loop.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
         GiveTheDeskBack("stopping");
         session.End();
         platform.Dispose();
@@ -255,7 +276,7 @@ public static class Program
             : null;
     }
 
-    private static CommandRouter Router(ConfigPaths paths)
+    private static CommandRouter Router(ConfigPaths paths, WindowManager? manager = null)
     {
         var windows = new WindowsPlatform();
         IPlatform platform = windows;
@@ -270,7 +291,8 @@ public static class Program
             new MonitorCommands(platform, paths),
             new UncloakCommand(platform, windows, ledger),
             new BenchCommand(platform, paths, windows),
-            new RescueCommand(paths, platform, windows));
+            new RescueCommand(paths, platform, windows),
+            manager is null ? null : new CompatCommand(manager.Envelope));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>
@@ -418,7 +440,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("usage: akuwm <command>");
         Console.WriteLine();
-        Console.WriteLine("  daemon [--foreground] [--force] [--stall-test <seconds>]");
+        Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--stall-test <seconds>]");
         Console.WriteLine("                          run the window manager");
         Console.WriteLine("  spike <s1..s5>          M1: what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)

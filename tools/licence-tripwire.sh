@@ -32,6 +32,7 @@ patterns=(
 paths=(src tests)
 excludes=(
   ':!src/AkuWM.App/Compat'
+  ':!src/AkuWM.Core/Compat'
   ':!tests/AkuWM.Tests/Fixtures'
   ':!tools/licence-tripwire.sh'
 )

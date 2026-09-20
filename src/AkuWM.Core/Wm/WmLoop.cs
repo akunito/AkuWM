@@ -37,6 +37,7 @@ public sealed class WmLoop : IAsyncDisposable
 
     private readonly Action? _beat;
     private readonly Action<PlatformEvent>? _onEvent;
+    private readonly Action? _onBatchEnd;
     private readonly TimeSpan _beatEvery;
     private readonly CancellationTokenSource _stopping = new();
     private Task? _loop;
@@ -50,11 +51,23 @@ public sealed class WmLoop : IAsyncDisposable
     /// a wedged one -- which is how the first version of this got a perfectly
     /// healthy daemon killed ten seconds after it started.
     /// </param>
-    public WmLoop(Action<PlatformEvent>? onEvent = null, Action? beat = null, TimeSpan? beatEvery = null)
+    /// <param name="onBatchEnd">
+    /// Called once after everything waiting has been dealt with, which is
+    /// where the desk is redrawn. Windows delivers events in bursts -- moving
+    /// one window produces dozens -- and answering each one with its own batch
+    /// of window moves would be a desk that never stops twitching. One burst,
+    /// one redraw.
+    /// </param>
+    public WmLoop(
+        Action<PlatformEvent>? onEvent = null,
+        Action? beat = null,
+        TimeSpan? beatEvery = null,
+        Action? onBatchEnd = null)
     {
         _onEvent = onEvent;
         _beat = beat;
         _beatEvery = beatEvery ?? TimeSpan.FromSeconds(1);
+        _onBatchEnd = onBatchEnd;
     }
 
     /// <summary>How many pieces of work have been through the loop.</summary>
@@ -137,6 +150,16 @@ public sealed class WmLoop : IAsyncDisposable
                         // is punished for it.
                         item.Done?.SetException(ex);
                     }
+                }
+
+                try
+                {
+                    _onBatchEnd?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    Refused++;
+                    Log.Error("redrawing the desk failed; it is left as it was", ex);
                 }
 
                 if (!await WaitForWork().ConfigureAwait(false))

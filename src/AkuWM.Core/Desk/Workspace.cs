@@ -21,6 +21,16 @@ public sealed class Workspace
         Direction = direction;
     }
 
+    /// <summary>
+    /// The id the bar and the scripts address it by.
+    /// </summary>
+    /// <remarks>
+    /// A container id, stable for as long as this run: everything outside
+    /// AkuWM identifies containers by these, and a workspace that changed its
+    /// id when it was shown would break every script holding one.
+    /// </remarks>
+    public Guid Id { get; } = Guid.NewGuid();
+
     /// <summary>sway's numbering: <c>11</c>-<c>10</c> on the first role.</summary>
     public string Name { get; }
 

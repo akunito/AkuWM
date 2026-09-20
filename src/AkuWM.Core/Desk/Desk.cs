@@ -30,12 +30,22 @@ public sealed partial class Desk
     private readonly List<DeskMonitor> _monitors = [];
     private readonly Func<WindowSnapshot, bool>? _isOurs;
 
-    public Desk(AkuWmConfig config, Func<WindowSnapshot, bool>? isOurs = null)
+    private readonly Func<long> _clock;
+
+    /// <param name="clock">
+    /// Milliseconds from somewhere monotonic. Injected so a test can let two
+    /// seconds pass without taking two seconds.
+    /// </param>
+    public Desk(AkuWmConfig config, Func<WindowSnapshot, bool>? isOurs = null, Func<long>? clock = null)
     {
         Config = config;
         _isOurs = isOurs;
+        _clock = clock ?? (() => Environment.TickCount64);
         BuildWorkspaces();
     }
+
+    /// <summary>Milliseconds, for the timings the model itself has to judge.</summary>
+    private long Now => _clock();
 
     public AkuWmConfig Config { get; private set; }
 
@@ -46,6 +56,20 @@ public sealed partial class Desk
     public IEnumerable<Workspace> Workspaces => _workspaces.Values;
 
     public WindowHandle Focused { get; private set; } = WindowHandle.None;
+
+    private WindowHandle _wantFocus = WindowHandle.None;
+
+    /// <summary>
+    /// Asks for the focus to end up on a window once the desk has been
+    /// redrawn.
+    /// </summary>
+    /// <remarks>
+    /// Not done immediately, and that is the point: a workspace switch focuses
+    /// a window that is still cloaked at the moment the command runs. The
+    /// focus travels with the redraw and is applied after the windows are
+    /// visible.
+    /// </remarks>
+    public void WantFocus(WindowHandle handle) => _wantFocus = handle;
 
     /// <summary>
     /// Whether AkuWM may move windows that run at a higher integrity level.
@@ -207,6 +231,27 @@ public sealed partial class Desk
         {
             Forget(gone);
         }
+    }
+
+    /// <summary>
+    /// One window changed. Reads that one rather than the whole desk.
+    /// </summary>
+    /// <remarks>
+    /// The difference between this and <see cref="Sync"/> is the difference
+    /// between a gesture that costs microseconds and one that costs
+    /// milliseconds: moving a window produces dozens of events, and reading a
+    /// hundred windows to learn about one of them is the cost that made the
+    /// stack this replaces feel slow.
+    /// </remarks>
+    public DeskWindow Observe(WindowSnapshot snapshot)
+    {
+        if (!_windows.TryGetValue(snapshot.Handle, out DeskWindow? known))
+        {
+            return Adopt(snapshot);
+        }
+
+        Update(known, snapshot);
+        return known;
     }
 
     /// <summary>Takes a new window in, and decides where it belongs.</summary>

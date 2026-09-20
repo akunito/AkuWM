@@ -121,6 +121,11 @@ public sealed partial class Desk
             Show = show,
             Band = band,
             TaskbarMark = mark,
+
+            // The focus goes last, after the windows are where they belong and
+            // visible. Focusing a window that is still cloaked hands the
+            // keyboard to something nobody can see.
+            Focus = _wantFocus,
         };
     }
 
@@ -154,10 +159,14 @@ public sealed partial class Desk
         };
     }
 
+    /// <summary>How long a window has to reach where it was put before AkuWM stops asking.</summary>
+    public const int PlacementPatienceMs = 2000;
+
     private void WantPlaced(DeskWindow window, Rect frame, List<Placement> into)
     {
         if (window.Snapshot.FrameBounds == frame)
         {
+            window.PlacementRefused = false;
             return;
         }
 
@@ -166,6 +175,24 @@ public sealed partial class Desk
             // UIPI refuses, and the call fails without saying so. Hiding and
             // showing it by cloak still works, which is what matters for a
             // game on a workspace nobody is looking at.
+            return;
+        }
+
+        // Already asked, for this exact rectangle, long enough ago that the
+        // move would have landed. It is not going to: some windows have a
+        // minimum size of their own, and asking for ever is an argument the
+        // window always wins at the cost of a window manager that never stops
+        // working.
+        if (window.Placed == frame && Now - window.PlacedAt > PlacementPatienceMs)
+        {
+            if (!window.PlacementRefused)
+            {
+                window.PlacementRefused = true;
+                Logging.Log.Warn(
+                    $"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" will not go to {frame} "
+                    + $"(it is at {window.Snapshot.FrameBounds}); AkuWM has stopped asking");
+            }
+
             return;
         }
 
@@ -215,11 +242,22 @@ public sealed partial class Desk
     /// </remarks>
     public void Applied(Redraw redraw, IReadOnlySet<WindowHandle>? refused = null)
     {
+        if (!redraw.Focus.IsNone)
+        {
+            if (_wantFocus == redraw.Focus)
+            {
+                _wantFocus = WindowHandle.None;
+            }
+
+            Focus(redraw.Focus);
+        }
+
         foreach (Placement placement in redraw.Place)
         {
             if (Window(placement.Window) is { } window)
             {
                 window.Placed = placement.Frame;
+                window.PlacedAt = Now;
             }
         }
 
