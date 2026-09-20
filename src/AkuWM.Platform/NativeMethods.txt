@@ -56,6 +56,7 @@ OpenProcess
 QueryFullProcessImageNameW
 GetTokenInformation
 OpenProcessToken
+GetCurrentProcess
 TOKEN_ELEVATION
 TOKEN_INFORMATION_CLASS
 PROCESS_ACCESS_RIGHTS

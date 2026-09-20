@@ -179,6 +179,23 @@ public static class Program
     /// <summary>The checks only the Windows host can make.</summary>
     private static List<Func<Check>> PlatformChecks(WindowsPlatform platform) =>
     [
+        () =>
+        {
+            bool granted = Win32Token.HasUiAccess();
+            return new Check(
+                "uiAccess",
+                granted ? CheckStatus.Ok : CheckStatus.Warn,
+                granted
+                    ? "granted: chords work while a game has the foreground"
+                    : "NOT granted — the hook will see nothing typed into a game. " +
+                      $"Run tools/install-uiaccess.ps1 as administrator (running from {AppContext.BaseDirectory})");
+        },
+        () => new Check(
+            "elevation",
+            Win32Token.IsElevated() ? CheckStatus.Warn : CheckStatus.Ok,
+            Win32Token.IsElevated()
+                ? "running elevated, which AkuWM does not need and should not have"
+                : "running as the user, which is right"),
         () => new Check(
             "dpi awareness",
             WindowsPlatform.IsPerMonitorDpiAware() ? CheckStatus.Ok : CheckStatus.Fail,
