@@ -85,17 +85,24 @@ public sealed class ImmersiveShell : IDisposable
 
             try
             {
-                // Measured, because none of this is documented and two of the
-                // three obvious spellings are wrong:
-                //   cloak   = (Shell, 1)    puts the shell's cloak on
-                //   uncloak = (Default, 0)  takes it off
-                //   (None, *) is refused with E_INVALIDARG
-                //   (Shell, 0) returns success and does nothing at all — which
-                //             is how a rescue can report thirteen successes and
-                //             leave thirteen windows invisible.
-                view.SetCloak(
-                    cloaked ? ApplicationViewCloakType.Shell : ApplicationViewCloakType.Default,
-                    cloaked ? 1 : 0);
+                // Measured, because none of this is documented, and the thing
+                // that matters is not which call hides a window but which
+                // PAIR completes the round trip (spike S8):
+                //
+                //   (Default, 1) hides it, and (Default, 0) brings it back
+                //   (Shell, 1)   hides it, and NOTHING brings it back -- not
+                //                any of the eight spellings, not ShowWindow,
+                //                not another process, not uiAccess. The window
+                //                is gone for good.
+                //   (None, *) and (Inherited, *) are refused with E_INVALIDARG
+                //
+                // M1 measured only half of this. It found (Default, 0) brings
+                // back a window ANOTHER program had hidden -- true, and the
+                // reason nine of this desk's windows came back -- and took it
+                // for the uncloak without checking that AkuWM's own cloak was
+                // the matching one. It was not. Hiding a window is the one
+                // operation a window manager cannot be allowed to get wrong.
+                view.SetCloak(ApplicationViewCloakType.Default, cloaked ? 1 : 0);
                 return null;
             }
             finally
@@ -135,6 +142,10 @@ public sealed class ImmersiveShell : IDisposable
     /// did it -- so recovering one means trying the four in turn and watching
     /// the flag.
     /// </remarks>
+    /// <summary>One raw call, for the spikes that measure what the shell does.</summary>
+    public string? TryCloak(WindowHandle window, int type, int flag) =>
+        Call(window, (ApplicationViewCloakType)type, flag);
+
     public IEnumerable<(string What, string? Error)> TryEveryUncloak(WindowHandle window)
     {
         foreach (ApplicationViewCloakType type in Enum.GetValues<ApplicationViewCloakType>())

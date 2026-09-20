@@ -43,6 +43,7 @@
 [CmdletBinding()]
 param(
     [string] $Source = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\akuwm.exe'),
+    [string] $Shim = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\glazewm.exe'),
     [string] $Destination = (Join-Path $env:ProgramFiles 'AkuWM'),
     [switch] $Force
 )
@@ -153,6 +154,22 @@ if ($signature.Status -ne 'Valid') {
     exit 1
 }
 Good "signed, status $($signature.Status)"
+
+# --- 3a. the drop-in CLI ----------------------------------------------------
+# The same words in, the same JSON out, answered by AkuWM. It is what the
+# hotkey script and the test suites call, and it is why nothing outside AkuWM
+# has to change for AkuWM to take over.
+Step 'Installing the glazewm shim'
+if (Test-Path $Shim) {
+    $shimTarget = Join-Path $Destination 'glazewm.exe'
+    Get-Process -Name glazewm -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq $shimTarget } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Copy-Item $Shim $shimTarget -Force
+    Good "installed $shimTarget"
+} else {
+    Note "no glazewm.exe at $Shim; the hotkeys will not reach AkuWM until it is built"
+}
 
 # --- 3b. the way out --------------------------------------------------------
 # A window manager that can hide windows has to ship the button that gives them

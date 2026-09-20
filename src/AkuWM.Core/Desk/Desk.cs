@@ -82,6 +82,16 @@ public sealed partial class Desk
     /// </remarks>
     public bool CanPositionElevated { get; set; } = true;
 
+    /// <summary>
+    /// Whether hiding a window is something this machine lets AkuWM undo.
+    /// </summary>
+    /// <remarks>
+    /// Set false by the platform when the round trip fails. Everything then
+    /// stays on screen: the workspaces lose their point, which is a bad desk,
+    /// and a window that cannot be brought back is a lost one.
+    /// </remarks>
+    public bool CanHide { get; set; } = true;
+
     public DeskWindow? Window(WindowHandle handle) =>
         _windows.TryGetValue(handle, out DeskWindow? window) ? window : null;
 

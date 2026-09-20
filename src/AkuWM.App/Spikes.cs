@@ -42,6 +42,7 @@ public static class Spikes
             Say("  s5   do the hooks keep firing while the main thread is busy?");
             Say("  s6   when a cloak refuses to come off, is it never cleared or put straight back?");
             Say("  s7   is there ANY call that brings back a window a dead manager left hidden?");
+            Say("  s8   which cloak can be undone? (cloak with each type, then try to undo it)");
             return 2;
         }
 
@@ -58,6 +59,7 @@ public static class Spikes
             "s5" => Threads(Number(options, "seconds", 10)),
             "s6" => CloakFight(Window(options), Number(options, "seconds", 3)),
             "s7" => RescueCloaked(Window(options)),
+            "s8" => CloakRoundTrip(Window(options)),
             _ => Fail($"'{args[1]}' is not one of s1, s2, s12, s3, s4, s5"),
         };
 
@@ -511,6 +513,99 @@ public static class Spikes
         Say(final.HasFlag(CloakKind.Shell)
             ? "  ANSWER: NO — nothing this process can call brings it back."
             : "  ANSWER: yes — ShowWindow brings it back where the cloak calls do not.");
+        return 0;
+    }
+
+    /// <summary>
+    /// S8: which spelling of the cloak can be taken off again?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The question M1 answered by halves. It found a call that brings back a
+    /// window <em>another</em> program had hidden, and concluded that was the
+    /// uncloak. It is not the whole story: a window this process hides with
+    /// one spelling cannot be brought back by any spelling at all, which is a
+    /// window lost for good -- and hiding windows is what a window manager
+    /// does all day.
+    /// </para>
+    /// <para>
+    /// So this puts each cloak on a window of its own making and then tries
+    /// every way of taking it off. What matters is not which call hides a
+    /// window but which pair completes the round trip, because a window
+    /// manager only ever needs the pair.
+    /// </para>
+    /// </remarks>
+    private static int CloakRoundTrip(WindowHandle target)
+    {
+        using var platform = new WindowsPlatform();
+        WindowSnapshot? window = Pick(platform, target, preferElevated: false);
+        if (window is null)
+        {
+            return Fail("no window to aim at; pass --window 0x1234");
+        }
+
+        Say($"S8: {window.ProcessName} [{window.ClassName}] \"{window.Title}\"");
+        Say("    for each way of putting a cloak on, every way of taking it off");
+        Say(string.Empty);
+
+        using var shell = new ImmersiveShell();
+        var roundTrips = new List<string>();
+
+        foreach (int type in new[] { 1, 2 })
+        {
+            string? error = shell.TryCloak(window.Handle, type, 1);
+            Thread.Sleep(250);
+            CloakKind on = platform.Window(window.Handle)?.Cloak ?? CloakKind.None;
+
+            Say($"  cloak type={type} flag=1 -> error={error ?? "none"} cloak={on}");
+
+            if (!on.HasFlag(CloakKind.Shell))
+            {
+                Say("    (it did not hide the window; nothing to undo)");
+                Say(string.Empty);
+                continue;
+            }
+
+            string? undone = null;
+            foreach ((string what, string? undoError) in shell.TryEveryUncloak(window.Handle))
+            {
+                Thread.Sleep(150);
+                CloakKind after = platform.Window(window.Handle)?.Cloak ?? CloakKind.None;
+                Say($"    undo {what,-26} error={undoError ?? "none",-32} cloak={after}");
+
+                if (!after.HasFlag(CloakKind.Shell))
+                {
+                    undone = what;
+                    break;
+                }
+            }
+
+            if (undone is null)
+            {
+                Say($"    NOTHING undoes a cloak put on with type={type}. The window is lost.");
+            }
+            else
+            {
+                roundTrips.Add($"cloak type={type} flag=1  <->  undo {undone}");
+                Say($"    undone by {undone}");
+            }
+
+            Say(string.Empty);
+        }
+
+        Say(string.Empty);
+        if (roundTrips.Count == 0)
+        {
+            Say("  ANSWER: NO pair completes the round trip. AkuWM must not cloak anything.");
+            return 1;
+        }
+
+        Say("  ANSWER: these pairs complete the round trip --");
+        foreach (string pair in roundTrips)
+        {
+            Say($"    {pair}");
+        }
+
         return 0;
     }
 

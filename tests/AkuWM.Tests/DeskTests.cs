@@ -498,6 +498,43 @@ public class DeskTests
         Assert.True(_fixture.Managed(2)!.PlacementRefused);
     }
 
+    [Fact]
+    public void When_a_hidden_window_cannot_be_brought_back_nothing_is_hidden()
+    {
+        // Measured on this machine: one spelling of the call that hides a
+        // window cannot be undone by anything at all. If the platform finds
+        // itself on the wrong side of that, every workspace shows everything
+        // -- a bad desk, against a lost window.
+        Desk.CanHide = false;
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        Desk.FocusWorkspace("12");
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Empty(redraw.Hide);
+        Assert.False(_fixture.IsHidden(1));
+    }
+
+    [Fact]
+    public void A_window_can_still_be_shown_when_hiding_is_off()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Turn();
+        Assert.True(_fixture.IsHidden(1));
+
+        // Whatever is already hidden must still be recoverable, or turning
+        // this off would strand exactly the windows it exists to protect.
+        Desk.CanHide = false;
+        Desk.FocusWorkspace("11");
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Contains(DeskFixture.W(1), redraw.Show);
+        Assert.False(_fixture.IsHidden(1));
+    }
+
     // ---- direction --------------------------------------------------------
 
     [Fact]

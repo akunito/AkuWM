@@ -199,11 +199,26 @@ public sealed partial class Desk
         into.Add(new Placement(window.Handle, frame));
     }
 
-    private static void WantHidden(
+    private bool _saidItCannotHide;
+
+    private void WantHidden(
         DeskWindow window, bool hidden, List<WindowHandle> hide, List<WindowHandle> show)
     {
         if (window.Hidden == hidden)
         {
+            return;
+        }
+
+        if (hidden && !CanHide)
+        {
+            if (!_saidItCannotHide)
+            {
+                _saidItCannotHide = true;
+                Logging.Log.Warn(
+                    "not hiding anything: bringing a hidden window back does not work on this machine, "
+                    + "so every workspace shows all of its windows");
+            }
+
             return;
         }
 

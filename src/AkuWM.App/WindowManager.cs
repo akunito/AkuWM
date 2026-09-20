@@ -62,7 +62,8 @@ public sealed class WindowManager : IAsyncDisposable
         CloakLedger ledger,
         GeometryJournal journal,
         Watchdog watchdog,
-        bool manage)
+        bool manage,
+        int compatPort = GlazeProtocol.Port)
     {
         _platform = platform;
         _journal = journal;
@@ -81,7 +82,7 @@ public sealed class WindowManager : IAsyncDisposable
         // Everything the bar and the scripts say arrives here and is answered
         // on the wm thread, so a query never sees a half-applied workspace
         // switch.
-        _server = new GlazeIpcServer(GlazeProtocol.Port, request => Ask(request).GetAwaiter().GetResult());
+        _server = new GlazeIpcServer(compatPort, request => Ask(request).GetAwaiter().GetResult());
         _server.Requested += request => Log.Debug(() => $"compat: {request}");
     }
 
@@ -266,6 +267,10 @@ public sealed class WindowManager : IAsyncDisposable
         Redraws++;
         Last = _applier.Apply(redraw);
         _desk.Applied(redraw, Last.Refused);
+
+        // The platform proves, once, that a window it hides can be brought
+        // back. If it cannot, the model stops asking.
+        _desk.CanHide = _applier.CanHide;
 
         Publish();
     }

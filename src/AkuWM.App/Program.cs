@@ -195,7 +195,7 @@ public static class Program
         bool manage = !shadow && (!verdict.SafeMode || force);
 
         await using var manager = new WindowManager(
-            loaded.Effective, platform, ledger, journal, watchdog, manage);
+            loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args));
 
         var stopping = new ManualResetEventSlim(false);
         var server = new PipeServer(Router(paths, manager));
@@ -265,6 +265,22 @@ public static class Program
         platform.Dispose();
         Log.Close();
         return 0;
+    }
+
+    /// <summary>
+    /// Which port the compatibility server listens on.
+    /// </summary>
+    /// <remarks>
+    /// Overridable so AkuWM can be exercised against the real desk while the
+    /// window manager it replaces still holds 6123 -- which is the only way to
+    /// test the bar's side of it without switching the desk over first.
+    /// </remarks>
+    private static int CompatPort(string[] args)
+    {
+        int at = Array.FindIndex(args, a => a.Equals("--compat-port", StringComparison.OrdinalIgnoreCase));
+        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out int port)
+            ? port
+            : AkuWM.Core.Compat.GlazeProtocol.Port;
     }
 
     /// <summary>The seconds asked for by <c>--stall-test</c>, or null.</summary>
@@ -440,7 +456,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("usage: akuwm <command>");
         Console.WriteLine();
-        Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--stall-test <seconds>]");
+        Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--compat-port <n>]");
         Console.WriteLine("                          run the window manager");
         Console.WriteLine("  spike <s1..s5>          M1: what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)
