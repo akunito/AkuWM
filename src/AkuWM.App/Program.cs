@@ -4,6 +4,7 @@ using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Platform;
 using AkuWM.Core.State;
+using AkuWM.Core.Wm;
 using AkuWM.Platform;
 
 namespace AkuWM.App;
@@ -63,8 +64,10 @@ public static class Program
         var client = new PipeClient();
 
         // A running daemon answers everything, so a query never sees a state
-        // assembled by a second process that is not managing the desk.
-        if (client.IsRunning())
+        // assembled by a second process that is not managing the desk. The one
+        // exception is the command whose whole job is to deal with a daemon
+        // that has stopped behaving.
+        if (!CommandRouter.NeverDelegates(verb) && client.IsRunning())
         {
             return Print(client.Send(line), verb, args, outFile);
         }
@@ -131,18 +134,30 @@ public static class Program
             Log.Warn(issue.ToString());
         }
 
+        var session = new SessionMarker(paths.SessionFile);
+        SessionVerdict verdict = session.Begin();
+        bool force = args.Contains("--force");
+
+        if (verdict.SafeMode && !force)
+        {
+            Log.Warn("safe mode: " + verdict.Reason);
+            Console.Error.WriteLine("AkuWM is in safe mode. " + verdict.Reason);
+        }
+
+        var platform = new WindowsPlatform();
+        var ledger = new CloakLedger(paths.CloakLedgerFile);
+        var journal = new GeometryJournal(paths.GeometryJournalFile);
+
         // Before anything else touches a window: whatever went wrong in the
         // last run, the desk is whole again by the time AkuWM is listening.
-        using (var platform = new WindowsPlatform())
+        RecoveryResult recovery = ledger.Recover(platform, platform);
+        GeometryRestoreResult restored = journal.Restore(platform, platform);
+        if (recovery.Anything || restored.Anything)
         {
-            var ledger = new CloakLedger(paths.CloakLedgerFile);
-            RecoveryResult recovery = ledger.Recover(platform, platform);
-            if (recovery.Anything)
-            {
-                Log.Info(
-                    $"recovery: {recovery.Recovered.Count} window(s) given back, " +
-                    $"{recovery.Failed.Count} refused, {recovery.Stale.Count} stale entries dropped");
-            }
+            Log.Info(
+                $"recovery: {recovery.Recovered.Count} window(s) given back, " +
+                $"{recovery.Failed.Count} refused, {restored.Restored.Count} put back where they were, " +
+                $"{recovery.Stale.Count + restored.Stale.Count} stale entries dropped");
         }
 
         var stopping = new ManualResetEventSlim(false);
@@ -150,20 +165,94 @@ public static class Program
         server.ExitRequested += () => stopping.Set();
         server.Start();
 
+        // The desk goes back however this process ends: on request, on Ctrl+C,
+        // on an exception nobody caught, or because the loop stopped answering
+        // and the watchdog gave up on it. Each path runs the same restore, and
+        // the restore is safe to run twice.
+        int restoring = 0;
+        void GiveTheDeskBack(string why)
+        {
+            if (Interlocked.Exchange(ref restoring, 1) != 0)
+            {
+                return;
+            }
+
+            Log.Info($"giving the desk back ({why})");
+            ledger.Recover(platform, platform);
+            journal.Restore(platform, platform);
+        }
+
+        using var watchdog = new Watchdog(
+            TimeSpan.FromSeconds(10),
+            () =>
+            {
+                GiveTheDeskBack("the window-manager loop stopped answering");
+                session.End(); // a stall the watchdog handled is not a crash to hold against the next run
+                Environment.Exit(3);
+            });
+
+        // The one thread allowed to change the desk, and the heartbeat the
+        // watchdog reads. Nothing is managed yet; what exists is the spine.
+        var loop = new WmLoop(beat: watchdog.Beat);
+        loop.Start();
+        watchdog.Start();
+
+        // Proof rather than a promise: `akuwm daemon --stall-test 30` wedges
+        // the loop on purpose, so the watchdog can be watched doing its job on
+        // the real machine instead of only in a unit test.
+        if (StallTest(args) is { } seconds)
+        {
+            Log.Warn($"--stall-test: wedging the window-manager loop for {seconds}s on purpose");
+            _ = loop.Post("the deliberate stall", () => Thread.Sleep(TimeSpan.FromSeconds(seconds)));
+        }
+
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
             stopping.Set();
         };
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => stopping.Set();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            GiveTheDeskBack("the process is exiting");
+            stopping.Set();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception fatal)
+            {
+                Log.Error("unhandled exception; giving the desk back before dying", fatal);
+            }
+            else
+            {
+                Log.Error($"unhandled failure ({e.ExceptionObject}); giving the desk back before dying");
+            }
 
-        Log.Info("up, in shadow mode: AkuWM watches the desk and changes nothing.");
+            GiveTheDeskBack("an unhandled exception");
+        };
+
+        Log.Info(
+            verdict.SafeMode && !force
+                ? "up, in safe mode: AkuWM manages nothing until it is started with --force."
+                : "up, in shadow mode: AkuWM watches the desk and changes nothing.");
         stopping.Wait();
 
         Log.Info("stopping");
         server.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        loop.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        GiveTheDeskBack("stopping");
+        session.End();
+        platform.Dispose();
         Log.Close();
         return 0;
+    }
+
+    /// <summary>The seconds asked for by <c>--stall-test</c>, or null.</summary>
+    private static int? StallTest(string[] args)
+    {
+        int at = Array.FindIndex(args, a => a.Equals("--stall-test", StringComparison.OrdinalIgnoreCase));
+        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out int seconds)
+            ? seconds
+            : null;
     }
 
     private static CommandRouter Router(ConfigPaths paths)
@@ -180,7 +269,8 @@ public static class Program
             new ShadowCommand(query, Compat.GlazeWmProbe.Ask),
             new MonitorCommands(platform, paths),
             new UncloakCommand(platform, windows, ledger),
-            new BenchCommand(platform, paths, windows));
+            new BenchCommand(platform, paths, windows),
+            new RescueCommand(paths, platform, windows));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>
@@ -328,7 +418,8 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("usage: akuwm <command>");
         Console.WriteLine();
-        Console.WriteLine("  daemon [--foreground]   run the window manager");
+        Console.WriteLine("  daemon [--foreground] [--force] [--stall-test <seconds>]");
+        Console.WriteLine("                          run the window manager");
         Console.WriteLine("  spike <s1..s5>          M1: what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)
         {

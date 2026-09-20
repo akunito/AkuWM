@@ -5,10 +5,6 @@ using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace AkuWM.Platform;
 
-/// <param name="Window">Which window.</param>
-/// <param name="Frame">Where its visible frame should end up.</param>
-public readonly record struct Placement(WindowHandle Window, Rect Frame);
-
 /// <summary>
 /// Moving windows, in batches.
 /// </summary>
@@ -74,6 +70,22 @@ public static class Win32Position
     /// <summary>One window, when there is only one.</summary>
     public static bool Place(WindowHandle window, Rect frame, bool activate = false) =>
         Place([new Placement(window, frame)], activate) == 1;
+
+    /// <summary>
+    /// Puts a window into the always-on-top band, or takes it out.
+    /// </summary>
+    /// <remarks>
+    /// Position and size are left alone; this is only the z-order band, which
+    /// is how a scratchpad or a pill stays over a fullscreen game.
+    /// </remarks>
+    public static bool SetTopmost(WindowHandle window, bool topmost) =>
+        PInvoke.SetWindowPos(
+            new HWND((IntPtr)window.Value),
+            topmost ? HWND.HWND_TOPMOST : HWND.HWND_NOTOPMOST,
+            0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE
+            | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
+            | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
 
     /// <summary>
     /// Turns a visible-frame rectangle into the outer rectangle

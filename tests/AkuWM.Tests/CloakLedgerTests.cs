@@ -43,6 +43,22 @@ internal sealed class FakeActions : IPlatformActions
 
         return null;
     }
+
+    // The rest of the interface is not what these tests are about; the fake
+    // desk applies them so a ledger test that strays into geometry still says
+    // something true.
+    public int Place(IReadOnlyList<Placement> placements, bool activate = false) =>
+        _platform.Place(placements, activate);
+
+    public void SetMaximized(WindowHandle window, bool maximized) =>
+        _platform.SetMaximized(window, maximized);
+
+    public void SetMinimized(WindowHandle window, bool minimized) =>
+        _platform.SetMinimized(window, minimized);
+
+    public void SetTopmost(WindowHandle window, bool topmost) => _platform.SetTopmost(window, topmost);
+
+    public bool Focus(WindowHandle window) => _platform.Focus(window);
 }
 
 /// <summary>

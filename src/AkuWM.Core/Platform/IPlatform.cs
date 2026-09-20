@@ -37,15 +37,35 @@ public interface IPlatform
 /// The half of the platform that changes things.
 /// </summary>
 /// <remarks>
-/// M2 fills this in -- positioning, focus, the topmost band, the taskbar mark.
-/// M1 needs exactly one of its members: the cloak, because AkuWM can now put
-/// one on, and anything that can hide a window must be able to give it back.
+/// Everything here is reversible, and the reverse is what the rescue path
+/// uses: a window manager that hides and moves other people's windows has to
+/// be able to put every one of them back exactly as it found it, from a
+/// process that may be starting up after the one that moved them died.
 /// </remarks>
 public interface IPlatformActions
 {
     /// <summary>Hides or shows a window through the shell's cloak.</summary>
     /// <returns>Null on success, or why it failed.</returns>
     string? SetCloak(WindowHandle window, bool cloaked);
+
+    /// <summary>
+    /// Moves and sizes windows in one batch, by their visible frames.
+    /// </summary>
+    /// <returns>How many were placed.</returns>
+    int Place(IReadOnlyList<Placement> placements, bool activate = false);
+
+    /// <summary>Maximises or un-maximises.</summary>
+    void SetMaximized(WindowHandle window, bool maximized);
+
+    /// <summary>Minimises, or brings back from the taskbar.</summary>
+    void SetMinimized(WindowHandle window, bool minimized);
+
+    /// <summary>Puts a window in the always-on-top band, or takes it out.</summary>
+    void SetTopmost(WindowHandle window, bool topmost);
+
+    /// <summary>Gives a window the keyboard focus.</summary>
+    /// <returns>True when the foreground window is this one afterwards.</returns>
+    bool Focus(WindowHandle window);
 }
 
 /// <summary>

@@ -41,6 +41,37 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
     /// <summary>Hides or shows somebody else's window, through the shell.</summary>
     public string? SetCloak(WindowHandle window, bool cloaked) => _shell.SetCloak(window, cloaked);
 
+    public int Place(IReadOnlyList<Placement> placements, bool activate = false) =>
+        Win32Position.Place(placements, activate);
+
+    public void SetMaximized(WindowHandle window, bool maximized)
+    {
+        if (maximized)
+        {
+            Win32Show.Maximize(window);
+        }
+        else
+        {
+            Win32Show.Restore(window);
+        }
+    }
+
+    public void SetMinimized(WindowHandle window, bool minimized)
+    {
+        if (minimized)
+        {
+            Win32Show.Minimize(window);
+        }
+        else
+        {
+            Win32Show.Restore(window);
+        }
+    }
+
+    public void SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
+
+    public bool Focus(WindowHandle window) => Win32Focus.Focus(window).Succeeded;
+
     public void Dispose()
     {
         _desktops.Dispose();

@@ -53,6 +53,15 @@ public sealed class ConfigPaths
     /// </summary>
     public string CloakLedgerFile => Path.Combine(RuntimeDir, "cloaked.json");
 
+    /// <summary>
+    /// Where each window was before AkuWM moved it, written before the first
+    /// move so the desk can be put back by a process that is not this one.
+    /// </summary>
+    public string GeometryJournalFile => Path.Combine(RuntimeDir, "geometry.json");
+
+    /// <summary>How the last run ended. Two bad endings in a row means safe mode.</summary>
+    public string SessionFile => Path.Combine(RuntimeDir, "session.json");
+
     /// <summary>The marker file that turns debug logging on without a restart.</summary>
     public string DebugMarkerFile => Path.Combine(RuntimeDir, "debug");
 

@@ -154,6 +154,31 @@ if ($signature.Status -ne 'Valid') {
 }
 Good "signed, status $($signature.Status)"
 
+# --- 3b. the way out --------------------------------------------------------
+# A window manager that can hide windows has to ship the button that gives them
+# back, and that button has to be reachable when the window manager itself is
+# the problem -- so it is a file on the Desktop, not a chord AkuWM handles.
+Step 'Installing the rescue button'
+
+$rescueSource = Join-Path $PSScriptRoot 'akuwm-rescue.cmd'
+if (Test-Path $rescueSource) {
+    $rescueTarget = Join-Path (Split-Path $target -Parent) 'akuwm-rescue.cmd'
+    Copy-Item $rescueSource $rescueTarget -Force
+    Good "installed $rescueTarget"
+
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    $link = Join-Path $desktop 'Rescue my desk (AkuWM).lnk'
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($link)
+    $shortcut.TargetPath = $rescueTarget
+    $shortcut.WorkingDirectory = Split-Path $target -Parent
+    $shortcut.Description = 'Stop AkuWM and put every window back where it was'
+    $shortcut.Save()
+    Good "put 'Rescue my desk (AkuWM)' on the Desktop"
+} else {
+    Note "no akuwm-rescue.cmd next to this script; skipping the Desktop button"
+}
+
 # --- 4. does Windows agree? -------------------------------------------------
 Step 'Checking that Windows actually grants uiAccess'
 Note 'starting the installed binary and asking it what its token says'

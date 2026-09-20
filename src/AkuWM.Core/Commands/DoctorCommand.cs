@@ -98,6 +98,7 @@ public sealed class DoctorCommand
         CheckPipe(checks);
         CheckMonitors(checks);
         CheckCloakedWindows(checks);
+        CheckSafetyNet(checks);
 
         foreach (Func<Check> check in _extra)
         {
@@ -267,6 +268,47 @@ public sealed class DoctorCommand
                 $"{(cloaked.Count > 6 ? ", ..." : string.Empty)}); most will be on other native virtual " +
                 "desktops. `akuwm uncloak-all` reports which ones the shell lets go"));
         }
+    }
+
+    /// <summary>
+    /// What is standing between a bad run and a desk the person cannot use.
+    /// </summary>
+    /// <remarks>
+    /// Reported even when everything is fine, because the answer a person
+    /// wants before letting a window manager rearrange their screen is not
+    /// "no problems found" but "here is what happens when there is one".
+    /// </remarks>
+    private void CheckSafetyNet(List<Check> checks)
+    {
+        Session? last = new SessionMarker(_paths.SessionFile).Previous;
+
+        if (last is null)
+        {
+            checks.Add(new("last run", CheckStatus.Info, "AkuWM has not run on this machine yet"));
+        }
+        else if (last.CleanExit)
+        {
+            checks.Add(new("last run", CheckStatus.Ok, "ended cleanly"));
+        }
+        else
+        {
+            bool safeMode = last.UncleanInARow + 1 >= SessionMarker.SafeModeAfter;
+            checks.Add(new("last run", safeMode ? CheckStatus.Warn : CheckStatus.Info,
+                $"did not shut down ({last.UncleanInARow + 1} in a row)"
+                + (safeMode
+                    ? ". The next start manages nothing unless it is `akuwm daemon --force`"
+                    : string.Empty)));
+        }
+
+        int moved = new GeometryJournal(_paths.GeometryJournalFile).Entries.Count;
+        checks.Add(new("geometry journal", moved > 0 ? CheckStatus.Info : CheckStatus.Ok,
+            moved > 0
+                ? $"{moved} window(s) AkuWM has moved and can put back where it found them"
+                : "empty: no window is out of place because of AkuWM"));
+
+        checks.Add(new("the way out", CheckStatus.Info,
+            "`akuwm rescue` stops AkuWM and gives every window back. Nothing of AkuWM is in the "
+            + "Startup folder, so restarting the machine comes up on the old stack"));
     }
 
     private static void CheckOtherProcesses(List<Check> checks)

@@ -16,6 +16,7 @@ public sealed class CommandRouter
     private readonly MonitorCommands? _monitors;
     private readonly UncloakCommand? _uncloak;
     private readonly BenchCommand? _bench;
+    private readonly RescueCommand? _rescue;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -29,7 +30,8 @@ public sealed class CommandRouter
         ShadowCommand? shadow = null,
         MonitorCommands? monitors = null,
         UncloakCommand? uncloak = null,
-        BenchCommand? bench = null)
+        BenchCommand? bench = null,
+        RescueCommand? rescue = null)
     {
         _config = config;
         _doctor = doctor;
@@ -38,6 +40,7 @@ public sealed class CommandRouter
         _monitors = monitors;
         _uncloak = uncloak;
         _bench = bench;
+        _rescue = rescue;
     }
 
     /// <summary>
@@ -53,7 +56,19 @@ public sealed class CommandRouter
     /// one arranging it.
     /// </remarks>
     public static bool NeedsNoDaemon(string verb) =>
-        verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors" or "uncloak-all" or "bench";
+        verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors"
+            or "uncloak-all" or "bench" or "rescue";
+
+    /// <summary>
+    /// Commands a second process answers itself even when the daemon is up.
+    /// </summary>
+    /// <remarks>
+    /// There is one, and it is the reason the rule exists: <c>rescue</c> is
+    /// what a person runs when AkuWM has stopped behaving, and handing it to
+    /// the misbehaving process to execute would be handing it to the problem.
+    /// It stops that process and works from the files on disk instead.
+    /// </remarks>
+    public static bool NeverDelegates(string verb) => verb is "rescue";
 
     public CommandResponse Execute(string line)
     {
@@ -80,6 +95,8 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to measure"),
                 "uncloak-all" => _uncloak?.Execute(line)
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to uncloak with"),
+                "rescue" => _rescue?.Execute(line, tokens)
+                    ?? CommandResponse.Fail(line, "there is no platform layer on this host to rescue"),
                 "doctor" => _doctor.Execute(line),
                 "version" => CommandResponse.Ok(line, new { version = Build.Version, build = Build.Description }),
                 "help" => CommandResponse.Ok(line, new { commands = Help }),
@@ -110,6 +127,7 @@ public sealed class CommandRouter
         "monitors list",
         "monitors identify [--dry-run]",
         "uncloak-all",
+        "rescue [--all] [--keep-daemon] [--forgive]",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",
         "doctor",

@@ -12,7 +12,7 @@ namespace AkuWM.Tests;
 /// two this setup has -- so a test failing here means the decision is wrong,
 /// not that the fake is unrealistic.
 /// </remarks>
-public sealed class FakePlatform : IPlatform
+public sealed class FakePlatform : IPlatform, IPlatformActions
 {
     public List<MonitorSnapshot> MonitorList { get; } = [];
 
@@ -24,7 +24,12 @@ public sealed class FakePlatform : IPlatform
 
     public IReadOnlyList<MonitorSnapshot> Monitors() => MonitorList;
 
-    public IReadOnlyList<WindowSnapshot> Windows() => WindowList;
+    /// <summary>
+    /// A copy, as the real one is: every call there builds a fresh list, and a
+    /// caller that changes windows while walking them must not be able to
+    /// break here in a way it could not break on the desk.
+    /// </summary>
+    public IReadOnlyList<WindowSnapshot> Windows() => [.. WindowList];
 
     public WindowSnapshot? Window(WindowHandle handle) =>
         WindowList.FirstOrDefault(w => w.Handle == handle);
@@ -32,6 +37,83 @@ public sealed class FakePlatform : IPlatform
     public WindowHandle Foreground() => ForegroundWindow;
 
     public (int X, int Y) CursorPosition() => Cursor;
+
+    // ---- the half that changes things -------------------------------------
+    // It really changes them: the fake desk is mutated, so a test can assert
+    // where a window ended up instead of which calls were made. A restore that
+    // calls everything in the right order and leaves the window in the wrong
+    // place is a restore that fails here, which is the point.
+
+    /// <summary>Windows the fake refuses to uncloak, for the shell that lies.</summary>
+    public HashSet<long> RefusesToUncloak { get; } = [];
+
+    public List<string> Calls { get; } = [];
+
+    public string? SetCloak(WindowHandle window, bool cloaked)
+    {
+        Calls.Add($"cloak {window.Value} {cloaked}");
+
+        if (!cloaked && RefusesToUncloak.Contains(window.Value))
+        {
+            return null; // reports success, does nothing: what the shell really does
+        }
+
+        Replace(window, w => w with
+        {
+            Cloak = cloaked ? w.Cloak | CloakKind.Shell : w.Cloak & ~CloakKind.Shell,
+        });
+
+        return null;
+    }
+
+    public int Place(IReadOnlyList<Placement> placements, bool activate = false)
+    {
+        foreach (Placement placement in placements)
+        {
+            Calls.Add($"place {placement.Window.Value} {placement.Frame}");
+            Replace(placement.Window, w => w with
+            {
+                FrameBounds = placement.Frame,
+                WindowRect = placement.Frame.Inflate(9),
+            });
+        }
+
+        return placements.Count;
+    }
+
+    public void SetMaximized(WindowHandle window, bool maximized)
+    {
+        Calls.Add($"maximize {window.Value} {maximized}");
+        Replace(window, w => w with { IsMaximized = maximized, IsMinimized = false });
+    }
+
+    public void SetMinimized(WindowHandle window, bool minimized)
+    {
+        Calls.Add($"minimize {window.Value} {minimized}");
+        Replace(window, w => w with { IsMinimized = minimized, IsMaximized = false });
+    }
+
+    public void SetTopmost(WindowHandle window, bool topmost)
+    {
+        Calls.Add($"topmost {window.Value} {topmost}");
+        Replace(window, w => w with { IsTopmost = topmost });
+    }
+
+    public bool Focus(WindowHandle window)
+    {
+        Calls.Add($"focus {window.Value}");
+        ForegroundWindow = window;
+        return true;
+    }
+
+    private void Replace(WindowHandle handle, Func<WindowSnapshot, WindowSnapshot> change)
+    {
+        int at = WindowList.FindIndex(w => w.Handle == handle);
+        if (at >= 0)
+        {
+            WindowList[at] = change(WindowList[at]);
+        }
+    }
 
     /// <summary>The main monitor of this desk: 4K at 150 %, taskbar at the bottom.</summary>
     public static MonitorSnapshot MainMonitor(long handle = 1) => new()

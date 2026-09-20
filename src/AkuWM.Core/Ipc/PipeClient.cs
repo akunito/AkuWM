@@ -34,9 +34,22 @@ public sealed class PipeClient
         }
     }
 
+    /// <summary>
+    /// Sends one command and waits for the answer.
+    /// </summary>
+    /// <remarks>
+    /// Both halves have a deadline. Connecting can fail because nothing is
+    /// listening, which is ordinary; the answer can fail to arrive because the
+    /// daemon accepted the connection and then stopped answering, which is the
+    /// failure that matters -- without a deadline on the read, every command
+    /// typed at a stuck window manager would hang the terminal too, including
+    /// the one that puts the desk back.
+    /// </remarks>
     public CommandResponse Send(string command, int timeoutMs = 5000)
     {
-        using var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.None);
+        using var pipe = new NamedPipeClientStream(
+            ".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+
         try
         {
             pipe.Connect(timeoutMs);
@@ -50,10 +63,22 @@ public sealed class PipeClient
         using var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 1024, leaveOpen: true);
 
         writer.WriteLine(command);
-        string? line = reader.ReadLine();
 
-        return line is null
-            ? CommandResponse.Fail(command, "AkuWM closed the connection without answering")
-            : CommandResponse.FromLine(line);
+        try
+        {
+            using var deadline = new CancellationTokenSource(timeoutMs);
+            string? line = reader.ReadLineAsync(deadline.Token).AsTask().GetAwaiter().GetResult();
+
+            return line is null
+                ? CommandResponse.Fail(command, "AkuWM closed the connection without answering")
+                : CommandResponse.FromLine(line);
+        }
+        catch (OperationCanceledException)
+        {
+            return CommandResponse.Fail(
+                command,
+                $"AkuWM took the command and did not answer within {timeoutMs} ms. "
+                + "It may be stuck; `akuwm rescue` puts the desk back without asking it.");
+        }
     }
 }
