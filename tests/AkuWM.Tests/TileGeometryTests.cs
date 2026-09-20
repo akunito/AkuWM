@@ -142,6 +142,62 @@ public class TileGeometryTests
         }
     }
 
+    [Theory]
+    [InlineData(8, 0.75)]
+    [InlineData(14, 0.75)]
+    [InlineData(22, 0.95)]
+    [InlineData(1, 0.5)]
+    [InlineData(3, 0.99)]
+    public void A_tile_narrower_than_its_gap_still_produces_rectangles(int width, double share)
+    {
+        // Measured: a nest sixteen deep on the portrait monitor already makes a
+        // 1 px tile. Math.Clamp with min > max threw here, WmLoop caught it,
+        // and the desk then redrew nothing for the rest of the run: whatever
+        // was cloaked stayed cloaked and workspace switching became a no-op.
+        Tile root = Tile.Split(SplitDirection.Horizontal, Leaf(1), Leaf(2));
+        root.Children[0].Share = share;
+        root.Children[1].Share = 1 - share;
+        root.Normalise();
+
+        Dictionary<WindowHandle, Rect> rects =
+            TileGeometry.Compute(root, new Rect(0, 0, width, 100), new Gaps(12));
+
+        Assert.Equal(2, rects.Count);
+        Assert.All(rects.Values, r => Assert.True(r.Width > 0 && r.Height > 0, $"{r}"));
+    }
+
+    [Fact]
+    public void No_share_and_no_area_ever_throws()
+    {
+        var random = new Random(20260920);
+
+        for (int i = 0; i < 2000; i++)
+        {
+            int children = random.Next(2, 6);
+            var leaves = new Tile[children];
+            for (int c = 0; c < children; c++)
+            {
+                leaves[c] = Leaf(c + 1);
+            }
+
+            Tile root = Tile.Split(
+                random.Next(2) == 0 ? SplitDirection.Horizontal : SplitDirection.Vertical, leaves);
+
+            for (int c = 0; c < children; c++)
+            {
+                root.Children[c].Share = random.NextDouble() + 0.001;
+            }
+
+            root.Normalise();
+
+            var area = new Rect(0, 0, random.Next(1, 200), random.Next(1, 200));
+            Dictionary<WindowHandle, Rect> rects = TileGeometry.Compute(root, area, new Gaps(random.Next(0, 24)));
+
+            Assert.Equal(children, rects.Count);
+            Assert.All(rects.Values, r => Assert.True(r.Width > 0 && r.Height > 0, $"{area} -> {r}"));
+        }
+    }
+
     [Fact]
     public void An_area_too_small_for_the_windows_still_gives_each_one_something()
     {

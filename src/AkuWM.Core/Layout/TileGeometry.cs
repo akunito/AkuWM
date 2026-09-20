@@ -82,8 +82,15 @@ public static class TileGeometry
             Tile child = tile.Children[i];
             accumulated += child.Share;
 
+            // Every child that comes after this one still needs a pixel, so the
+            // edge can never pass extent - remaining. Clamping to extent alone
+            // let min exceed max once a rounded edge had already reached it,
+            // and Math.Clamp throws on that: measured, a two-child 75/25 split
+            // in a tile 14 px wide. WmLoop caught the throw and the desk then
+            // redrew nothing for the rest of the run.
+            int remaining = count - 1 - i;
             int edge = i == count - 1 ? extent : (int)Math.Round(accumulated * extent);
-            edge = Math.Clamp(edge, previousEdge + 1, extent);
+            edge = Math.Clamp(edge, previousEdge + 1, extent - remaining);
 
             int position = start + previousEdge + (i * gaps.Inner);
             int size = edge - previousEdge;

@@ -54,12 +54,17 @@ public sealed class BenchCommand
         WindowSnapshot? one = windows.FirstOrDefault();
         double readOne = one is null ? 0 : Time(rounds * 10, () => _platform.Window(one.Handle));
         double buildModel = Time(rounds, () => ShadowModel.Build(config, monitors, windows));
+        double ledgerWrite = TimeLedger(rounds, one);
 
         var results = new List<object>
         {
             Measurement("read one window", readOne, "an event becoming a fact"),
             Measurement("build the model", buildModel, $"{windows.Count} windows, rules and all"),
-            Measurement("enumerate every window", enumerateWindows, "a cold query; not on the hot path"),
+            Measurement("record one cloak", ledgerWrite, "paid once per window hidden, inside the gesture"),
+            Measurement("a workspace switch of 8", (readOne * 8) + buildModel + (ledgerWrite * 16),
+                "8 hidden and 8 shown: the reads and the records a real switch pays"),
+            Measurement("enumerate every window", enumerateWindows,
+                "every window appearing or disappearing, menus and tooltips included"),
             Measurement("enumerate the monitors", enumerateMonitors, "only after a display change"),
         };
 
@@ -77,6 +82,41 @@ public sealed class BenchCommand
             comparison = "the stack this replaces pays 47 ms for one CLI round trip, 110 ms to bring a window",
             measurements = results,
         });
+    }
+
+    /// <summary>
+    /// What one entry in the cloak ledger costs. Paid per window hidden and per
+    /// window shown, on the wm thread, inside the gesture.
+    /// </summary>
+    private double TimeLedger(int rounds, WindowSnapshot? window)
+    {
+        if (window is null)
+        {
+            return 0;
+        }
+
+        string file = Path.Combine(_paths.RuntimeDir, "bench-ledger");
+        var ledger = new State.CloakLedger(file);
+
+        try
+        {
+            return Time(rounds * 5, () =>
+            {
+                ledger.Record(window);
+                ledger.Forget(window.Handle);
+            }) / 2;
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (IOException)
+            {
+                // A leftover bench file is not worth failing the bench for.
+            }
+        }
     }
 
     private static object Measurement(string what, double ms, string note) => new

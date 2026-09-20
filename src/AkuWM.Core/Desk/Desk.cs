@@ -46,6 +46,21 @@ public sealed partial class Desk
 
     private readonly Func<long> _clock;
 
+    /// <summary>Is that handle still a window? Null means believe the enumeration.</summary>
+    private Func<WindowHandle, bool>? _stillAWindow;
+
+    /// <summary>
+    /// Lets the desk check a handle before forgetting a window it has hidden.
+    /// </summary>
+    /// <remarks>
+    /// The candidate filter flaps: a title that goes empty for a moment, a
+    /// splash turning into a main window, a game loading. One pass without a
+    /// window AkuWM has cloaked used to forget it, and the re-adopt then read
+    /// the cloak as somebody else's -- unmanaged, invisible, off the taskbar
+    /// and out of Alt+Tab, with nothing left that would ever take it off.
+    /// </remarks>
+    public void ChecksHandlesWith(Func<WindowHandle, bool> stillAWindow) => _stillAWindow = stillAWindow;
+
     /// <param name="clock">
     /// Milliseconds from somewhere monotonic. Injected so a test can let two
     /// seconds pass without taking two seconds.
@@ -241,9 +256,30 @@ public sealed partial class Desk
             }
         }
 
-        foreach (WindowHandle gone in _windows.Keys.Where(h => !present.Contains(h)).ToList())
+        List<WindowHandle>? gone = null;
+        foreach ((WindowHandle handle, DeskWindow window) in _windows)
         {
-            Forget(gone);
+            if (present.Contains(handle))
+            {
+                continue;
+            }
+
+            // A window AkuWM has hidden is the one it must not lose: check the
+            // handle before believing an enumeration that left it out.
+            if (window.Hidden && _stillAWindow?.Invoke(handle) == true)
+            {
+                continue;
+            }
+
+            (gone ??= []).Add(handle);
+        }
+
+        if (gone is not null)
+        {
+            for (int i = 0; i < gone.Count; i++)
+            {
+                Forget(gone[i]);
+            }
         }
     }
 

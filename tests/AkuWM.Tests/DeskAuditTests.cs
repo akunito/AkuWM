@@ -258,6 +258,106 @@ public class DeskAuditTests
         Assert.True(_fixture.Managed(1)!.Sticky);
     }
 
+    [Fact]
+    public void A_hidden_window_that_misses_one_pass_is_not_abandoned_cloaked()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Turn();
+        Assert.True(_fixture.IsHidden(1));
+
+        // One enumeration that does not list it -- an Electron app whose title
+        // goes empty for a moment, a splash turning into a main window, a game
+        // loading -- all of which fail the candidate filter briefly.
+        Desk.Sync([]);
+        _fixture.Sync();
+
+        // Forgetting it means re-adopting it as CloakedElsewhere: unmanaged,
+        // invisible, off the taskbar, out of Alt+Tab, and nothing left that
+        // will ever take the cloak off.
+        Assert.NotNull(_fixture.Managed(1));
+        Assert.True(_fixture.Managed(1)!.Managed);
+
+        Desk.FocusWorkspace("11");
+        _fixture.Turn();
+        Assert.False(_fixture.IsHidden(1));
+    }
+
+    [Fact]
+    public void A_hidden_window_whose_handle_really_is_gone_is_forgotten()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Turn();
+
+        _fixture.Platform.WindowList.Clear();
+        _fixture.Sync();
+
+        Assert.Null(_fixture.Managed(1));
+    }
+
+    [Fact]
+    public void After_a_workspace_switch_the_model_knows_where_the_focus_went()
+    {
+        _fixture.Open(1);
+        Desk.FocusWorkspace("12");
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.Focus(W(2));
+
+        Desk.WantFocus(Desk.FocusWorkspace("11"));
+        Redraw redraw = _fixture.Turn();
+
+        // The focus was recorded before the un-hide, so the model refused it
+        // and kept pointing at the window on the workspace just hidden -- and
+        // the next chord with no --id acted on a window nobody could see.
+        Assert.Equal(W(1), redraw.Focus);
+        Assert.Equal(W(1), Desk.Focused);
+    }
+
+    [Fact]
+    public void A_raised_hidden_window_hands_the_keyboard_back_to_a_visible_one()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.Focus(W(2));
+
+        // Something raised the cloaked window: a taskbar click, a toast, an app
+        // calling SetForegroundWindow on itself.
+        Assert.False(Desk.Focus(W(1)));
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Equal(W(2), redraw.Focus);
+    }
+
+    [Fact]
+    public void A_window_dragged_away_long_after_it_settled_still_goes_back()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        Rect was = _fixture.FrameOf(2);
+
+        // A minute of the window sitting where it was put.
+        _fixture.Wait(60_000);
+        _fixture.Sync();
+        Assert.True(Desk.Compute().IsNothing);
+
+        _fixture.Platform.Place([new Placement(W(2), new Rect(300, 900, 800, 600))]);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        // The patience clock only ever started; it never stopped when the
+        // window complied, so the first drag after that was read as a refusal.
+        Assert.False(_fixture.Managed(2)!.PlacementRefused);
+        Assert.Equal(was, _fixture.FrameOf(2));
+    }
+
     // ---- monitors coming and going ----------------------------------------
 
     [Fact]

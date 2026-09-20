@@ -33,6 +33,10 @@ public sealed partial class Desk
 
         if (window.Hidden)
         {
+            // Refusing to believe it is half the job; the other half is taking
+            // the keyboard off the invisible window, which otherwise swallows
+            // every keystroke.
+            FocusSomethingVisible();
             return false;
         }
 
@@ -43,6 +47,42 @@ public sealed partial class Desk
             workspace.Touch(handle);
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Asks for the focus to land on something the person can see.
+    /// </summary>
+    /// <remarks>
+    /// Called when something raised a window AkuWM has hidden -- a taskbar
+    /// click, a toast, an app calling SetForegroundWindow on itself. Refusing
+    /// to believe it is half the job; the other half is taking the keyboard
+    /// off the invisible window, which otherwise swallows every keystroke.
+    /// </remarks>
+    public bool FocusSomethingVisible()
+    {
+        DeskMonitor? monitor = FocusedMonitor;
+        WindowHandle target = monitor?.Displayed?.LastFocused ?? WindowHandle.None;
+
+        if (target.IsNone || Window(target) is not { Managed: true, Hidden: false })
+        {
+            for (int i = 0; i < _monitors.Count; i++)
+            {
+                if (_monitors[i].Displayed?.LastFocused is { IsNone: false } other
+                    && Window(other) is { Managed: true, Hidden: false })
+                {
+                    target = other;
+                    break;
+                }
+            }
+        }
+
+        if (target.IsNone)
+        {
+            return false;
+        }
+
+        WantFocus(target);
         return true;
     }
 

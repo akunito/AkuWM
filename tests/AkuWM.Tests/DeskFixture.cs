@@ -25,6 +25,7 @@ public sealed class DeskFixture
         Platform.MonitorList.Add(FakePlatform.SecondMonitor());
 
         Desk = new Desk(config ?? Configuration(), clock: () => _now);
+        Desk.ChecksHandlesWith(h => Platform.Window(h) is not null);
         Desk.SetMonitors(Platform.Monitors());
     }
 

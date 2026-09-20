@@ -71,6 +71,10 @@ public static class Win32Windows
 
     public static WindowSnapshot? Read(WindowHandle handle) => Read(new HWND((IntPtr)handle.Value));
 
+    /// <summary>One call: does that handle still name a window?</summary>
+    public static bool IsWindow(WindowHandle handle) =>
+        PInvoke.IsWindow(new HWND((IntPtr)handle.Value));
+
     /// <summary>
     /// Could this window ever be managed? Cheap checks only: the expensive
     /// ones (process name, DWM attributes) are paid once the answer is yes.

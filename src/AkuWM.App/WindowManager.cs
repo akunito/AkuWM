@@ -78,6 +78,7 @@ public sealed class WindowManager : IAsyncDisposable
 
         // A window that has closed is not one AkuWM has to put back.
         _desk.Forgotten += journal.Forget;
+        _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
 
         _loop = new WmLoop(OnEvent, watchdog.Beat, onBatchEnd: Redraw);
 
@@ -199,9 +200,7 @@ public sealed class WindowManager : IAsyncDisposable
             case EventResponse.TheFocusMoved:
                 if (!_desk.Focus(platformEvent.Handle))
                 {
-                    // Something raised a window AkuWM has hidden. Following it
-                    // would leave the keyboard pointing at a window nobody can
-                    // see, so the focus is put back where it belongs.
+                    // Desk.Focus has already asked for the keyboard back.
                     Log.Debug(() => $"refused the focus for the hidden window {platformEvent.Handle}");
                     _dirty = true;
                 }

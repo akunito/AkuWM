@@ -196,17 +196,23 @@ public sealed partial class Desk
 
     private void WantPlaced(DeskWindow window, Rect frame, List<Placement> into)
     {
+        // Where it should be: the patience clock restarts, so a drag an hour
+        // from now is a fresh request rather than a refusal that never was.
         if (window.Snapshot.FrameBounds == frame)
         {
             window.PlacementRefused = false;
+            window.PlacedAt = Now;
             return;
         }
 
-        // Already asked for exactly this, and it landed near enough. The
-        // difference is the window's own doing, not a person moving it.
+        // Already asked for exactly this, and it landed near enough: the
+        // difference is the window's own doing, not a person moving it. The
+        // clock restarts, or a drag an hour later reads as a refusal that
+        // never happened and the window is left where it was dragged.
         if (window.Placed == frame && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
         {
             window.PlacementRefused = false;
+            window.PlacedAt = Now;
             return;
         }
 
@@ -297,15 +303,6 @@ public sealed partial class Desk
     /// </remarks>
     public void Applied(Redraw redraw, IReadOnlySet<WindowHandle>? refused = null)
     {
-        if (!redraw.Focus.IsNone)
-        {
-            if (_wantFocus == redraw.Focus)
-            {
-                _wantFocus = WindowHandle.None;
-            }
-
-            Focus(redraw.Focus);
-        }
 
         foreach (Placement placement in redraw.Place)
         {
@@ -346,6 +343,20 @@ public sealed partial class Desk
             {
                 window.Marked = fullscreen;
             }
+        }
+
+        // Last, after the un-hide above: Focus refuses a window the model still
+        // believes is hidden, which used to leave Focused pointing at the
+        // workspace that was just put away -- and the next chord with no --id
+        // acted on a window nobody could see.
+        if (!redraw.Focus.IsNone)
+        {
+            if (_wantFocus == redraw.Focus)
+            {
+                _wantFocus = WindowHandle.None;
+            }
+
+            Focus(redraw.Focus);
         }
     }
 }
