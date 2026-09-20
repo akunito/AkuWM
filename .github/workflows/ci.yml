@@ -32,10 +32,17 @@ jobs:
       - name: Publish win-x64 from Linux
         run: dotnet publish src/AkuWM.App/AkuWM.App.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 
+      # The drop-in CLI goes with it: the installer puts both in Program Files,
+      # and without it the hotkey script has nothing to talk to.
+      - name: Publish the glazewm shim
+        run: dotnet publish src/AkuWM.Shim/AkuWM.Shim.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
+
       - uses: actions/upload-artifact@v4
         with:
           name: akuwm-win-x64
-          path: publish/akuwm.exe
+          path: |
+            publish/akuwm.exe
+            publish/glazewm.exe
 
   # And again on Windows, where it actually runs. The platform tests that need
   # a desktop skip themselves; what this proves is that the Windows-targeted
