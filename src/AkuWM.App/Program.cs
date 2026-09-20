@@ -3,6 +3,7 @@ using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Platform;
+using AkuWM.Core.State;
 using AkuWM.Platform;
 
 namespace AkuWM.App;
@@ -123,6 +124,20 @@ public static class Program
             Log.Warn(issue.ToString());
         }
 
+        // Before anything else touches a window: whatever went wrong in the
+        // last run, the desk is whole again by the time AkuWM is listening.
+        using (var platform = new WindowsPlatform())
+        {
+            var ledger = new CloakLedger(paths.CloakLedgerFile);
+            RecoveryResult recovery = ledger.Recover(platform, platform);
+            if (recovery.Anything)
+            {
+                Log.Info(
+                    $"recovery: {recovery.Recovered.Count} window(s) given back, " +
+                    $"{recovery.Failed.Count} refused, {recovery.Stale.Count} stale entries dropped");
+            }
+        }
+
         var stopping = new ManualResetEventSlim(false);
         var server = new PipeServer(Router(paths));
         server.ExitRequested += () => stopping.Set();
@@ -149,14 +164,15 @@ public static class Program
         var windows = new WindowsPlatform();
         IPlatform platform = windows;
         var query = new QueryCommands(platform, paths);
+        var ledger = new CloakLedger(paths.CloakLedgerFile);
 
         return new CommandRouter(
             new ConfigCommands(paths),
-            new DoctorCommand(paths, () => new PipeClient().IsRunning(), platform, PlatformChecks(windows)),
+            new DoctorCommand(paths, () => new PipeClient().IsRunning(), platform, PlatformChecks(windows), ledger),
             query,
             new ShadowCommand(query, Compat.GlazeWmProbe.Ask),
             new MonitorCommands(platform, paths),
-            new UncloakCommand(platform, windows),
+            new UncloakCommand(platform, windows, ledger),
             new BenchCommand(platform, paths, windows));
     }
 

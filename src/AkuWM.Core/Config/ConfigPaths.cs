@@ -47,6 +47,12 @@ public sealed class ConfigPaths
 
     public string JournalFile => Path.Combine(RuntimeDir, "journal.json");
 
+    /// <summary>
+    /// The windows AkuWM has hidden, written before each cloak so a crash
+    /// cannot take them with it.
+    /// </summary>
+    public string CloakLedgerFile => Path.Combine(RuntimeDir, "cloaked.json");
+
     /// <summary>The marker file that turns debug logging on without a restart.</summary>
     public string DebugMarkerFile => Path.Combine(RuntimeDir, "debug");
 

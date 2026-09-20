@@ -85,10 +85,17 @@ public sealed class ImmersiveShell : IDisposable
 
             try
             {
-                // The first argument says *which* cloak, the second whether it
-                // is on. Clearing it with type None is refused with E_INVALIDARG
-                // (measured): the type has to stay Shell and the flag go to 0.
-                view.SetCloak(ApplicationViewCloakType.Shell, cloaked ? 1 : 0);
+                // Measured, because none of this is documented and two of the
+                // three obvious spellings are wrong:
+                //   cloak   = (Shell, 1)    puts the shell's cloak on
+                //   uncloak = (Default, 0)  takes it off
+                //   (None, *) is refused with E_INVALIDARG
+                //   (Shell, 0) returns success and does nothing at all — which
+                //             is how a rescue can report thirteen successes and
+                //             leave thirteen windows invisible.
+                view.SetCloak(
+                    cloaked ? ApplicationViewCloakType.Shell : ApplicationViewCloakType.Default,
+                    cloaked ? 1 : 0);
                 return null;
             }
             finally
@@ -117,6 +124,57 @@ public sealed class ImmersiveShell : IDisposable
         }
 
         Log.Debug("immersive shell released");
+    }
+
+    /// <summary>
+    /// Tries every cloak type and flag, reporting what each one does.
+    /// </summary>
+    /// <remarks>
+    /// For the windows a dead window manager left hidden. The type used to set
+    /// a cloak is not readable afterwards -- DWM only reports that the shell
+    /// did it -- so recovering one means trying the four in turn and watching
+    /// the flag.
+    /// </remarks>
+    public IEnumerable<(string What, string? Error)> TryEveryUncloak(WindowHandle window)
+    {
+        foreach (ApplicationViewCloakType type in Enum.GetValues<ApplicationViewCloakType>())
+        {
+            foreach (int flag in new[] { 0, 1 })
+            {
+                yield return ($"type={type}({(int)type}) flag={flag}", Call(window, type, flag));
+            }
+        }
+    }
+
+    private string? Call(WindowHandle window, ApplicationViewCloakType type, int flags)
+    {
+        if (_views is null)
+        {
+            return Unavailable ?? "the shell's view collection is not available";
+        }
+
+        try
+        {
+            _views.GetViewForHwnd((IntPtr)window.Value, out IApplicationView? view);
+            if (view is null)
+            {
+                return "the shell has no view for that window";
+            }
+
+            try
+            {
+                view.SetCloak(type, flags);
+                return null;
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(view);
+            }
+        }
+        catch (Exception ex)
+        {
+            return $"{ex.GetType().Name}: 0x{ex.HResult:x8}";
+        }
     }
 
     private enum ApplicationViewCloakType

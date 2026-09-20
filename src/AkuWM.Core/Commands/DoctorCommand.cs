@@ -6,6 +6,7 @@ using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 using AkuWM.Core.Platform;
+using AkuWM.Core.State;
 
 namespace AkuWM.Core.Commands;
 
@@ -40,6 +41,7 @@ public sealed class DoctorCommand
     private readonly Func<bool> _daemonRunning;
     private readonly IPlatform? _platform;
     private readonly IReadOnlyList<Func<Check>> _extra;
+    private readonly CloakLedger? _ledger;
 
     /// <param name="platform">
     /// When there is one, doctor also reports the desk itself: the monitors and
@@ -53,12 +55,14 @@ public sealed class DoctorCommand
         ConfigPaths paths,
         Func<bool>? daemonRunning = null,
         IPlatform? platform = null,
-        IReadOnlyList<Func<Check>>? extra = null)
+        IReadOnlyList<Func<Check>>? extra = null,
+        CloakLedger? ledger = null)
     {
         _paths = paths;
         _daemonRunning = daemonRunning ?? (() => new PipeClient().IsRunning());
         _platform = platform;
         _extra = extra ?? [];
+        _ledger = ledger;
     }
 
     public CommandResponse Execute(string line)
@@ -239,6 +243,16 @@ public sealed class DoctorCommand
             .ToList();
         checks.Add(new("windows", CheckStatus.Info,
             $"{windows.Count} on the desk, {cloaked.Count} cloaked by something other than AkuWM"));
+
+        if (_ledger is { } ledger)
+        {
+            int ours = ledger.Entries.Count;
+            checks.Add(new("cloak ledger", ours > 0 ? CheckStatus.Warn : CheckStatus.Ok,
+                ours > 0
+                    ? $"{ours} window(s) AkuWM hid and has not given back; they are recovered on the next start, " +
+                      "or now with `akuwm uncloak-all`"
+                    : "empty: AkuWM is not holding any window hidden"));
+        }
 
         if (cloaked.Count > 0)
         {

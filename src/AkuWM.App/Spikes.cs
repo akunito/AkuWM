@@ -41,6 +41,7 @@ public static class Spikes
             Say("  s4   how long does the hot path take?");
             Say("  s5   do the hooks keep firing while the main thread is busy?");
             Say("  s6   when a cloak refuses to come off, is it never cleared or put straight back?");
+            Say("  s7   is there ANY call that brings back a window a dead manager left hidden?");
             return 2;
         }
 
@@ -55,6 +56,7 @@ public static class Spikes
             "s4" => HotPath(),
             "s5" => Threads(Number(options, "seconds", 10)),
             "s6" => CloakFight(Window(options), Number(options, "seconds", 3)),
+            "s7" => RescueCloaked(Window(options)),
             _ => Fail($"'{args[1]}' is not one of s1, s2, s12, s3, s4, s5"),
         };
 
@@ -441,6 +443,73 @@ public static class Spikes
             Say("  ANSWER: it came off and stayed off.");
         }
 
+        return 0;
+    }
+
+    /// <summary>
+    /// S7: can a window a dead window manager left hidden be brought back at
+    /// all?
+    /// </summary>
+    /// <remarks>
+    /// This is the one that matters for living with AkuWM rather than for
+    /// building it. Windows have been lost on this desk every time the manager
+    /// was restarted mid-test, and "open a new one" is not an answer. The type
+    /// a cloak was set with cannot be read back, so every combination is tried
+    /// in turn and the flag is watched after each.
+    /// </remarks>
+    private static int RescueCloaked(WindowHandle target)
+    {
+        using var platform = new WindowsPlatform();
+
+        WindowSnapshot? window = target.IsNone
+            ? platform.Windows().FirstOrDefault(w => w.Cloak.HasFlag(CloakKind.Shell))
+            : platform.Window(target);
+
+        if (window is null)
+        {
+            Say("S7: nothing on this desk is cloaked. Nothing to rescue, which is the good outcome.");
+            return 0;
+        }
+
+        Say($"S7: {window.ProcessName} [{window.ClassName}] \"{window.Title}\"");
+        Say($"    cloak before: {window.Cloak}");
+        Say(string.Empty);
+
+        using var shell = new ImmersiveShell();
+        string? worked = null;
+
+        foreach ((string what, string? error) in shell.TryEveryUncloak(window.Handle))
+        {
+            Thread.Sleep(120);
+            CloakKind after = platform.Window(window.Handle)?.Cloak ?? CloakKind.None;
+            Say($"  {what,-28} error={error ?? "none",-34} cloak={after}");
+
+            if (!after.HasFlag(CloakKind.Shell))
+            {
+                worked = what;
+                break;
+            }
+        }
+
+        Say(string.Empty);
+        if (worked is not null)
+        {
+            Say($"  ANSWER: yes — {worked} brings it back.");
+            return 0;
+        }
+
+        // Last resort: ask the window itself to show, which goes through a
+        // different path entirely.
+        Say("  none of the cloak calls worked; trying ShowWindow instead");
+        Win32Show.Show(window.Handle);
+        Thread.Sleep(200);
+        CloakKind final = platform.Window(window.Handle)?.Cloak ?? CloakKind.None;
+        Say($"  after ShowWindow: cloak={final}");
+
+        Say(string.Empty);
+        Say(final.HasFlag(CloakKind.Shell)
+            ? "  ANSWER: NO — nothing this process can call brings it back."
+            : "  ANSWER: yes — ShowWindow brings it back where the cloak calls do not.");
         return 0;
     }
 

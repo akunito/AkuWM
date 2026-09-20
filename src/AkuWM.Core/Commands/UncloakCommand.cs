@@ -2,6 +2,7 @@ using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 using AkuWM.Core.Platform;
+using AkuWM.Core.State;
 
 namespace AkuWM.Core.Commands;
 
@@ -18,28 +19,29 @@ namespace AkuWM.Core.Commands;
 /// knows something went wrong and the program does not.
 /// </para>
 /// <para>
-/// Windows parked on another native virtual desktop are cloaked with the very
-/// same flag, and the shell will not let that one go: the call returns success
-/// and the flag stays on (measured, spike S6). They are reported rather than
-/// fixed, because uncloaking is not how a window comes back from another
-/// desktop -- switching to it is.
+/// Every window is verified afterwards rather than trusted: the shell has a
+/// spelling of this call that reports success and does nothing (measured,
+/// spike S7), and a rescue that claims thirteen successes while thirteen
+/// windows stay invisible is worse than no rescue at all.
 /// </para>
 /// <para>
-/// The <c>IVirtualDesktopManager</c> answer is deliberately not used to tell
-/// the two apart: on this Windows build it claims every window is on the
-/// current desktop, including ones that demonstrably are not. What AkuWM
-/// trusts instead is what it knows it did itself.
+/// Windows parked on another native virtual desktop carry the same flag. The
+/// <c>IVirtualDesktopManager</c> answer is not used to tell them apart,
+/// because on this Windows build it claims every window is on the current
+/// desktop; what separates them is simply whether the cloak comes off.
 /// </para>
 /// </remarks>
 public sealed class UncloakCommand
 {
     private readonly IPlatform _platform;
     private readonly IPlatformActions _actions;
+    private readonly CloakLedger? _ledger;
 
-    public UncloakCommand(IPlatform platform, IPlatformActions actions)
+    public UncloakCommand(IPlatform platform, IPlatformActions actions, CloakLedger? ledger = null)
     {
         _platform = platform;
         _actions = actions;
+        _ledger = ledger;
     }
 
     public CommandResponse Execute(string line)
@@ -78,8 +80,7 @@ public sealed class UncloakCommand
 
             if (error is null && stillCloaked)
             {
-                error = "the shell refused: the window is on another native virtual desktop, " +
-                        "and uncloaking is not how it comes back — switch to that desktop";
+                error = "the shell reported success and the cloak is still on";
             }
 
             var described = new
@@ -102,6 +103,10 @@ public sealed class UncloakCommand
                 Log.Warn($"could not uncloak {window}: {error}");
             }
         }
+
+        // Whatever the ledger still claims is either back now or gone; either
+        // way it is no longer something to give back on the next start.
+        _ledger?.Clear();
 
         return CommandResponse.Ok(line, new
         {
