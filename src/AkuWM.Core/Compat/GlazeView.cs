@@ -42,7 +42,7 @@ public static class GlazeView
 
         foreach (Workspace workspace in monitor.Workspaces)
         {
-            children.Add(Workspace(desk, monitor, workspace));
+            children.Add((JsonNode)Workspace(desk, monitor, workspace));
         }
 
         return new JsonObject
@@ -79,7 +79,7 @@ public static class GlazeView
         {
             if (desk.Window(handle) is { Managed: true } window)
             {
-                children.Add(Window(desk, workspace, window));
+                children.Add((JsonNode)Window(desk, workspace, window));
             }
         }
 
@@ -167,7 +167,7 @@ public static class GlazeView
                 {
                     if (desk.Window(handle) is { Managed: true } window && seen.Add(handle))
                     {
-                        windows.Add(Window(desk, workspace, window));
+                        windows.Add((JsonNode)Window(desk, workspace, window));
                     }
                 }
             }
@@ -179,7 +179,7 @@ public static class GlazeView
             {
                 if (desk.Window(handle) is { Managed: true } window && seen.Add(handle))
                 {
-                    windows.Add(Window(desk, monitor.Displayed, window));
+                    windows.Add((JsonNode)Window(desk, monitor.Displayed, window));
                 }
             }
         }
@@ -193,7 +193,7 @@ public static class GlazeView
 
         foreach (DeskMonitor monitor in desk.Monitors)
         {
-            monitors.Add(Monitor(desk, monitor));
+            monitors.Add((JsonNode)Monitor(desk, monitor));
         }
 
         return monitors;
@@ -207,7 +207,7 @@ public static class GlazeView
         {
             foreach (Workspace workspace in monitor.Workspaces)
             {
-                workspaces.Add(Workspace(desk, monitor, workspace));
+                workspaces.Add((JsonNode)Workspace(desk, monitor, workspace));
             }
         }
 

@@ -13,9 +13,26 @@
     <Copyright>Copyright (c) 2026 akunito</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/akunito/AkuWM</RepositoryUrl>
-    <!-- The window manager runs one hot thread and must not pay for server GC. -->
+    <!-- The window manager runs one hot thread and must not pay for server GC;
+         non-concurrent workstation GC also drops the background GC thread and
+         the memory it commits, and the heap here is tiny. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <EventSourceSupport>false</EventSourceSupport>
+
+    <!-- Measured on the desk (akuwm.exe, self-contained win-x64 single file):
+           plain        89.6 MB   start 293 ms   private RAM 11.8 MB
+           compressed   39.9 MB   start 351 ms   private RAM 29.8 MB
+           ReadyToRun  142.1 MB   start 306 ms   private RAM 22.0 MB
+         Plain wins the two that matter for a daemon that runs all day. The
+         bulk of its working set is the mapped image: shared, file-backed and
+         evictable. Compression trades 50 MB of free disk for 18 MB of private
+         RAM that can only be paged; ReadyToRun buys no startup here and costs
+         both. Trimming is the only thing that would improve disk AND memory,
+         and ten reflection sites block it: see docs/trimming.md. -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
   </PropertyGroup>
 
 </Project>
