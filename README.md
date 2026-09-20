@@ -4,10 +4,11 @@ A tiling window manager for Windows 11 that is also its own hotkey daemon and
 its own configuration UI — one MIT application in place of three programs that
 had to agree with each other.
 
-**Status: M0.** The configuration, the importer, the pipe and `doctor` are
-here. It manages no windows yet: that is M1 (the platform layer in shadow
-mode) and M2 (the takeover). The plan, milestone by milestone, lives in the
-dotfiles repository at
+**Status: M1.** AkuWM can see the desk — every window, every monitor by its
+EDID, and what it would do with each — and it changes nothing on it. Its view
+was compared with the window manager actually in charge, 270 times over 45
+minutes of real use, and agreed every time. Taking over is M2. The plan,
+milestone by milestone, lives in the dotfiles repository at
 `docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
 
 ## Why

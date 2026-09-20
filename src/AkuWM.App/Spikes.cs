@@ -245,12 +245,12 @@ public static class Spikes
         Say($"  keys seen while a normal window was:    {normalKeys}");
 
         string answer = elevatedKeys > 0
-            ? "yes — an unprivileged hook sees keys typed into an elevated window."
+            ? "yes - an unprivileged hook sees keys typed into an elevated window."
             : elevatedSeconds < 2
-                ? "inconclusive — the elevated window was barely in front; run it again and type into it."
+                ? "inconclusive - the elevated window was barely in front; run it again and type into it."
                 : normalKeys == 0
-                    ? "inconclusive — no key reached the hook at all, so nothing was measured."
-                    : "NO — an elevated window was in front and typed into, and not one key reached the hook. " +
+                    ? "inconclusive - no key reached the hook at all, so nothing was measured."
+                    : "NO - an elevated window was in front and typed into, and not one key reached the hook. " +
                       "AkuWM cannot own chords over a game without uiAccess.";
 
         return new KeyboardFinding(elevatedKeys, normalKeys, elevatedSeconds, answer);
@@ -323,13 +323,13 @@ public static class Spikes
 
         if (result is not { } focus)
         {
-            return new FocusFinding("inconclusive — no key was typed into a normal window while this ran.");
+            return new FocusFinding("inconclusive - no key was typed into a normal window while this ran.");
         }
 
         Say($"  focus attempt: {focus.Route} ({focus.Detail})");
         return new FocusFinding(focus.Succeeded
-            ? $"yes — right after a keystroke the focus moves to an elevated window, by {focus.Route}."
-            : $"NO — {focus.Detail}");
+            ? $"yes - right after a keystroke the focus moves to an elevated window, by {focus.Route}."
+            : $"NO - {focus.Detail}");
     }
 
     /// <summary>S3: the shell's cloak, from .NET, on somebody else's window.</summary>
