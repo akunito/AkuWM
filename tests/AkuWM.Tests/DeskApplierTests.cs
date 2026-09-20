@@ -39,8 +39,8 @@ public class DeskApplierTests
 
     public DeskApplierTests()
     {
-        _ledger = new CloakLedger(_dir.File("cloaked.json"));
-        _journal = new GeometryJournal(_dir.File("geometry.json"));
+        _ledger = new CloakLedger(_dir.File("cloaked.bin"));
+        _journal = new GeometryJournal(_dir.File("geometry.bin"));
         _applier = new DeskApplier(_platform, _platform, _ledger, _journal, _taskbar);
     }
 

@@ -19,6 +19,8 @@ public sealed class Win32DeskPlatform : IDeskPlatform
 
     public void Minimize(WindowHandle window) => Win32Show.Minimize(window);
 
+    public void Restore(WindowHandle window) => Win32Show.Restore(window);
+
     /// <summary>
     /// Asks a window to close, the way its own title-bar button does.
     /// </summary>

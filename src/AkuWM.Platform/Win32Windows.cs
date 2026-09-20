@@ -236,7 +236,13 @@ public static class Win32Windows
         }
     }
 
-    private static readonly Dictionary<uint, (string Name, bool Elevated)> ProcessCache = new();
+    // Concurrent because there are two readers: the wm thread on every event,
+    // and the pipe listener answering `query windows` or `doctor` from a second
+    // WindowsPlatform. Two threads writing a plain Dictionary corrupts its
+    // bucket chain, and a lookup that never terminates on the wm thread wedges
+    // the loop until the watchdog kills the daemon.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, (string Name, bool Elevated)>
+        ProcessCache = new();
 
     /// <summary>
     /// The process's name without <c>.exe</c>, and whether AkuWM is allowed to

@@ -51,13 +51,13 @@ public sealed class ConfigPaths
     /// The windows AkuWM has hidden, written before each cloak so a crash
     /// cannot take them with it.
     /// </summary>
-    public string CloakLedgerFile => Path.Combine(RuntimeDir, "cloaked.json");
+    public string CloakLedgerFile => Path.Combine(RuntimeDir, "cloaked.bin");
 
     /// <summary>
     /// Where each window was before AkuWM moved it, written before the first
     /// move so the desk can be put back by a process that is not this one.
     /// </summary>
-    public string GeometryJournalFile => Path.Combine(RuntimeDir, "geometry.json");
+    public string GeometryJournalFile => Path.Combine(RuntimeDir, "geometry.bin");
 
     /// <summary>How the last run ended. Two bad endings in a row means safe mode.</summary>
     public string SessionFile => Path.Combine(RuntimeDir, "session.json");

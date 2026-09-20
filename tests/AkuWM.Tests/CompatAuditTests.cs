@@ -347,6 +347,79 @@ public class CompatAuditTests
     }
 
     [Fact]
+    public void A_windows_path_survives_shell_exec()
+    {
+        // A backslash inside quotes used to escape the next character, so every
+        // app-launch chord whose target lives under Program Files arrived with
+        // its separators eaten.
+        const string path = @"C:\Program Files\Mozilla Firefox\firefox.exe";
+
+        Assert.True(_executor.Command("shell-exec \"" + path + "\"").Success);
+
+        Assert.Contains("exec " + path, _platform.Calls);
+    }
+
+    [Fact]
+    public void An_escaped_quote_is_still_an_escaped_quote()
+    {
+        // a "say \"hi\""
+        const string line = "a \"say \\\"hi\\\"\"";
+
+        Assert.Equal(["a", "say \"hi\""], AkuWM.Core.Ipc.CommandLine.Split(line));
+    }
+
+    [Fact]
+    public void A_path_that_ends_in_a_separator_survives_a_round_trip()
+    {
+        // Ambiguous to read on its own -- CommandLineToArgvW would call the
+        // last backslash an escape too -- so the pair that matters is Join
+        // then Split.
+        string[] arguments = ["shell-exec", @"C:\Users\diego\"];
+
+        Assert.Equal(arguments, AkuWM.Core.Ipc.CommandLine.Split(AkuWM.Core.Ipc.CommandLine.Join(arguments)));
+    }
+
+    [Fact]
+    public void Toggle_minimized_brings_a_minimised_window_back()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        _fixture.Desk.Focus(W(1));
+
+        Assert.True(_executor.Command("toggle-minimized").Success);
+        Assert.Contains("minimize 1", _platform.Calls);
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+
+        // Pressing the toggle on an already-minimised window used to minimise
+        // it again, so a script could never raise one from the taskbar.
+        Assert.True(_executor.Command($"toggle-minimized --id {_fixture.Managed(1)!.Id}").Success);
+        Assert.Contains("restore 1", _platform.Calls);
+    }
+
+    [Fact]
+    public void A_paused_desk_moves_nothing()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        _fixture.Desk.Focus(W(1));
+
+        Assert.True(_executor.Command("wm-toggle-pause").Success);
+        Assert.True(_executor.Command("focus --workspace 12").Success);
+
+        // A script pauses to drag something, or to take a screenshot. It used
+        // to get success and a window manager that kept arranging.
+        Assert.True(_fixture.Desk.Compute().IsNothing);
+        Assert.False(_fixture.IsHidden(1));
+
+        _executor.Command("wm-toggle-pause");
+        _fixture.Turn();
+        Assert.True(_fixture.IsHidden(1));
+    }
+
+    [Fact]
     public void Exit_is_asked_for_rather_than_taken()
     {
         Assert.False(_executor.ExitRequested);

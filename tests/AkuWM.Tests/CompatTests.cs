@@ -24,6 +24,8 @@ internal sealed class FakeDeskPlatform : IDeskPlatform
 
     public void Minimize(WindowHandle window) => Calls.Add($"minimize {window.Value}");
 
+    public void Restore(WindowHandle window) => Calls.Add($"restore {window.Value}");
+
     public void Close(WindowHandle window) => Calls.Add($"close {window.Value}");
 
     public void Exec(string command) => Calls.Add($"exec {command}");

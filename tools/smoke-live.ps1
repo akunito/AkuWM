@@ -217,8 +217,10 @@ try {
     $stillRunning = Get-Process -Name akuwm -ErrorAction SilentlyContinue
     Check 'the daemon stopped' (-not $stillRunning) 'it is still running'
 
-    $ledger = Join-Path $state 'akuwm\cloaked.json'
-    $left = if (Test-Path $ledger) { (Get-Content $ledger -Raw | ConvertFrom-Json).Count } else { 0 }
+    # The records are memory-mapped, so they are binary; `state` reads them.
+    $left = 0
+    $dump = Akuwm 'state'
+    if ($dump) { $left = ($dump | ConvertFrom-Json).hidden }
     Check 'nothing is left hidden' ($left -eq 0) "$left window(s) still in the ledger"
 }
 finally {

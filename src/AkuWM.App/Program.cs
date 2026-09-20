@@ -200,6 +200,11 @@ public static class Program
         var stopping = new ManualResetEventSlim(false);
         var server = new PipeServer(Router(paths, manager));
         server.ExitRequested += () => stopping.Set();
+
+        // wm-exit over the bar's socket is the same request as exit over the
+        // pipe. It used to set a flag nothing read, so a script that stopped
+        // AkuWM that way silently left it running -- two window managers.
+        manager.ExitRequested += () => stopping.Set();
         server.Start();
 
         manager.Start();
@@ -314,7 +319,8 @@ public static class Program
             new UncloakCommand(platform, windows, ledger),
             new BenchCommand(platform, paths, windows),
             new RescueCommand(paths, platform, windows),
-            manager is null ? null : new CompatCommand(manager.Envelope));
+            manager is null ? null : new CompatCommand(manager.Envelope),
+            new StateCommand(paths));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>

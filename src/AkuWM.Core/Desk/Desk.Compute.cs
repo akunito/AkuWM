@@ -27,6 +27,11 @@ public sealed partial class Desk
     /// </remarks>
     public Redraw Compute()
     {
+        if (Paused)
+        {
+            return Redraw.Nothing;
+        }
+
         var place = new List<Placement>();
         var hide = new List<WindowHandle>();
         var show = new List<WindowHandle>();

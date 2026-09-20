@@ -47,17 +47,27 @@ public readonly record struct OriginalGeometry(
 /// </remarks>
 public sealed class GeometryJournal
 {
-    private readonly string _file;
+    private readonly RecordStore _store;
     private readonly Dictionary<long, OriginalGeometry> _entries = [];
     private readonly object _gate = new();
 
     public GeometryJournal(string file)
     {
-        _file = file;
+        // Memory-mapped for the same reason as the cloak ledger: this is
+        // written before the first move of every window, on the wm thread.
+        _store = new RecordStore(file);
 
-        foreach (OriginalGeometry entry in AtomicJson.Read<OriginalGeometry[]>(file, "the geometry journal") ?? [])
+        foreach (StoredWindow stored in _store.All())
         {
-            _entries[entry.Handle] = entry;
+            _entries[stored.Handle] = new OriginalGeometry(
+                stored.Handle,
+                stored.Process,
+                stored.Title,
+                stored.Frame,
+                stored.Maximized,
+                stored.Minimized,
+                stored.Topmost,
+                stored.At);
         }
     }
 
@@ -85,7 +95,7 @@ public sealed class GeometryJournal
                 return;
             }
 
-            _entries[window.Handle.Value] = new OriginalGeometry(
+            var entry = new OriginalGeometry(
                 window.Handle.Value,
                 window.ProcessName,
                 window.Title,
@@ -95,7 +105,10 @@ public sealed class GeometryJournal
                 window.IsTopmost,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
-            Save();
+            _entries[entry.Handle] = entry;
+            _store.Put(new StoredWindow(
+                entry.Handle, entry.Process, entry.Title, entry.At,
+                entry.Frame, entry.Maximized, entry.Minimized, entry.Topmost));
         }
     }
 
@@ -106,7 +119,7 @@ public sealed class GeometryJournal
         {
             if (_entries.Remove(window.Value))
             {
-                Save();
+                _store.Remove(window.Value);
             }
         }
     }
@@ -121,7 +134,7 @@ public sealed class GeometryJournal
             }
 
             _entries.Clear();
-            Save();
+            _store.Clear();
         }
     }
 
@@ -206,13 +219,12 @@ public sealed class GeometryJournal
         lock (_gate)
         {
             _entries.Clear();
-            Save();
+            _store.Clear();
         }
 
         return new GeometryRestoreResult(restored, stale);
     }
 
-    private void Save() => AtomicJson.Write(_file, _entries.Values, "the geometry journal");
 }
 
 /// <param name="Restored">Windows put back.</param>

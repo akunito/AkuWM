@@ -18,6 +18,7 @@ public sealed class CommandRouter
     private readonly BenchCommand? _bench;
     private readonly RescueCommand? _rescue;
     private readonly CompatCommand? _compat;
+    private readonly StateCommand? _state;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -33,7 +34,8 @@ public sealed class CommandRouter
         UncloakCommand? uncloak = null,
         BenchCommand? bench = null,
         RescueCommand? rescue = null,
-        CompatCommand? compat = null)
+        CompatCommand? compat = null,
+        StateCommand? state = null)
     {
         _config = config;
         _doctor = doctor;
@@ -44,6 +46,7 @@ public sealed class CommandRouter
         _bench = bench;
         _rescue = rescue;
         _compat = compat;
+        _state = state;
     }
 
     /// <summary>
@@ -60,7 +63,7 @@ public sealed class CommandRouter
     /// </remarks>
     public static bool NeedsNoDaemon(string verb) =>
         verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors"
-            or "uncloak-all" or "bench" or "rescue";
+            or "uncloak-all" or "bench" or "rescue" or "state";
 
     /// <summary>
     /// Commands a second process answers itself even when the daemon is up.
@@ -100,6 +103,8 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to uncloak with"),
                 "rescue" => _rescue?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to rescue"),
+                "state" => _state?.Execute(line)
+                    ?? CommandResponse.Fail(line, "there is no state directory on this host"),
                 "compat" => _compat?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "AkuWM is not managing the desk, so there is nothing to ask"),
                 "doctor" => _doctor.Execute(line),
@@ -133,6 +138,7 @@ public sealed class CommandRouter
         "monitors identify [--dry-run]",
         "uncloak-all",
         "rescue [--all] [--keep-daemon] [--forgive]",
+        "state",
         "compat <query|command> ...   (what the glazewm shim sends)",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",

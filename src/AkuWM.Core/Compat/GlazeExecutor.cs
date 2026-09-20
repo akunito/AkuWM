@@ -13,6 +13,8 @@ public interface IDeskPlatform
 
     void Minimize(WindowHandle window);
 
+    void Restore(WindowHandle window);
+
     void Close(WindowHandle window);
 
     void Exec(string command);
@@ -52,7 +54,7 @@ public sealed class GlazeExecutor
     public bool ExitRequested { get; private set; }
 
     /// <summary>Set when the desk was told to leave everything where it is.</summary>
-    public bool Paused { get; private set; }
+    public bool Paused => _desk.Paused;
 
     public ExecResult Query(string line)
     {
@@ -118,13 +120,31 @@ public sealed class GlazeExecutor
                 return Toggle(subject, w => _desk.SetSticky(w.Handle, false));
 
             case "set-minimized":
-            case "toggle-minimized":
                 if (subject is null)
                 {
                     return ExecResult.Fail("there is no focused window to minimize");
                 }
 
                 _platform.Minimize(subject.Handle);
+                return ExecResult.Ok(subject.Id);
+
+            case "toggle-minimized":
+                if (subject is null)
+                {
+                    return ExecResult.Fail("there is no focused window to minimize");
+                }
+
+                // Both used to minimise, so a script could never raise a window
+                // from the taskbar with the toggle.
+                if (subject.State == WindowState.Minimized)
+                {
+                    _platform.Restore(subject.Handle);
+                }
+                else
+                {
+                    _platform.Minimize(subject.Handle);
+                }
+
                 return ExecResult.Ok(subject.Id);
 
             case "toggle-tiling-direction":
@@ -149,7 +169,7 @@ public sealed class GlazeExecutor
                 return ExecResult.Ok();
 
             case "wm-toggle-pause":
-                Paused = !Paused;
+                _desk.Paused = !_desk.Paused;
                 return ExecResult.Ok();
 
             case "wm-exit":

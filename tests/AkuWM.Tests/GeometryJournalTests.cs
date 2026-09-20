@@ -29,7 +29,7 @@ public class GeometryJournalTests
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700));
         platform.WindowList.Add(window);
 
-        var journal = new GeometryJournal(dir.File("geometry.json"));
+        var journal = new GeometryJournal(dir.File("geometry.bin"));
         journal.Remember(window);
 
         // AkuWM tiles it somewhere else.
@@ -50,7 +50,7 @@ public class GeometryJournalTests
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700));
         platform.WindowList.Add(window);
 
-        var journal = new GeometryJournal(dir.File("geometry.json"));
+        var journal = new GeometryJournal(dir.File("geometry.bin"));
         journal.Remember(window);
 
         // Every later move must not become the thing that gets restored: what
@@ -72,7 +72,7 @@ public class GeometryJournalTests
         WindowSnapshot window = At(1, new Rect(0, 0, 3840, 2118), maximized: true);
         platform.WindowList.Add(window);
 
-        var journal = new GeometryJournal(dir.File("geometry.json"));
+        var journal = new GeometryJournal(dir.File("geometry.bin"));
         journal.Remember(window);
 
         platform.SetMaximized(window.Handle, false);
@@ -91,7 +91,7 @@ public class GeometryJournalTests
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700), minimized: true);
         platform.WindowList.Add(window);
 
-        var journal = new GeometryJournal(dir.File("geometry.json"));
+        var journal = new GeometryJournal(dir.File("geometry.bin"));
         journal.Remember(window);
         platform.SetMinimized(window.Handle, false);
 
@@ -104,7 +104,7 @@ public class GeometryJournalTests
     public void The_journal_survives_the_process_that_wrote_it()
     {
         using var dir = new TempDir();
-        string file = dir.File("geometry.json");
+        string file = dir.File("geometry.bin");
         var platform = new FakePlatform();
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700));
         platform.WindowList.Add(window);
@@ -123,7 +123,7 @@ public class GeometryJournalTests
     public void A_handle_that_now_belongs_to_somebody_else_is_dropped()
     {
         using var dir = new TempDir();
-        string file = dir.File("geometry.json");
+        string file = dir.File("geometry.bin");
         var platform = new FakePlatform();
         platform.WindowList.Add(At(1, new Rect(200, 300, 900, 700)));
 
@@ -144,7 +144,7 @@ public class GeometryJournalTests
     public void Restoring_twice_is_harmless()
     {
         using var dir = new TempDir();
-        string file = dir.File("geometry.json");
+        string file = dir.File("geometry.bin");
         var platform = new FakePlatform();
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700));
         platform.WindowList.Add(window);
@@ -171,7 +171,7 @@ public class GeometryJournalTests
         WindowSnapshot window = At(1, new Rect(200, 300, 900, 700));
         platform.WindowList.Add(window);
 
-        var journal = new GeometryJournal(dir.File("geometry.json"));
+        var journal = new GeometryJournal(dir.File("geometry.bin"));
         journal.Remember(window);
         journal.Forget(window.Handle);
 

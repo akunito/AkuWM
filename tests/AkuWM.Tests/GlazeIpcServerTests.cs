@@ -225,6 +225,59 @@ public class GlazeIpcServerTests
     }
 
     [Fact]
+    public async Task A_command_that_throws_is_answered_not_hung_up_on()
+    {
+        int port = FreePort();
+        int asked = 0;
+        await using var server = new GlazeIpcServer(port, _ =>
+            ++asked == 1 ? throw new InvalidOperationException("a bad rectangle") : ExecResult.Ok());
+        server.Start();
+
+        using ClientWebSocket client = await Connect(port);
+
+        JsonNode first = JsonNode.Parse(await Ask(client, "command focus --direction left"))!;
+        Assert.False(first["success"]!.GetValue<bool>());
+        Assert.Contains("a bad rectangle", first["error"]!.GetValue<string>());
+
+        // The connection has to survive it: the bar comes back having lost
+        // every subscription it made, and a script loses the rest of its
+        // sequence.
+        JsonNode second = JsonNode.Parse(await Ask(client, "query windows"))!;
+        Assert.True(second["success"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Subscribing_while_events_are_firing_does_not_drop_them()
+    {
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(port, _ => ExecResult.Ok());
+        server.Start();
+
+        using ClientWebSocket client = await Connect(port);
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        Task publishing = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                await server.Publish("workspace_activated", new JsonObject { ["n"] = 1 });
+            }
+        });
+
+        // The subscription map used to be mutated outside the lock Publish
+        // reads it under, so a sub arriving mid-event threw and the event was
+        // silently dropped.
+        for (int i = 0; i < 20 && !stop.IsCancellationRequested; i++)
+        {
+            await Ask(client, "sub -e all");
+            await Ask(client, "unsub");
+        }
+
+        stop.Cancel();
+        await publishing;
+    }
+
+    [Fact]
     public async Task A_port_that_is_already_taken_is_reported_rather_than_thrown()
     {
         int port = FreePort();

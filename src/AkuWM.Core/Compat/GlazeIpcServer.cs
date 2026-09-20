@@ -261,12 +261,24 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         string verb = request.Split(' ', 2)[0].ToLowerInvariant();
         string rest = request.Length > verb.Length ? request[(verb.Length + 1)..] : string.Empty;
 
-        ExecResult result = verb switch
+        ExecResult result;
+        try
         {
-            "sub" or "subscribe" => Subscribe(subscriber, rest),
-            "unsub" or "unsubscribe" => Unsubscribe(subscriber, rest),
-            _ => _handle(request),
-        };
+            result = verb switch
+            {
+                "sub" or "subscribe" => Subscribe(subscriber, rest),
+                "unsub" or "unsubscribe" => Unsubscribe(subscriber, rest),
+                _ => _handle(request),
+            };
+        }
+        catch (Exception ex)
+        {
+            // The envelope has error and success fields for exactly this. An
+            // escape used to drop the connection, and the bar came back having
+            // lost every subscription it had made.
+            Log.Error($"'{request}' threw; answering with an error rather than dropping the client", ex);
+            result = ExecResult.Fail($"{ex.GetType().Name}: {ex.Message}");
+        }
 
         return GlazeProtocol.Reply(request, result).ToJsonString(GlazeProtocol.Compact);
     }
@@ -294,23 +306,29 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         string[] wanted = (events ?? "all")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        subscriber.Subscriptions[id] = wanted;
+        lock (_gate)
+        {
+            subscriber.Subscriptions[id] = wanted;
+        }
         Log.Info($"a client subscribed to {string.Join(", ", wanted)}");
 
         return ExecResult.Ok(data: new JsonObject { ["subscriptionId"] = id.ToString() });
     }
 
-    private static ExecResult Unsubscribe(Subscriber subscriber, string rest)
+    private ExecResult Unsubscribe(Subscriber subscriber, string rest)
     {
         ParsedCommand parsed = GlazeCommandLine.Parse("unsub " + rest);
 
-        if (parsed.Value("id") is { Length: > 0 } text && Guid.TryParse(text, out Guid id))
+        lock (_gate)
         {
-            subscriber.Subscriptions.Remove(id);
-        }
-        else
-        {
-            subscriber.Subscriptions.Clear();
+            if (parsed.Value("id") is { Length: > 0 } text && Guid.TryParse(text, out Guid id))
+            {
+                subscriber.Subscriptions.Remove(id);
+            }
+            else
+            {
+                subscriber.Subscriptions.Clear();
+            }
         }
 
         return ExecResult.Ok();

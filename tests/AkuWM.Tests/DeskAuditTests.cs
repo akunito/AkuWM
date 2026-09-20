@@ -358,6 +358,51 @@ public class DeskAuditTests
         Assert.Equal(was, _fixture.FrameOf(2));
     }
 
+    [Fact]
+    public void A_window_is_never_sticky_to_two_monitors_at_once()
+    {
+        _fixture.Open(1, resizable: false, frame: new Rect(500, 500, 400, 300));
+        Desk.SetSticky(W(1), true);
+        _fixture.Turn();
+
+        // Minimised and restored after moving to the other screen: the restore
+        // used to add it to the new monitor's set without taking it out of the
+        // old one, and which screen drew it was then decided by enumeration
+        // order.
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Platform.WindowList[0] = _fixture.Platform.WindowList[0] with
+        {
+            Monitor = new MonitorHandle(2),
+            IsMinimized = false,
+        };
+        _fixture.Sync();
+        _fixture.Turn();
+
+        int sets = Desk.Monitors.Count(m => m.Sticky.Contains(W(1)));
+        Assert.Equal(1, sets);
+        Assert.Equal(Desk.Monitors.First(m => m.Sticky.Contains(W(1))).Role, _fixture.Managed(1)!.StickyMonitor);
+    }
+
+    [Fact]
+    public void Unsticking_always_lands_the_window_on_a_workspace()
+    {
+        _fixture.Open(1, monitor: new MonitorHandle(2));
+        Desk.SetSticky(W(1), true);
+        _fixture.Turn();
+
+        // Its monitor goes away while it is stuck to it. Unsticking then found
+        // no displayed workspace and left the window belonging to nothing:
+        // managed, in no layer, never placed, hidden or shown again.
+        _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
+        Desk.SetMonitors(_fixture.Platform.Monitors());
+
+        Assert.True(Desk.SetSticky(W(1), false));
+
+        Assert.NotNull(_fixture.Managed(1)!.Workspace);
+        Assert.False(_fixture.Managed(1)!.Sticky);
+    }
+
     // ---- monitors coming and going ----------------------------------------
 
     [Fact]

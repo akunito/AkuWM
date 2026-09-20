@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 using AkuWM.Core.Platform;
@@ -41,20 +39,22 @@ public readonly record struct CloakedWindow(long Handle, string Process, string 
 /// </remarks>
 public sealed class CloakLedger
 {
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
-
-    private readonly string _file;
+    private readonly RecordStore _store;
     private readonly Dictionary<long, CloakedWindow> _entries = [];
     private readonly object _gate = new();
 
     public CloakLedger(string file)
     {
-        _file = file;
-        Load();
+        // Memory-mapped, not JSON. Measured on the desk: rewriting the file per
+        // record cost 0.576 ms, paid once per window hidden and once per window
+        // shown -- 9.2 ms for a workspace switch of eight, inside a 5 ms budget.
+        _store = new RecordStore(file);
+
+        foreach (StoredWindow stored in _store.All())
+        {
+            _entries[stored.Handle] = new CloakedWindow(
+                stored.Handle, stored.Process, stored.Title, stored.At);
+        }
     }
 
     public IReadOnlyCollection<CloakedWindow> Entries
@@ -73,12 +73,14 @@ public sealed class CloakLedger
     {
         lock (_gate)
         {
-            _entries[window.Handle.Value] = new CloakedWindow(
+            var entry = new CloakedWindow(
                 window.Handle.Value,
                 window.ProcessName,
                 window.Title,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            Save();
+
+            _entries[entry.Handle] = entry;
+            _store.Put(new StoredWindow(entry.Handle, entry.Process, entry.Title, entry.At));
         }
     }
 
@@ -89,7 +91,7 @@ public sealed class CloakLedger
         {
             if (_entries.Remove(window.Value))
             {
-                Save();
+                _store.Remove(window.Value);
             }
         }
     }
@@ -99,7 +101,7 @@ public sealed class CloakLedger
         lock (_gate)
         {
             _entries.Clear();
-            Save();
+            _store.Clear();
         }
     }
 
@@ -162,54 +164,11 @@ public sealed class CloakLedger
             foreach (CloakedWindow entry in recovered.Concat(stale))
             {
                 _entries.Remove(entry.Handle);
+                _store.Remove(entry.Handle);
             }
-
-            Save();
         }
 
         return new RecoveryResult(recovered, failed, stale);
-    }
-
-    private void Load()
-    {
-        if (!File.Exists(_file))
-        {
-            return;
-        }
-
-        try
-        {
-            CloakedWindow[]? entries =
-                JsonSerializer.Deserialize<CloakedWindow[]>(File.ReadAllText(_file, Encoding.UTF8), Json);
-
-            foreach (CloakedWindow entry in entries ?? [])
-            {
-                _entries[entry.Handle] = entry;
-            }
-        }
-        catch (Exception ex)
-        {
-            // A ledger that cannot be read is worse than none: it would keep
-            // AkuWM from starting over a file whose only job is recovery.
-            Log.Warn($"the cloak ledger could not be read ({ex.Message}); starting with an empty one");
-        }
-    }
-
-    private void Save()
-    {
-        try
-        {
-            string directory = Path.GetDirectoryName(Path.GetFullPath(_file))!;
-            Directory.CreateDirectory(directory);
-
-            string temporary = Path.Combine(directory, $".{Path.GetFileName(_file)}.{Environment.ProcessId}.tmp");
-            File.WriteAllText(temporary, JsonSerializer.Serialize(_entries.Values, Json), new UTF8Encoding(false));
-            File.Move(temporary, _file, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"the cloak ledger could not be written: {ex.Message}");
-        }
     }
 }
 

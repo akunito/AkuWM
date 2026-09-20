@@ -121,6 +121,17 @@ public sealed partial class Desk
     /// </remarks>
     public bool CanHide { get; set; } = true;
 
+    /// <summary>
+    /// Told to leave the desk alone. The model still follows what happens; it
+    /// just stops asking for anything to move.
+    /// </summary>
+    /// <remarks>
+    /// `wm-toggle-pause` used to set a flag on the executor that nothing read,
+    /// so a script that paused the window manager to drag something got
+    /// success and a window manager that kept arranging.
+    /// </remarks>
+    public bool Paused { get; set; }
+
     public DeskWindow? Window(WindowHandle handle) =>
         _windows.TryGetValue(handle, out DeskWindow? window) ? window : null;
 
@@ -461,6 +472,14 @@ public sealed partial class Desk
         {
             Workspace(previous)?.Release(window.Handle);
             window.Workspace = null;
+        }
+
+        // Out of every other monitor's set first: a restore that crossed
+        // screens used to leave it in two, and which one drew it was then
+        // decided by enumeration order rather than by StickyMonitor.
+        for (int i = 0; i < _monitors.Count; i++)
+        {
+            _monitors[i].Sticky.Remove(window.Handle);
         }
 
         window.Sticky = true;

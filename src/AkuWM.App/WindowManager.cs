@@ -94,6 +94,9 @@ public sealed class WindowManager : IAsyncDisposable
     /// <summary>Whether the bar and the scripts can reach AkuWM.</summary>
     public GlazeIpcServer Compat => _server;
 
+    /// <summary>Raised when a command asked the window manager to stop.</summary>
+    public event Action? ExitRequested;
+
     /// <summary>Whether AkuWM is arranging the desk or only watching it.</summary>
     public bool Managing { get; private set; }
 
@@ -146,6 +149,12 @@ public sealed class WindowManager : IAsyncDisposable
             {
                 ExecResult result = _executor.Command(rest);
                 _dirty = true;
+
+                if (_executor.ExitRequested)
+                {
+                    ExitRequested?.Invoke();
+                }
+
                 return result;
             }),
             _ => Task.FromResult(ExecResult.Fail($"unrecognized subcommand '{verb}'")),
@@ -198,13 +207,15 @@ public sealed class WindowManager : IAsyncDisposable
                 break;
 
             case EventResponse.TheFocusMoved:
+                // Dirty either way: a focus change moves nothing, and the bar
+                // still has to be told. Desk.Focus has already asked for the
+                // keyboard back when it refused.
                 if (!_desk.Focus(platformEvent.Handle))
                 {
-                    // Desk.Focus has already asked for the keyboard back.
                     Log.Debug(() => $"refused the focus for the hidden window {platformEvent.Handle}");
-                    _dirty = true;
                 }
 
+                _dirty = true;
                 return;
 
             case EventResponse.TheScreensChanged:
@@ -260,25 +271,25 @@ public sealed class WindowManager : IAsyncDisposable
 
         _dirty = false;
 
-        if (!Managing)
+        if (Managing)
         {
-            return;
+            Redraw redraw = _desk.Compute();
+            if (!redraw.IsNothing)
+            {
+                Redraws++;
+                Last = _applier.Apply(redraw);
+                _desk.Applied(redraw, Last.Refused);
+
+                // The platform proves, once, that a window it hides can be
+                // brought back. If it cannot, the model stops asking.
+                _desk.CanHide = _applier.CanHide;
+            }
         }
 
-        Redraw redraw = _desk.Compute();
-        if (redraw.IsNothing)
-        {
-            return;
-        }
-
-        Redraws++;
-        Last = _applier.Apply(redraw);
-        _desk.Applied(redraw, Last.Refused);
-
-        // The platform proves, once, that a window it hides can be brought
-        // back. If it cannot, the model stops asking.
-        _desk.CanHide = _applier.CanHide;
-
+        // Always, and last: a focus change moves no window, and the bar still
+        // has to hear about it. Publishing only after a redraw that did
+        // something meant clicking between two windows told the bar nothing,
+        // and a watching run told it nothing at all.
         Publish();
     }
 
@@ -374,8 +385,12 @@ public sealed class WindowManager : IAsyncDisposable
     /// reading would otherwise stop the desk, which is the wrong way round:
     /// the desk is the thing that has to keep working.
     /// </remarks>
+    private Task _publishing = Task.CompletedTask;
+
     private void Fire(string eventType, JsonObject payload) =>
-        _ = _server.Publish(eventType, payload).ContinueWith(
+        _publishing = _publishing.ContinueWith(
+            _ => _server.Publish(eventType, payload),
+            TaskScheduler.Default).Unwrap().ContinueWith(
             task => Log.Warn($"the {eventType} event could not be sent: {task.Exception?.Message}"),
             TaskContinuationOptions.OnlyOnFaulted);
 

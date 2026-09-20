@@ -72,7 +72,7 @@ public class CloakLedgerTests
     {
         var platform = new FakePlatform();
         platform.WindowList.AddRange(windows);
-        return (new CloakLedger(dir.File("cloaked.json")), platform, new FakeActions(platform));
+        return (new CloakLedger(dir.File("cloaked.bin")), platform, new FakeActions(platform));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class CloakLedgerTests
         platform.WindowList[0] = window with { Cloak = CloakKind.Shell };
 
         // The next run reads the same file off disk.
-        var next = new CloakLedger(dir.File("cloaked.json"));
+        var next = new CloakLedger(dir.File("cloaked.bin"));
         RecoveryResult result = next.Recover(platform, actions);
 
         Assert.Single(result.Recovered);
@@ -117,7 +117,7 @@ public class CloakLedgerTests
         using var dir = new TempDir();
         WindowSnapshot original = FakePlatform.Window(1, "zen");
         var platform = new FakePlatform();
-        var ledger = new CloakLedger(dir.File("cloaked.json"));
+        var ledger = new CloakLedger(dir.File("cloaked.bin"));
         ledger.Record(original);
 
         // Same handle, another process: Windows reuses them.
@@ -136,7 +136,7 @@ public class CloakLedgerTests
     {
         using var dir = new TempDir();
         var platform = new FakePlatform();
-        var ledger = new CloakLedger(dir.File("cloaked.json"));
+        var ledger = new CloakLedger(dir.File("cloaked.bin"));
         ledger.Record(FakePlatform.Window(1, "zen"));
 
         Assert.Single(ledger.Recover(platform, new FakeActions(platform)).Stale);
@@ -180,9 +180,9 @@ public class CloakLedgerTests
     public void AnUnreadableLedgerDoesNotStopAkuWmStarting()
     {
         using var dir = new TempDir();
-        File.WriteAllText(dir.File("cloaked.json"), "{ this is not the file it was");
+        File.WriteAllText(dir.File("cloaked.bin"), "{ this is not the file it was");
 
-        var ledger = new CloakLedger(dir.File("cloaked.json"));
+        var ledger = new CloakLedger(dir.File("cloaked.bin"));
 
         Assert.Empty(ledger.Entries);
     }
@@ -191,7 +191,7 @@ public class CloakLedgerTests
     public void TheLedgerSurvivesBeingWrittenOverAndOver()
     {
         using var dir = new TempDir();
-        var ledger = new CloakLedger(dir.File("cloaked.json"));
+        var ledger = new CloakLedger(dir.File("cloaked.bin"));
 
         for (int i = 1; i <= 20; i++)
         {
@@ -203,7 +203,7 @@ public class CloakLedgerTests
             ledger.Forget(new WindowHandle(i));
         }
 
-        Assert.Equal(10, new CloakLedger(dir.File("cloaked.json")).Entries.Count);
-        Assert.Equal(["cloaked.json"], Directory.GetFiles(dir.Path).Select(Path.GetFileName));
+        Assert.Equal(10, new CloakLedger(dir.File("cloaked.bin")).Entries.Count);
+        Assert.Equal(["cloaked.bin"], Directory.GetFiles(dir.Path).Select(Path.GetFileName));
     }
 }
