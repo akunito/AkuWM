@@ -87,6 +87,10 @@ QUERY_DISPLAY_CONFIG_FLAGS
 SetWinEventHook
 UnhookWinEvent
 GetModuleHandleW
+FindResourceW
+LoadResource
+LockResource
+SizeofResource
 SetWindowsHookExW
 UnhookWindowsHookEx
 CallNextHookEx

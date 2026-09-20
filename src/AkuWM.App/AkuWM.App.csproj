@@ -22,6 +22,14 @@
     <UiAccess Condition="'$(UiAccess)' == ''">true</UiAccess>
     <ApplicationManifest Condition="'$(UiAccess)' == 'true'">app.manifest</ApplicationManifest>
     <ApplicationManifest Condition="'$(UiAccess)' != 'true'">app-dev.manifest</ApplicationManifest>
+    <!-- The two builds must not share intermediate output. Choosing a
+         different manifest changes no file's timestamp, so MSBuild happily
+         considers obj up to date and reuses the executable built with the
+         other one — which is how a binary with uiAccess="false" ended up
+         installed in Program Files and quietly refused every chord over a
+         game. Giving each its own obj makes that impossible rather than
+         something to remember. -->
+    <IntermediateOutputPath>obj\$(Configuration)\uiaccess-$(UiAccess)\</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

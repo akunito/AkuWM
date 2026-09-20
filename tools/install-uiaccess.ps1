@@ -95,6 +95,23 @@ foreach ($store in 'Root', 'TrustedPublisher') {
 }
 Remove-Item $exported -ErrorAction SilentlyContinue
 
+# --- 1b. is this even the right binary? -------------------------------------
+# Choosing a manifest changes no file's timestamp, so an incremental build will
+# happily hand you an executable built with the other one. That is how a binary
+# asking for uiAccess="false" once ended up signed and installed in Program
+# Files, quietly refusing every chord over a game. The manifest sits
+# uncompressed in the PE resources, so checking is one read.
+Step 'Checking the binary actually asks for uiAccess'
+$bytes = [System.IO.File]::ReadAllBytes($Source)
+$text  = [System.Text.Encoding]::ASCII.GetString($bytes)
+if ($text -notmatch 'uiAccess="true"') {
+    Bad 'this build does not ask for uiAccess.'
+    Note 'It was published with -p:UiAccess=false, which is the development manifest.'
+    Note 'Publish without that switch and run this again.'
+    exit 1
+}
+Good 'it does'
+
 # --- 2. a secure directory --------------------------------------------------
 Step "Installing to $Destination"
 $target = Join-Path $Destination 'akuwm.exe'

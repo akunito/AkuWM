@@ -182,13 +182,19 @@ public static class Program
         () =>
         {
             bool granted = Win32Token.HasUiAccess();
+            bool asked = Win32Token.ManifestRequestsUiAccess();
+
             return new Check(
                 "uiAccess",
                 granted ? CheckStatus.Ok : CheckStatus.Warn,
                 granted
                     ? "granted: chords work while a game has the foreground"
-                    : "NOT granted — the hook will see nothing typed into a game. " +
-                      $"Run tools/install-uiaccess.ps1 as administrator (running from {AppContext.BaseDirectory})");
+                    : asked
+                        ? "asked for but NOT granted — the binary is signed and in a secure " +
+                          $"directory, or it is not. Run tools/install-uiaccess.ps1 as administrator " +
+                          $"(running from {AppContext.BaseDirectory})"
+                        : "this build never asked for it: it was published with -p:UiAccess=false, " +
+                          "which is the development manifest. Chords over a game will not work.");
         },
         () => new Check(
             "elevation",

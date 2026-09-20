@@ -1,5 +1,8 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
+using Windows.Win32.Foundation;
 using Windows.Win32.Security;
 
 namespace AkuWM.Platform;
@@ -39,6 +42,55 @@ public static class Win32Token
                 return PInvoke.GetTokenInformation(token, TokenUiAccess, &granted, sizeof(uint), out uint _)
                        && granted != 0;
             }
+        }
+    }
+
+    /// <summary>
+    /// Whether this binary's own manifest asked for uiAccess at all.
+    /// </summary>
+    /// <remarks>
+    /// Asking and being granted are different failures with different fixes,
+    /// and they look identical from the token alone. A build that never asked
+    /// is a mistake in the build; one that asked and was refused is a mistake
+    /// in the install. Saying which saves the wrong half of the problem being
+    /// investigated -- as it was here, for the better part of an hour, because
+    /// a stale intermediate build quietly put the development manifest into
+    /// the binary that went to Program Files.
+    /// </remarks>
+    public static bool ManifestRequestsUiAccess()
+    {
+        try
+        {
+            unsafe
+            {
+                // The executable's own module: its resources are where the
+                // manifest the loader read lives.
+                using FreeLibrarySafeHandle module = PInvoke.GetModuleHandle((string?)null);
+                var self = (HMODULE)module.DangerousGetHandle();
+
+                // RT_MANIFEST (24), CREATEPROCESS_MANIFEST_RESOURCE_ID (1).
+                HRSRC resource = PInvoke.FindResource(self, (char*)1, (char*)24);
+                if (resource == default)
+                {
+                    return false;
+                }
+
+                uint size = PInvoke.SizeofResource(self, resource);
+                void* data = PInvoke.LockResource(PInvoke.LoadResource(self, resource));
+                if (size == 0 || data is null)
+                {
+                    return false;
+                }
+
+                var bytes = new byte[size];
+                Marshal.Copy((IntPtr)data, bytes, 0, (int)size);
+                return Encoding.UTF8.GetString(bytes)
+                    .Contains("uiAccess=\"true\"", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
