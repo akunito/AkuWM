@@ -217,13 +217,14 @@ public sealed class DoctorCommand
     /// Windows the shell has cloaked that AkuWM did not cloak.
     /// </summary>
     /// <remarks>
-    /// A cloaked window on another native virtual desktop is normal: the shell
-    /// put it there. A cloaked window on <em>this</em> desktop that nothing
-    /// claims is an orphan -- some window manager hid it and then forgot it,
-    /// which is what happens when one is restarted or reconfigured while
-    /// workspaces are hidden. An orphan is invisible in every way that
-    /// matters: not on screen, not on the taskbar, not in Alt+Tab.
-    /// <c>akuwm uncloak-all</c> gives them back.
+    /// Most of them are normal: a window on another native virtual desktop is
+    /// cloaked by the shell, and that is the shell's business. The ones worth
+    /// knowing about are the orphans -- hidden by a window manager that then
+    /// forgot them, which is what happens when one is restarted while
+    /// workspaces are hidden -- because an orphan is invisible in every way
+    /// that matters: not on screen, not on the taskbar, not in Alt+Tab.
+    /// <c>akuwm uncloak-all</c> tells the two apart by trying, since the shell
+    /// refuses to uncloak the first kind and allows the second.
     /// </remarks>
     private void CheckCloakedWindows(List<Check> checks)
     {
@@ -236,17 +237,21 @@ public sealed class DoctorCommand
         List<WindowSnapshot> cloaked = windows
             .Where(w => w.Cloak.HasFlag(CloakKind.Shell))
             .ToList();
-        List<WindowSnapshot> orphans = cloaked.Where(w => w.OnCurrentVirtualDesktop).ToList();
-
         checks.Add(new("windows", CheckStatus.Info,
             $"{windows.Count} on the desk, {cloaked.Count} cloaked by something other than AkuWM"));
 
-        if (orphans.Count > 0)
+        if (cloaked.Count > 0)
         {
-            checks.Add(new("cloaked orphans", CheckStatus.Warn,
-                $"{orphans.Count} window(s) hidden on this desktop by something that no longer claims them " +
-                $"({string.Join(", ", orphans.Take(6).Select(w => w.ProcessName).Distinct())}" +
-                $"{(orphans.Count > 6 ? ", ..." : string.Empty)}); `akuwm uncloak-all` gives them back"));
+            // Whether each one is on another virtual desktop or orphaned by a
+            // dead manager cannot be read: IVirtualDesktopManager claims every
+            // window is on the current desktop, including ones that are not
+            // (measured, spike S6). Trying to uncloak is the only way to know,
+            // and that is a command, not a check.
+            checks.Add(new("cloaked elsewhere", CheckStatus.Info,
+                $"{cloaked.Count} window(s) hidden by something else " +
+                $"({string.Join(", ", cloaked.Take(6).Select(w => w.ProcessName).Distinct())}" +
+                $"{(cloaked.Count > 6 ? ", ..." : string.Empty)}); most will be on other native virtual " +
+                "desktops. `akuwm uncloak-all` reports which ones the shell lets go"));
         }
     }
 
