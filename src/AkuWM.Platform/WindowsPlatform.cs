@@ -1,3 +1,4 @@
+using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 using AkuWM.Core.Platform;
 using Windows.Win32;
@@ -76,7 +77,21 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
 
-    public bool Focus(WindowHandle window) => Win32Focus.Focus(window).Succeeded;
+    public bool Focus(WindowHandle window)
+    {
+        FocusResult result = Win32Focus.Focus(window);
+
+        // Which route it took is worth knowing on the desk: whether attaching
+        // the input queues works at all from the wm thread -- a thread that
+        // never pumps messages -- is an open question, and this is the only
+        // place that can answer it.
+        if (result.Route is not (FocusRoute.Direct or FocusRoute.AlreadyFocused))
+        {
+            Log.Info($"focus {window}: {result.Route} -- {result.Detail}");
+        }
+
+        return result.Succeeded;
+    }
 
     public void Dispose()
     {

@@ -76,6 +76,27 @@ public class CloakLedgerTests
     }
 
     [Fact]
+    public void A_second_process_can_read_the_records_while_the_first_holds_them()
+    {
+        using var dir = new TempDir();
+        string file = dir.File("cloaked.bin");
+
+        var daemon = new CloakLedger(file);
+        daemon.Record(FakePlatform.Window(1, "zen", title: "a tab"));
+
+        // This is the whole point of writing them down: `akuwm rescue` runs in
+        // another process while the daemon is alive, or after it died holding
+        // the mapping. An exclusive open made rescue see nothing and report
+        // nothing hidden.
+        var rescue = new CloakLedger(file);
+
+        Assert.False(rescue.Broken);
+        CloakedWindow entry = Assert.Single(rescue.Entries);
+        Assert.Equal(1, entry.Handle);
+        Assert.Equal("zen", entry.Process);
+    }
+
+    [Fact]
     public void AWindowHiddenByARunThatDiedComesBackOnTheNextStart()
     {
         using var dir = new TempDir();

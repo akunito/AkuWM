@@ -196,8 +196,20 @@ public sealed class RecordStore : IDisposable
 
             bool fresh = !File.Exists(_file) || new FileInfo(_file).Length != length;
 
+            // Shared, because the point of these records is that a SECOND
+            // process reads them: `akuwm rescue` while the daemon is alive, or
+            // the next daemon after it died. The default is exclusive, and it
+            // made rescue open nothing and report nothing hidden.
+            var stream = new FileStream(
+                _file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+
+            if (stream.Length != length)
+            {
+                stream.SetLength(length);
+            }
+
             _map = MemoryMappedFile.CreateFromFile(
-                _file, FileMode.OpenOrCreate, null, length, MemoryMappedFileAccess.ReadWrite);
+                stream, null, length, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: false);
             _view = _map.CreateViewAccessor(0, length, MemoryMappedFileAccess.ReadWrite);
 
             if (fresh || _view.ReadInt32(0) != Magic)

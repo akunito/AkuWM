@@ -57,6 +57,9 @@ public sealed class CloakLedger
         }
     }
 
+    /// <summary>True when the records could not be opened: nothing here is trustworthy.</summary>
+    public bool Broken => _store.Broken;
+
     public IReadOnlyCollection<CloakedWindow> Entries
     {
         get

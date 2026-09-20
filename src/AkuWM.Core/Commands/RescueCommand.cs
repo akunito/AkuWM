@@ -77,6 +77,14 @@ public sealed class RescueCommand
         // The cloaks first: a window nobody can see is the urgent part, and
         // moving one that is still invisible helps nobody.
         var ledger = new CloakLedger(_paths.CloakLedgerFile);
+        if (ledger.Broken)
+        {
+            // Reporting nothing hidden because the file would not open is the
+            // worst possible answer here.
+            Log.Error("the cloak ledger could not be opened; falling back to uncloaking everything");
+            everything = true;
+        }
+
         RecoveryResult cloaks = ledger.Recover(_platform, _actions);
 
         var swept = new List<object>();

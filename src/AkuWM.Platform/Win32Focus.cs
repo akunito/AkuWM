@@ -71,7 +71,13 @@ public static class Win32Focus
     /// the check below reads the old foreground and reports a failure that
     /// did not happen.
     /// </summary>
+    // The longest a route is given to take effect, and how often it is asked.
+    // This runs on the wm thread, so a flat 40 ms sleep per route put up to
+    // 120 ms of doing nothing inside the gesture -- against a 5 ms budget for
+    // the whole thing. The usual case is the first route working, and polling
+    // returns the moment it has.
     private const int SettleMs = 40;
+    private const int PollMs = 2;
 
     /// <summary>
     /// Whether the foreground window is something no synthetic input may go
@@ -132,8 +138,28 @@ public static class Win32Focus
     private static bool Try(HWND hwnd)
     {
         PInvoke.SetForegroundWindow(hwnd);
-        Thread.Sleep(SettleMs);
-        return PInvoke.GetForegroundWindow() == hwnd;
+        return Settled(hwnd);
+    }
+
+    /// <summary>Waits only as long as it takes, up to <see cref="SettleMs"/>.</summary>
+    private static bool Settled(HWND hwnd)
+    {
+        if (PInvoke.GetForegroundWindow() == hwnd)
+        {
+            return true;
+        }
+
+        for (int waited = 0; waited < SettleMs; waited += PollMs)
+        {
+            Thread.Sleep(PollMs);
+
+            if (PInvoke.GetForegroundWindow() == hwnd)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -23,6 +23,12 @@ public sealed class StateCommand
         var journal = new GeometryJournal(_paths.GeometryJournalFile);
         Session? session = new SessionMarker(_paths.SessionFile).Previous;
 
+        if (ledger.Broken)
+        {
+            return CommandResponse.Fail(
+                line, "the records could not be opened, so nothing here would be true");
+        }
+
         return CommandResponse.Ok(line, new
         {
             hidden = ledger.Entries.Count,
