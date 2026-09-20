@@ -52,6 +52,13 @@ public static class Program
             return Spikes.Run(args);
         }
 
+        // A uiAccess process is launched through AppInfo, and its standard
+        // output cannot be redirected by the caller -- any script that tries
+        // gets "the requested operation requires elevation" and an empty
+        // string. So the program can write its own output to a file instead,
+        // which is the only way a script can read what it said.
+        string? outFile = OutFile(ref args);
+
         string line = CommandLine.Join(args);
         var client = new PipeClient();
 
@@ -59,7 +66,7 @@ public static class Program
         // assembled by a second process that is not managing the desk.
         if (client.IsRunning())
         {
-            return Print(client.Send(line), verb, args);
+            return Print(client.Send(line), verb, args, outFile);
         }
 
         if (!CommandRouter.NeedsNoDaemon(verb))
@@ -70,7 +77,7 @@ public static class Program
         }
 
         Log.Console = false; // the command's own output is the interface here
-        return Print(Router(paths).Execute(line), verb, args);
+        return Print(Router(paths).Execute(line), verb, args, outFile);
     }
 
     private static int Daemon(ConfigPaths paths, string[] args)
@@ -231,22 +238,68 @@ public static class Program
     /// Prints a reply. <c>doctor</c> and <c>shadow diff</c> get their readable
     /// form, everything else the JSON a script can read.
     /// </summary>
-    private static int Print(CommandResponse response, string verb, string[] args)
+    /// <summary>
+    /// Pulls <c>--out &lt;path&gt;</c> out of the arguments before the command
+    /// sees them.
+    /// </summary>
+    private static string? OutFile(ref string[] args)
+    {
+        int at = Array.FindIndex(args, a => a.Equals("--out", StringComparison.OrdinalIgnoreCase));
+        if (at < 0 || at + 1 >= args.Length)
+        {
+            return null;
+        }
+
+        string path = args[at + 1];
+        args = [.. args[..at], .. args[(at + 2)..]];
+        return path;
+    }
+
+    private static int Print(CommandResponse response, string verb, string[] args, string? outFile)
+    {
+        string text = Render(response, verb, args, out int code);
+
+        Console.Write(text);
+        if (outFile is not null)
+        {
+            try
+            {
+                File.WriteAllText(outFile, text);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"could not write {outFile}: {ex.Message}");
+            }
+        }
+
+        return code;
+    }
+
+    private static string Render(CommandResponse response, string verb, string[] args, out int code)
     {
         if (verb == "doctor" && response.Success && response.Data is not null)
         {
-            Console.Write(DoctorText(response));
-            return response.Data["ok"]?.GetValue<bool>() == true ? 0 : 1;
+            code = response.Data["ok"]?.GetValue<bool>() == true ? 0 : 1;
+            return DoctorText(response);
         }
 
         if (verb == "shadow" && args.Length > 1 && args[1] == "diff"
-            && response.Success && response.Data?["text"] is { } text)
+            && response.Success && response.Data?["text"] is { } diff)
         {
-            Console.Write(text.GetValue<string>());
-            return response.Data["agrees"]?.GetValue<bool>() == true ? 0 : 1;
+            code = response.Data["agrees"]?.GetValue<bool>() == true ? 0 : 1;
+            return diff.GetValue<string>();
         }
 
-        return Cli.Program.Print(response);
+        if (!response.Success)
+        {
+            code = 1;
+            return (response.Error ?? "failed") + Environment.NewLine;
+        }
+
+        code = 0;
+        return response.Data is null
+            ? string.Empty
+            : response.Data.ToJsonString(Protocol.Pretty) + Environment.NewLine;
     }
 
     private static string DoctorText(CommandResponse response)

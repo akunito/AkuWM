@@ -157,8 +157,18 @@ Good "signed, status $($signature.Status)"
 # --- 4. does Windows agree? -------------------------------------------------
 Step 'Checking that Windows actually grants uiAccess'
 Note 'starting the installed binary and asking it what its token says'
-$doctor = & $target doctor 2>&1
-$line = $doctor | Where-Object { $_ -match 'uiAccess' } | Select-Object -First 1
+
+# A uiAccess process is launched through AppInfo, exactly like an elevated one,
+# and its standard output cannot be redirected by whoever starts it: PowerShell
+# answers "the requested operation requires elevation" and hands back nothing.
+# That is also the proof it worked, and it is why AkuWM writes the answer to a
+# file of its own instead.
+$report = Join-Path $env:TEMP 'akuwm-doctor.txt'
+Remove-Item $report -ErrorAction SilentlyContinue
+Start-Process -FilePath $target -ArgumentList 'doctor', '--out', "`"$report`"" -Wait -WindowStyle Hidden
+$line = if (Test-Path $report) {
+    Get-Content $report | Where-Object { $_ -match 'uiAccess' } | Select-Object -First 1
+} else { $null }
 
 if ($line -match 'granted:') {
     Good $line.Trim()
