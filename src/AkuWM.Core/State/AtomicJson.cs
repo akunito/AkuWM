@@ -49,20 +49,46 @@ public static class AtomicJson
         }
     }
 
+    /// <summary>
+    /// Writes the file, atomically, retrying briefly if somebody else has it.
+    /// </summary>
+    /// <remarks>
+    /// Two processes legitimately write these at the same time: the daemon
+    /// shutting down and an <c>akuwm rescue</c> that is what told it to. The
+    /// temporary file is per process, so they never collide there; the move
+    /// onto the real name can still lose a race with the other one's move, and
+    /// Windows reports that as access denied. A moment later it is free.
+    /// </remarks>
     public static void Write<T>(string file, T value, string what)
     {
-        try
-        {
-            string directory = Path.GetDirectoryName(Path.GetFullPath(file))!;
-            Directory.CreateDirectory(directory);
+        string? last = null;
 
-            string temporary = Path.Combine(directory, $".{Path.GetFileName(file)}.{Environment.ProcessId}.tmp");
-            File.WriteAllText(temporary, JsonSerializer.Serialize(value, Options), new UTF8Encoding(false));
-            File.Move(temporary, file, overwrite: true);
-        }
-        catch (Exception ex)
+        for (int attempt = 0; attempt < 4; attempt++)
         {
-            Log.Error($"{what} could not be written: {ex.Message}");
+            try
+            {
+                string directory = Path.GetDirectoryName(Path.GetFullPath(file))!;
+                Directory.CreateDirectory(directory);
+
+                string temporary = Path.Combine(
+                    directory, $".{Path.GetFileName(file)}.{Environment.ProcessId}.tmp");
+
+                File.WriteAllText(temporary, JsonSerializer.Serialize(value, Options), new UTF8Encoding(false));
+                File.Move(temporary, file, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex.Message;
+                Thread.Sleep(30 * (attempt + 1));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"{what} could not be written: {ex.Message}");
+                return;
+            }
         }
+
+        Log.Error($"{what} could not be written after four tries: {last}");
     }
 }

@@ -43,6 +43,7 @@ public static class Spikes
             Say("  s6   when a cloak refuses to come off, is it never cleared or put straight back?");
             Say("  s7   is there ANY call that brings back a window a dead manager left hidden?");
             Say("  s8   which cloak can be undone? (cloak with each type, then try to undo it)");
+            Say("  s9   does a window actually move? (a deferred batch, then one call on its own)");
             return 2;
         }
 
@@ -60,6 +61,7 @@ public static class Spikes
             "s6" => CloakFight(Window(options), Number(options, "seconds", 3)),
             "s7" => RescueCloaked(Window(options)),
             "s8" => CloakRoundTrip(Window(options)),
+            "s9" => Placing(Window(options), Windows(options)),
             _ => Fail($"'{args[1]}' is not one of s1, s2, s12, s3, s4, s5"),
         };
 
@@ -609,6 +611,135 @@ public static class Spikes
         return 0;
     }
 
+    /// <summary>
+    /// S9: does the window actually end up where it was put?
+    /// </summary>
+    /// <remarks>
+    /// A deferred batch is how a workspace switch moves a dozen windows
+    /// together instead of visibly reflowing one at a time. It is also a way
+    /// to move nothing at all and hear nothing about it, which is what
+    /// happened to the first three windows AkuWM ever tried to arrange. So
+    /// both paths are measured against the same window, in order.
+    /// </remarks>
+    private static int Placing(WindowHandle target, IReadOnlyList<WindowHandle> several)
+    {
+        using var platform = new WindowsPlatform();
+
+        if (several.Count > 1)
+        {
+            return PlacingSeveral(platform, several);
+        }
+
+        WindowSnapshot? window = Pick(platform, target, preferElevated: false);
+        if (window is null)
+        {
+            return Fail("no window to aim at; pass --window 0x1234");
+        }
+
+        Rect original = window.FrameBounds;
+        Say($"S9: {window.ProcessName} [{window.ClassName}] \"{window.Title}\"");
+        Say($"    where it is now: {original}");
+        Say(string.Empty);
+
+        var wanted = new Rect(original.X + 120, original.Y + 90, original.Width, original.Height);
+
+        int batched = Win32Position.Place([new Placement(window.Handle, wanted)]);
+        Thread.Sleep(400);
+        Rect afterBatch = platform.Window(window.Handle)?.FrameBounds ?? Rect.Empty;
+        Say($"  a deferred batch      asked for {wanted}, reported {batched} placed");
+        Say($"                        it is now {afterBatch}  {(afterBatch.CloseTo(wanted, 8) ? "MOVED" : "did not move")}");
+
+        var second = new Rect(original.X + 240, original.Y + 180, original.Width, original.Height);
+        bool direct = Win32Position.PlaceDirectly(window.Handle, second);
+        Thread.Sleep(400);
+        Rect afterDirect = platform.Window(window.Handle)?.FrameBounds ?? Rect.Empty;
+        Say($"  one call on its own   asked for {second}, returned {direct}");
+        Say($"                        it is now {afterDirect}  {(afterDirect.CloseTo(second, 8) ? "MOVED" : "did not move")}");
+
+        Win32Position.PlaceDirectly(window.Handle, original);
+        Say(string.Empty);
+        Say($"  put back to {original}");
+
+        bool batchWorks = afterBatch.CloseTo(wanted, 8);
+        bool directWorks = afterDirect.CloseTo(second, 8);
+
+        Say(string.Empty);
+        Say((batchWorks, directWorks) switch
+        {
+            (true, true) => "  ANSWER: both work.",
+            (false, true) => "  ANSWER: a batch moves nothing; one call at a time does. Use the fallback.",
+            (true, false) => "  ANSWER: the batch works and a single call does not, which is backwards.",
+            _ => "  ANSWER: NO - this window cannot be moved by either path.",
+        });
+
+        return batchWorks || directWorks ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The same question for a batch of several, which is what a workspace
+    /// switch actually sends.
+    /// </summary>
+    private static int PlacingSeveral(WindowsPlatform platform, IReadOnlyList<WindowHandle> handles)
+    {
+        var windows = new List<WindowSnapshot>();
+        foreach (WindowHandle handle in handles)
+        {
+            if (platform.Window(handle) is { } window)
+            {
+                windows.Add(window);
+            }
+        }
+
+        if (windows.Count < 2)
+        {
+            return Fail("pass at least two: --windows 0xA,0xB,0xC");
+        }
+
+        Say($"S9: a batch of {windows.Count}");
+        foreach (WindowSnapshot window in windows)
+        {
+            Say($"    {window.Handle} {window.ProcessName} [{window.ClassName}] at {window.FrameBounds}");
+        }
+
+        Say(string.Empty);
+
+        var originals = windows.ToDictionary(w => w.Handle, w => w.FrameBounds);
+        List<Placement> wanted =
+        [
+            .. windows.Select(w => new Placement(
+                w.Handle,
+                w.FrameBounds with { X = w.FrameBounds.X + 100, Y = w.FrameBounds.Y + 80 }))
+        ];
+
+        int placed = Win32Position.Place(wanted);
+        Thread.Sleep(500);
+
+        int moved = 0;
+        foreach (Placement placement in wanted)
+        {
+            Rect now = platform.Window(placement.Window)?.FrameBounds ?? Rect.Empty;
+            bool ok = now.CloseTo(placement.Frame, 8);
+            Say($"  {placement.Window} asked {placement.Frame} -> {now}  {(ok ? "MOVED" : "did not move")}");
+            if (ok)
+            {
+                moved++;
+            }
+        }
+
+        foreach ((WindowHandle handle, Rect original) in originals)
+        {
+            Win32Position.PlaceDirectly(handle, original);
+        }
+
+        Say(string.Empty);
+        Say($"  reported {placed} placed, {moved} of {windows.Count} actually moved");
+        Say(moved == windows.Count
+            ? "  ANSWER: a batch of several works."
+            : "  ANSWER: a batch of several does NOT work; the fallback is what moves them.");
+
+        return moved == windows.Count ? 0 : 1;
+    }
+
     /// <summary>S4: the latency budget.</summary>
     private static int HotPath()
     {
@@ -742,6 +873,27 @@ public static class Spikes
 
     private static int Number(Dictionary<string, string?> options, string name, int fallback) =>
         options.TryGetValue(name, out string? value) && int.TryParse(value, out int parsed) ? parsed : fallback;
+
+    /// <summary>Several handles, as <c>--windows 0xA,0xB,0xC</c>.</summary>
+    private static IReadOnlyList<WindowHandle> Windows(Dictionary<string, string?> options)
+    {
+        if (!options.TryGetValue("windows", out string? value) || value is null)
+        {
+            return [];
+        }
+
+        var handles = new List<WindowHandle>();
+        foreach (string piece in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string text = piece.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? piece[2..] : piece;
+            if (long.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out long handle))
+            {
+                handles.Add(new WindowHandle(handle));
+            }
+        }
+
+        return handles;
+    }
 
     private static WindowHandle Window(Dictionary<string, string?> options)
     {

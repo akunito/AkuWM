@@ -1,4 +1,4 @@
-using System.Threading.Channels;
+using System.Collections.Concurrent;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Platform;
 
@@ -10,37 +10,43 @@ namespace AkuWM.Core.Wm;
 /// <remarks>
 /// <para>
 /// Everything that wants something done -- a hook callback, a command off the
-/// pipe, the IPC, later the GUI -- posts it here and waits. Nothing else
+/// pipe, the bar, later the GUI -- posts it here and waits. Nothing else
 /// touches the model. That is not a performance decision: a window manager
 /// whose state can be read by one thread while another is halfway through a
-/// workspace switch will eventually place a window using a tree that no
-/// longer exists, and no amount of locking makes that easy to reason about.
-/// One consumer, no locks in the model, and every decision made in the order
-/// it arrived.
+/// workspace switch will eventually place a window using a tree that no longer
+/// exists, and no amount of locking makes that easy to reason about.
+/// </para>
+/// <para>
+/// <strong>One real thread, not a task.</strong> The first version used
+/// <c>async</c> and a channel, which looks the same and is not: after every
+/// <c>await</c> the work resumed on whichever thread-pool thread was free.
+/// Win32 does not forgive that. A deferred window-position batch belongs to
+/// the thread that opened it, and moving three windows at once failed --
+/// silently, returning a null batch handle -- for exactly that reason, while
+/// the same code from a spike on its own thread worked every time. The desk
+/// still moved, because the batch falls back to one call per window, but every
+/// workspace switch was visibly reflowing instead of changing at once.
 /// </para>
 /// <para>
 /// A piece of work that throws is logged and refused; the loop survives it.
-/// The alternative -- a manager that dies because one rule had a bad
-/// rectangle -- leaves a desk full of cloaked windows and nobody to give them
-/// back.
+/// The alternative -- a manager that dies because one rule had a bad rectangle
+/// -- leaves a desk full of hidden windows and nobody to give them back.
 /// </para>
 /// <para>
-/// Every pass leaves a heartbeat, which is what the watchdog reads. A loop
-/// that stops answering is the one failure nothing else on the machine would
-/// notice.
+/// Every pass leaves a heartbeat, which is what the watchdog reads, and an
+/// idle pass leaves one too: a quiet desk is not a stuck one.
 /// </para>
 /// </remarks>
 public sealed class WmLoop : IAsyncDisposable
 {
-    private readonly Channel<WorkItem> _work = Channel.CreateUnbounded<WorkItem>(
-        new UnboundedChannelOptions { SingleReader = true });
-
+    private readonly BlockingCollection<WorkItem> _work = new(new ConcurrentQueue<WorkItem>());
     private readonly Action? _beat;
     private readonly Action<PlatformEvent>? _onEvent;
     private readonly Action? _onBatchEnd;
     private readonly TimeSpan _beatEvery;
     private readonly CancellationTokenSource _stopping = new();
-    private Task? _loop;
+
+    private Thread? _thread;
 
     /// <param name="onEvent">What to do with a platform event. Runs on this thread.</param>
     /// <param name="beat">Called once per pass, for the watchdog.</param>
@@ -55,8 +61,7 @@ public sealed class WmLoop : IAsyncDisposable
     /// Called once after everything waiting has been dealt with, which is
     /// where the desk is redrawn. Windows delivers events in bursts -- moving
     /// one window produces dozens -- and answering each one with its own batch
-    /// of window moves would be a desk that never stops twitching. One burst,
-    /// one redraw.
+    /// of window moves would be a desk that never stops twitching.
     /// </param>
     public WmLoop(
         Action<PlatformEvent>? onEvent = null,
@@ -76,13 +81,18 @@ public sealed class WmLoop : IAsyncDisposable
     /// <summary>Work that threw and was refused.</summary>
     public long Refused { get; private set; }
 
+    /// <summary>The thread everything above runs on, for the assertions that care.</summary>
+    public int ThreadId => _thread?.ManagedThreadId ?? -1;
+
     public void Start()
     {
-        _loop = Task.Factory.StartNew(
-            Run,
-            _stopping.Token,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap();
+        _thread = new Thread(Run)
+        {
+            Name = "akuwm-wm",
+            IsBackground = true,
+        };
+
+        _thread.Start();
     }
 
     /// <summary>
@@ -90,21 +100,21 @@ public sealed class WmLoop : IAsyncDisposable
     /// back in well under a millisecond or Windows removes the hook.
     /// </summary>
     public void Enqueue(PlatformEvent platformEvent) =>
-        _work.Writer.TryWrite(new WorkItem(platformEvent.ToString(), null, platformEvent));
+        Offer(new WorkItem(platformEvent.ToString(), null, platformEvent));
 
     /// <summary>Runs something on the wm thread and waits for the answer.</summary>
     public Task<T> Post<T>(string what, Func<T> work)
     {
         var done = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var item = new WorkItem(what, () => work(), null, done);
 
-        if (!_work.Writer.TryWrite(item))
+        if (!Offer(new WorkItem(what, () => work(), null, done)))
         {
-            return Task.FromException<T>(new InvalidOperationException("the window manager is not accepting work"));
+            return Task.FromException<T>(
+                new InvalidOperationException("the window manager is not accepting work"));
         }
 
         return done.Task.ContinueWith(
-            t => (T)t.GetAwaiter().GetResult()!,
+            task => (T)task.GetAwaiter().GetResult()!,
             TaskContinuationOptions.ExecuteSynchronously);
     }
 
@@ -116,104 +126,102 @@ public sealed class WmLoop : IAsyncDisposable
             return null;
         });
 
-    private async Task Run()
+    private bool Offer(WorkItem item)
+    {
+        try
+        {
+            _work.Add(item);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return false; // stopped
+        }
+    }
+
+    private void Run()
     {
         Log.Info("the window-manager loop is running");
 
-        try
+        while (!_stopping.IsCancellationRequested)
         {
-            while (!_stopping.IsCancellationRequested)
+            _beat?.Invoke();
+
+            try
             {
-                // Idle counts as alive: a quiet desk is not a stuck one.
-                _beat?.Invoke();
-
-                while (_work.Reader.TryRead(out WorkItem item))
+                // Wait for something to do, giving up regularly so the
+                // heartbeat keeps going on a quiet desk.
+                if (_work.TryTake(out WorkItem first, (int)_beatEvery.TotalMilliseconds, _stopping.Token))
                 {
-                    _beat?.Invoke();
-                    Handled++;
+                    Handle(first);
 
-                    try
+                    // And then everything else that is already waiting.
+                    // Windows delivers events in bursts -- moving one window
+                    // produces dozens -- and a batch of window moves per event
+                    // is a desk that never stops twitching.
+                    while (_work.TryTake(out WorkItem next))
                     {
-                        if (item.Event is { } platformEvent)
-                        {
-                            _onEvent?.Invoke(platformEvent);
-                        }
-
-                        item.Done?.SetResult(item.Work?.Invoke());
+                        Handle(next);
                     }
-                    catch (Exception ex)
-                    {
-                        Refused++;
-                        Log.Error($"'{item.What}' failed and was refused; the desk is unchanged", ex);
-
-                        // The caller hears about its own failure. Nobody else
-                        // is punished for it.
-                        item.Done?.SetException(ex);
-                    }
-                }
-
-                try
-                {
-                    _onBatchEnd?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    Refused++;
-                    Log.Error("redrawing the desk failed; it is left as it was", ex);
-                }
-
-                if (!await WaitForWork().ConfigureAwait(false))
-                {
-                    break;
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Stopping.
+            catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException or ObjectDisposedException)
+            {
+                break;
+            }
+
+            try
+            {
+                _onBatchEnd?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Refused++;
+                Log.Error("redrawing the desk failed; it is left as it was", ex);
+            }
         }
 
         Log.Info($"the window-manager loop has stopped after {Handled} piece(s) of work");
     }
 
-    /// <summary>
-    /// Waits for something to do, and gives up regularly so the heartbeat
-    /// keeps going.
-    /// </summary>
-    /// <returns>False when the loop is finished for good.</returns>
-    private async Task<bool> WaitForWork()
+    private void Handle(WorkItem item)
     {
-        using var wake = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token);
-        wake.CancelAfter(_beatEvery);
+        _beat?.Invoke();
+        Handled++;
 
         try
         {
-            return await _work.Reader.WaitToReadAsync(wake.Token).ConfigureAwait(false);
+            if (item.Event is { } platformEvent)
+            {
+                _onEvent?.Invoke(platformEvent);
+            }
+
+            item.Done?.SetResult(item.Work?.Invoke());
         }
-        catch (OperationCanceledException) when (!_stopping.IsCancellationRequested)
+        catch (Exception ex)
         {
-            return true; // just the heartbeat coming round
+            Refused++;
+            Log.Error($"'{item.What}' failed and was refused; the desk is unchanged", ex);
+
+            // The caller hears about its own failure. Nobody else is punished
+            // for it.
+            item.Done?.SetException(ex);
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        _work.Writer.TryComplete();
         _stopping.Cancel();
+        _work.CompleteAdding();
 
-        if (_loop is not null)
+        if (_thread is not null && !_thread.Join(TimeSpan.FromSeconds(3)))
         {
-            try
-            {
-                await _loop.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
-            {
-                Log.Warn("the window-manager loop did not stop in time");
-            }
+            Log.Warn("the window-manager loop did not stop in time");
         }
 
         _stopping.Dispose();
+        _work.Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private readonly record struct WorkItem(

@@ -112,22 +112,33 @@ public class WmLoopTests
     public async Task A_burst_of_events_is_answered_once()
     {
         int redraws = 0;
+        var held = new ManualResetEventSlim(false);
+
         await using var loop = new WmLoop(
             beatEvery: TimeSpan.FromSeconds(30), onBatchEnd: () => redraws++);
         loop.Start();
 
-        // Moving one window on a real desk produces dozens of these. A batch
-        // of window moves per event would be a desk that never stops
-        // twitching.
+        // Hold the loop still while the burst is queued, so this measures the
+        // batching and not the scheduler. Moving one window on a real desk
+        // produces dozens of these, and a batch of window moves per event
+        // would be a desk that never stops twitching.
+        Task holding = loop.Post("holding the loop", () => held.Wait(TimeSpan.FromSeconds(5)));
+        await Task.Delay(50);
+
+        int before = redraws;
         for (int i = 0; i < 40; i++)
         {
             loop.Enqueue(new PlatformEvent(PlatformEventKind.WindowMoved, new WindowHandle(1), 0));
         }
 
+        held.Set();
+        await holding;
         await loop.Post("drain", () => { });
         await Task.Delay(50);
 
-        Assert.InRange(redraws, 1, 3);
+        // The forty were all waiting together: one pass deals with them, and
+        // the drain that follows may add one more.
+        Assert.InRange(redraws - before, 1, 3);
     }
 
     [Fact]
@@ -148,6 +159,32 @@ public class WmLoopTests
         await Task.Delay(150);
 
         Assert.True(calls > 1, "the loop stopped after the first failure");
+    }
+
+    [Fact]
+    public async Task Everything_runs_on_the_same_thread_every_time()
+    {
+        var threads = new System.Collections.Concurrent.ConcurrentBag<int>();
+        await using var loop = new WmLoop(
+            onEvent: _ => threads.Add(Environment.CurrentManagedThreadId),
+            beatEvery: TimeSpan.FromMilliseconds(20),
+            onBatchEnd: () => threads.Add(Environment.CurrentManagedThreadId));
+        loop.Start();
+
+        for (int i = 0; i < 30; i++)
+        {
+            loop.Enqueue(new PlatformEvent(PlatformEventKind.WindowMoved, new WindowHandle(i), 0));
+            await loop.Post($"work {i}", () => threads.Add(Environment.CurrentManagedThreadId));
+        }
+
+        await Task.Delay(100);
+
+        // Win32 does not forgive a loop that drifts between threads: a
+        // deferred window-position batch belongs to the thread that opened it,
+        // and an async loop that resumed on the thread pool failed to move
+        // three windows at once, silently, every time.
+        Assert.Single(threads.Distinct());
+        Assert.Equal(loop.ThreadId, threads.First());
     }
 
     [Fact]

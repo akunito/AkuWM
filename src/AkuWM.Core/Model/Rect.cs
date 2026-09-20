@@ -49,5 +49,21 @@ public readonly record struct Rect(int X, int Y, int Width, int Height)
     public double FractionInside(Rect other) =>
         Area <= 0 ? 0 : (double)Intersect(other).Area / Area;
 
+    /// <summary>
+    /// Within <paramref name="slack"/> pixels on every edge.
+    /// </summary>
+    /// <remarks>
+    /// Some windows will not take the exact rectangle they are given: a
+    /// terminal rounds its size to whole character cells, and some apps keep
+    /// a minimum of their own. Those land a few pixels from where they were
+    /// put, for ever, and a window manager that insists on the exact number
+    /// re-sends the same move for as long as it runs.
+    /// </remarks>
+    public bool CloseTo(Rect other, int slack) =>
+        Math.Abs(X - other.X) <= slack
+        && Math.Abs(Y - other.Y) <= slack
+        && Math.Abs(Width - other.Width) <= slack
+        && Math.Abs(Height - other.Height) <= slack;
+
     public override string ToString() => $"{X},{Y} {Width}x{Height}";
 }

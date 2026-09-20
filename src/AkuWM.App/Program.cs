@@ -194,7 +194,7 @@ public static class Program
         bool shadow = args.Contains("--shadow");
         bool manage = !shadow && (!verdict.SafeMode || force);
 
-        await using var manager = new WindowManager(
+        var manager = new WindowManager(
             loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args));
 
         var stopping = new ManualResetEventSlim(false);
@@ -258,7 +258,12 @@ public static class Program
         stopping.Wait();
 
         Log.Info("stopping");
+
+        // The window manager goes first. Restoring the desk while its loop is
+        // still running means the loop puts everything back the way it wants
+        // it, one pass after the restore.
         server.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await manager.DisposeAsync();
 
         GiveTheDeskBack("stopping");
         session.End();

@@ -70,7 +70,10 @@ function SmokeWindows($json) {
     if (-not $json) { return @() }
     $parsed = $json | ConvertFrom-Json
     if (-not $parsed.success) { return @() }
-    @($parsed.data.windows | Where-Object { $titles -contains $_.title })
+    # Trimmed: `title X` leaves a trailing space in the window title, which is
+    # invisible in every log and makes an exact comparison silently find
+    # nothing.
+    @($parsed.data.windows | Where-Object { $titles -contains $_.title.Trim() })
 }
 
 # --- setting up -------------------------------------------------------------
@@ -109,19 +112,27 @@ foreach ($title in $titles) {
 }
 Start-Sleep -Seconds 1
 
-# The window manager that is running now also sees them. Ask it to let go, so
-# the two are not fighting over the same three windows.
+# The window manager that is running now also sees them, and a cloak is one
+# flag: two managers taking it on and off is a fight neither wins. It is asked
+# to let go of these three, and then to stand still entirely for the length of
+# the test -- nothing of the person's desk moves while it is paused.
 $glazewm = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
+$paused = $false
+
 if (Test-Path $glazewm) {
-    Step 'Asking the running window manager to ignore them'
+    Step 'Asking the running window manager to let go and stand still'
     $running = & $glazewm query windows | ConvertFrom-Json
     foreach ($window in $running.data.windows) {
-        if ($titles -contains $window.title) {
+        if ($titles -contains $window.title.Trim()) {
             & $glazewm command ignore --id $window.id | Out-Null
-            Note "ignored $($window.title)"
+            Note "ignored $($window.title.Trim())"
         }
     }
-    Start-Sleep -Milliseconds 600
+
+    & $glazewm command wm-toggle-pause | Out-Null
+    $paused = $true
+    Note 'paused'
+    Start-Sleep -Milliseconds 800
 }
 
 # --- the test ---------------------------------------------------------------
@@ -169,33 +180,33 @@ try {
     Check 'all three shown again' ($shown.Count -eq 3) "$($shown.Count) of 3 are shown"
 
     Step 'A window moved to another workspace goes away and comes back'
-    $one = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title -eq $titles[0] })[0]
-    Shim "--id $($one.id) command move --workspace 13" | Out-Null
+    $one = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title.Trim() -eq $titles[0] })[0]
+    Shim "command --id $($one.id) move --workspace 13" | Out-Null
     Start-Sleep -Seconds 1
-    $left = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title -eq $titles[0] })[0]
+    $left = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title.Trim() -eq $titles[0] })[0]
     Check 'it is hidden on the other workspace' ($left.displayState -eq 'hidden') "it is $($left.displayState)"
 
     $remaining = @(SmokeWindows (Shim 'query windows') |
-        Where-Object { $_.title -ne $titles[0] -and $_.displayState -eq 'shown' })
+        Where-Object { $_.title.Trim() -ne $titles[0] -and $_.displayState -eq 'shown' })
     Check 'the other two took the space' (
         $remaining.Count -eq 2 -and
         ($remaining | Measure-Object -Property width -Sum).Sum -gt ($sorted[0].width * 2.5)) 'they did not grow'
 
-    Shim "--id $($one.id) command move --workspace 11" | Out-Null
+    Shim "command --id $($one.id) move --workspace 11" | Out-Null
     Start-Sleep -Seconds 1
-    $back = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title -eq $titles[0] })[0]
+    $back = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title.Trim() -eq $titles[0] })[0]
     Check 'it comes back visible' ($back.displayState -eq 'shown') "it is $($back.displayState)"
 
     Step 'Fullscreen covers the whole screen, taskbar included'
-    Shim "--id $($back.id) command toggle-fullscreen" | Out-Null
+    Shim "command --id $($back.id) toggle-fullscreen" | Out-Null
     Start-Sleep -Milliseconds 800
-    $full = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title -eq $titles[0] })[0]
+    $full = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title.Trim() -eq $titles[0] })[0]
     Check 'it is fullscreen' ($full.state.type -eq 'fullscreen') "it is $($full.state.type)"
     Check 'and covers more than the work area' ($full.height -ge 2160) "it is $($full.height) tall"
 
-    Shim "--id $($full.id) command toggle-fullscreen" | Out-Null
+    Shim "command --id $($full.id) toggle-fullscreen" | Out-Null
     Start-Sleep -Milliseconds 800
-    $tiled = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title -eq $titles[0] })[0]
+    $tiled = @(SmokeWindows (Shim 'query windows') | Where-Object { $_.title.Trim() -eq $titles[0] })[0]
     Check 'and goes back to tiling' ($tiled.state.type -eq 'tiling') "it is $($tiled.state.type)"
 
     Step 'Stopping AkuWM puts them back where it found them'
@@ -215,10 +226,32 @@ finally {
     $env:LOCALAPPDATA = $env:LOCALAPPDATA_ORIGINAL
 
     if (-not $KeepWindows) {
+        # Closed by message, by handle. A console window on this machine is
+        # hosted by Windows Terminal, one process for all of them, so killing
+        # by process name would take the person's terminals with it.
         Step 'Closing the three windows'
-        Get-Process -Name cmd -ErrorAction SilentlyContinue |
-            Where-Object { $titles -contains $_.MainWindowTitle } |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class SmokeClose {
+  [DllImport("user32.dll")] public static extern bool EnumWindows(Proc f, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  public delegate bool Proc(IntPtr h, IntPtr l);
+  public static string Title(IntPtr h){ var s = new StringBuilder(512); GetWindowTextW(h, s, 512); return s.ToString(); }
+  public static void CloseStartingWith(string prefix){
+    EnumWindows((h, l) => { if (Title(h).StartsWith(prefix)) PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero);
+  }
+}
+"@ -ErrorAction SilentlyContinue
+        [SmokeClose]::CloseStartingWith('AKUWM SMOKE')
+    }
+
+    if ($paused) {
+        Step 'Letting the other window manager move again'
+        & $glazewm command wm-toggle-pause | Out-Null
+        Note 'unpaused'
     }
 }
 

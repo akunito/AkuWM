@@ -478,6 +478,37 @@ public class DeskTests
     }
 
     [Fact]
+    public void A_window_that_lands_a_few_pixels_off_is_left_where_it_landed()
+    {
+        _fixture.Open(1, frame: new Rect(0, 42, 3840, 2118));
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        // A terminal rounding its size to whole character cells: it takes the
+        // move and settles a few pixels away, for ever.
+        Rect landed = _fixture.FrameOf(2);
+        _fixture.Platform.Place([new Placement(DeskFixture.W(2), landed with { Height = landed.Height - 11 })]);
+        _fixture.Sync();
+
+        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
+    }
+
+    [Fact]
+    public void A_window_somebody_dragged_away_is_put_back()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        Rect was = _fixture.FrameOf(2);
+        _fixture.Platform.Place([new Placement(DeskFixture.W(2), new Rect(500, 500, 600, 400))]);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        Assert.Equal(was, _fixture.FrameOf(2));
+    }
+
+    [Fact]
     public void A_window_that_will_not_be_moved_is_not_argued_with_for_ever()
     {
         // A window with a minimum size of its own: it takes the position and

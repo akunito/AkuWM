@@ -162,9 +162,30 @@ public sealed partial class Desk
     /// <summary>How long a window has to reach where it was put before AkuWM stops asking.</summary>
     public const int PlacementPatienceMs = 2000;
 
+    /// <summary>
+    /// How far from where it was put a window may land and still count as
+    /// there.
+    /// </summary>
+    /// <remarks>
+    /// A terminal rounds its size to whole character cells and lands a few
+    /// pixels off, for ever. Measured on this desk: a console window asked for
+    /// 1272x2118 settles at a size of its own choosing nearby. Insisting on
+    /// the exact number is a move re-sent for as long as AkuWM runs. Anything
+    /// further than this was moved by somebody, and is put back.
+    /// </remarks>
+    public const int PlacementSlack = 32;
+
     private void WantPlaced(DeskWindow window, Rect frame, List<Placement> into)
     {
         if (window.Snapshot.FrameBounds == frame)
+        {
+            window.PlacementRefused = false;
+            return;
+        }
+
+        // Already asked for exactly this, and it landed near enough. The
+        // difference is the window's own doing, not a person moving it.
+        if (window.Placed == frame && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
         {
             window.PlacementRefused = false;
             return;
