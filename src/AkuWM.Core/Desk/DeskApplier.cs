@@ -1,9 +1,9 @@
-using AkuWM.Core.Desk;
 using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
+using AkuWM.Core.Platform;
 using AkuWM.Core.State;
 
-namespace AkuWM.Platform;
+namespace AkuWM.Core.Desk;
 
 /// <param name="Placed">Windows moved.</param>
 /// <param name="Refused">Windows whose cloak did not take, read back from DWM.</param>
@@ -41,10 +41,17 @@ public readonly record struct ApplyResult(int Placed, IReadOnlySet<WindowHandle>
 /// </remarks>
 public sealed class DeskApplier
 {
-    private readonly WindowsPlatform _platform;
+    private readonly IPlatform _platform;
+    private readonly IPlatformActions _actions;
     private readonly CloakLedger _ledger;
     private readonly GeometryJournal _journal;
-    private readonly Win32Taskbar _taskbar;
+    private readonly ITaskbar _taskbar;
+
+    /// <summary>
+    /// Everything else the platform can think of to undo a cloak, tried once
+    /// when a window will not come back.
+    /// </summary>
+    private readonly Func<WindowHandle, IEnumerable<(string What, string? Error)>>? _lastResort;
 
     private Proof _proof = Proof.Untried;
 
@@ -55,13 +62,24 @@ public sealed class DeskApplier
         OneWay,
     }
 
+    /// <param name="lastResort">
+    /// Every other spelling of the uncloak, for the one moment it is worth
+    /// trying them: a window that has been hidden and will not come back.
+    /// </param>
     public DeskApplier(
-        WindowsPlatform platform, CloakLedger ledger, GeometryJournal journal, Win32Taskbar taskbar)
+        IPlatform platform,
+        IPlatformActions actions,
+        CloakLedger ledger,
+        GeometryJournal journal,
+        ITaskbar taskbar,
+        Func<WindowHandle, IEnumerable<(string What, string? Error)>>? lastResort = null)
     {
         _platform = platform;
+        _actions = actions;
         _ledger = ledger;
         _journal = journal;
         _taskbar = taskbar;
+        _lastResort = lastResort;
     }
 
     /// <summary>
@@ -90,7 +108,7 @@ public sealed class DeskApplier
 
         foreach ((WindowHandle window, bool topmost) in redraw.Band)
         {
-            Win32Position.SetTopmost(window, topmost);
+            _actions.SetTopmost(window, topmost);
         }
 
         foreach ((WindowHandle window, bool fullscreen) in redraw.TaskbarMark)
@@ -100,7 +118,7 @@ public sealed class DeskApplier
 
         if (!redraw.Focus.IsNone)
         {
-            Win32Focus.Focus(redraw.Focus);
+            _actions.Focus(redraw.Focus);
         }
 
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
@@ -128,7 +146,7 @@ public sealed class DeskApplier
             }
         }
 
-        return Win32Position.Place(placements);
+        return _actions.Place(placements);
     }
 
     /// <summary>
@@ -154,7 +172,7 @@ public sealed class DeskApplier
     {
         _proof = Proof.OneWay; // until shown otherwise
 
-        _platform.SetCloak(handle, true);
+        _actions.SetCloak(handle, true);
         bool hid = _platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) == true;
 
         if (!hid)
@@ -163,7 +181,7 @@ public sealed class DeskApplier
             return;
         }
 
-        _platform.SetCloak(handle, false);
+        _actions.SetCloak(handle, false);
         bool back = _platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) != true;
 
         if (back)
@@ -175,7 +193,7 @@ public sealed class DeskApplier
 
         // It went one way. Everything, in order, before giving up on it.
         Log.Error("a window was hidden and would not come back; trying every way of undoing it");
-        foreach ((string what, string? error) in new ImmersiveShell().TryEveryUncloak(handle))
+        foreach ((string what, string? error) in _lastResort?.Invoke(handle) ?? [])
         {
             if (_platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) != true)
             {
@@ -223,7 +241,7 @@ public sealed class DeskApplier
                 _ledger.Record(before);
             }
 
-            string? error = _platform.SetCloak(handle, hidden);
+            string? error = _actions.SetCloak(handle, hidden);
             bool nowCloaked = _platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) == true;
 
             if (error is not null || nowCloaked != hidden)

@@ -23,7 +23,7 @@ namespace AkuWM.Platform;
 /// manager, correctly.
 /// </para>
 /// </remarks>
-public sealed class Win32Taskbar : IDisposable
+public sealed class Win32Taskbar : AkuWM.Core.Platform.ITaskbar, IDisposable
 {
     private ITaskbarList2? _taskbar;
     private bool _tried;

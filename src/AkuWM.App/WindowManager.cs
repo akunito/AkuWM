@@ -67,13 +67,17 @@ public sealed class WindowManager : IAsyncDisposable
     {
         _platform = platform;
         _journal = journal;
-        _applier = new DeskApplier(platform, ledger, journal, _taskbar);
+        _applier = new DeskApplier(
+            platform, platform, ledger, journal, _taskbar, ImmersiveShell.EveryUncloak);
         Managing = manage;
 
         _desk = new Desk(config, isOurs: IsOurs)
         {
             CanPositionElevated = Win32Token.HasUiAccess(),
         };
+
+        // A window that has closed is not one AkuWM has to put back.
+        _desk.Forgotten += journal.Forget;
 
         _loop = new WmLoop(OnEvent, watchdog.Beat, onBatchEnd: Redraw);
 
@@ -91,6 +95,15 @@ public sealed class WindowManager : IAsyncDisposable
 
     /// <summary>Whether AkuWM is arranging the desk or only watching it.</summary>
     public bool Managing { get; private set; }
+
+    /// <summary>
+    /// Whether hiding a window is something this machine lets AkuWM undo.
+    /// </summary>
+    /// <remarks>
+    /// Proven on the first hide of the run. False means every workspace shows
+    /// all of its windows, which is a bad desk and better than a lost window.
+    /// </remarks>
+    public bool CanHide => _applier.CanHide;
 
     /// <summary>The last redraw, for the bench and for <c>doctor</c>.</summary>
     public ApplyResult Last { get; private set; }
@@ -177,20 +190,13 @@ public sealed class WindowManager : IAsyncDisposable
 
     private void OnEvent(PlatformEvent platformEvent)
     {
-        switch (platformEvent.Kind)
+        switch (WmEvents.Decide(platformEvent.Kind))
         {
-            // A window appearing or disappearing changes the set, so the set
-            // is read again. Everything else changes one window, and reading
-            // the whole desk to learn about one is the difference between a
-            // gesture that costs microseconds and one that costs milliseconds.
-            case PlatformEventKind.WindowCreated:
-            case PlatformEventKind.WindowDestroyed:
-            case PlatformEventKind.WindowShown:
-            case PlatformEventKind.WindowHidden:
+            case EventResponse.ReadTheDesk:
                 _resync = true;
                 break;
 
-            case PlatformEventKind.ForegroundChanged:
+            case EventResponse.TheFocusMoved:
                 if (!_desk.Focus(platformEvent.Handle))
                 {
                     // Something raised a window AkuWM has hidden. Following it
@@ -202,10 +208,13 @@ public sealed class WindowManager : IAsyncDisposable
 
                 return;
 
-            case PlatformEventKind.DisplayChanged:
+            case EventResponse.TheScreensChanged:
                 _desk.SetMonitors(_platform.Monitors());
                 _resync = true;
                 break;
+
+            case EventResponse.Nothing:
+                return;
 
             default:
                 UpdateOne(platformEvent.Handle);
@@ -233,7 +242,6 @@ public sealed class WindowManager : IAsyncDisposable
         else
         {
             _desk.Forget(handle);
-            _journal.Forget(handle);
         }
     }
 

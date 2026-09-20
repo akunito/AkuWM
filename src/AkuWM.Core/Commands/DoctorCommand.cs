@@ -185,7 +185,8 @@ public sealed class DoctorCommand
         checks.Add(new("akuwm daemon", running ? CheckStatus.Ok : CheckStatus.Info,
             running
                 ? $"answering on the {Protocol.PipeName} pipe"
-                : "not running (in shadow mode it only watches, so this is not yet a problem)"));
+                : "not running: nothing is arranging the desk, and nothing of AkuWM's is hidden "
+                  + "(the desk is on whatever else is running)"));
     }
 
     /// <summary>

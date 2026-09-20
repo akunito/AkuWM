@@ -146,6 +146,23 @@ public sealed class ImmersiveShell : IDisposable
     public string? TryCloak(WindowHandle window, int type, int flag) =>
         Call(window, (ApplicationViewCloakType)type, flag);
 
+    /// <summary>
+    /// The same, for a caller that has no shell of its own to ask.
+    /// </summary>
+    /// <remarks>
+    /// One shell per call, opened and dropped: this runs once, in the moment a
+    /// window has been hidden and will not come back, and holding a COM object
+    /// open for that would be holding it open for ever.
+    /// </remarks>
+    public static IEnumerable<(string What, string? Error)> EveryUncloak(WindowHandle window)
+    {
+        using var shell = new ImmersiveShell();
+        foreach ((string what, string? error) in shell.TryEveryUncloak(window))
+        {
+            yield return (what, error);
+        }
+    }
+
     public IEnumerable<(string What, string? Error)> TryEveryUncloak(WindowHandle window)
     {
         foreach (ApplicationViewCloakType type in Enum.GetValues<ApplicationViewCloakType>())

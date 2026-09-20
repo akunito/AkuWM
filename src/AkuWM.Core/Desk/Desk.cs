@@ -27,7 +27,21 @@ public sealed partial class Desk
 {
     private readonly Dictionary<WindowHandle, DeskWindow> _windows = [];
     private readonly Dictionary<string, Workspace> _workspaces = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The screens that are here now, in enumeration order.</summary>
     private readonly List<DeskMonitor> _monitors = [];
+
+    /// <summary>
+    /// Every role this desk has ever seen, whether its screen is plugged in or
+    /// not.
+    /// </summary>
+    /// <remarks>
+    /// A monitor that goes to sleep and comes back is the same monitor. Making
+    /// a new one for it would lose which workspace it was showing, which
+    /// windows were stuck to it and where the focus had been -- so the object
+    /// outlives the cable.
+    /// </remarks>
+    private readonly Dictionary<string, DeskMonitor> _byRole = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<WindowSnapshot, bool>? _isOurs;
 
     private readonly Func<long> _clock;
@@ -156,13 +170,6 @@ public sealed partial class Desk
     public void SetMonitors(IReadOnlyList<MonitorSnapshot> monitors)
     {
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
-        var kept = new Dictionary<string, DeskMonitor>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (DeskMonitor monitor in _monitors)
-        {
-            kept[monitor.Role] = monitor;
-        }
-
         _monitors.Clear();
 
         foreach (MonitorSnapshot snapshot in monitors)
@@ -175,15 +182,14 @@ public sealed partial class Desk
                 continue;
             }
 
-            if (kept.TryGetValue(role, out DeskMonitor? existing))
+            if (!_byRole.TryGetValue(role, out DeskMonitor? monitor))
             {
-                existing.Snapshot = snapshot;
-                _monitors.Add(existing);
+                monitor = new DeskMonitor(snapshot, role);
+                _byRole[role] = monitor;
             }
-            else
-            {
-                _monitors.Add(new DeskMonitor(snapshot, role));
-            }
+
+            monitor.Snapshot = snapshot;
+            _monitors.Add(monitor);
         }
 
         foreach (DeskMonitor monitor in _monitors)
@@ -199,11 +205,9 @@ public sealed partial class Desk
             }
         }
 
-        // A workspace whose monitor is not here cannot be on screen.
-        foreach (Workspace workspace in _workspaces.Values.Where(w => MonitorOf(w) is null))
-        {
-            workspace.Displayed = false;
-        }
+        // A workspace whose monitor is away keeps its displayed flag: the
+        // screen coming back should find the desk as it left it, and nothing
+        // draws a workspace whose monitor is not in the list anyway.
     }
 
     // ---- windows coming and going ----------------------------------------
@@ -324,7 +328,22 @@ public sealed partial class Desk
         {
             window.PreviousState = window.State;
             window.State = WindowState.Minimized;
-            Workspace(window.Workspace ?? string.Empty)?.Tiling.Remove(window.Handle);
+
+            if (Workspace(window.Workspace ?? string.Empty) is { } leaving)
+            {
+                // Out of the tree, and out of the fullscreen slot: a workspace
+                // that still believes something is covering it puts every
+                // other window behind a window nobody can see. Its place in
+                // the floating band is kept, because that is where it goes
+                // back to.
+                leaving.Tiling.Remove(window.Handle);
+
+                if (leaving.Fullscreen == window.Handle)
+                {
+                    leaving.Fullscreen = WindowHandle.None;
+                }
+            }
+
             return;
         }
 
@@ -351,6 +370,19 @@ public sealed partial class Desk
         }
     }
 
+    /// <summary>
+    /// Raised when a window closes, so whoever is keeping records about it can
+    /// stop.
+    /// </summary>
+    /// <remarks>
+    /// The journal of where windows were is written to disk and read at the
+    /// next start. Without this it collects every window that has ever been
+    /// opened and closed in a session -- harmless, because a stale entry is
+    /// dropped when it is restored, and still a file that grows all day and a
+    /// count in <c>doctor</c> that means nothing.
+    /// </remarks>
+    public event Action<WindowHandle>? Forgotten;
+
     /// <summary>Lets go of a window that has closed.</summary>
     public void Forget(WindowHandle handle)
     {
@@ -358,6 +390,8 @@ public sealed partial class Desk
         {
             return;
         }
+
+        Forgotten?.Invoke(handle);
 
         if (window.Workspace is { } name)
         {

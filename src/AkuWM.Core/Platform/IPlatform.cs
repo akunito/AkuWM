@@ -68,6 +68,21 @@ public interface IPlatformActions
     bool Focus(WindowHandle window);
 }
 
+/// <summary>The shell's taskbar, for the one thing a window manager tells it.</summary>
+public interface ITaskbar
+{
+    /// <summary>
+    /// Tells the taskbar a window is covering the screen, so it drops behind.
+    /// </summary>
+    /// <remarks>
+    /// It has to be told again when the window stops, or the bar stays hidden
+    /// after the game is closed -- which looks exactly like a broken shell,
+    /// and is the kind of thing a person blames on the window manager,
+    /// correctly.
+    /// </remarks>
+    bool MarkFullscreen(WindowHandle window, bool fullscreen);
+}
+
 /// <summary>
 /// A platform event, as the hooks deliver it.
 /// </summary>

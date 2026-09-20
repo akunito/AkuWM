@@ -175,6 +175,56 @@ public class GlazeIpcServerTests
     }
 
     [Fact]
+    public async Task A_request_split_across_frames_is_put_back_together()
+    {
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(port, request => ExecResult.Ok(
+            data: new JsonObject { ["length"] = request.Length }));
+        server.Start();
+
+        using ClientWebSocket client = await Connect(port);
+
+        // A WebSocket message can arrive in any number of frames, and the
+        // sender decides. Reading one frame and answering it would answer half
+        // a command.
+        string first = "command focus --workspace ";
+        string second = new string('1', 40_000);
+
+        await client.SendAsync(
+            Encoding.UTF8.GetBytes(first), WebSocketMessageType.Text, false, CancellationToken.None);
+        await client.SendAsync(
+            Encoding.UTF8.GetBytes(second), WebSocketMessageType.Text, true, CancellationToken.None);
+
+        var buffer = new byte[64 * 1024];
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        WebSocketReceiveResult result = await client.ReceiveAsync(buffer, deadline.Token);
+        JsonNode reply = JsonNode.Parse(Encoding.UTF8.GetString(buffer, 0, result.Count))!;
+
+        Assert.Equal(first.Length + second.Length, reply["data"]!["length"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task A_client_that_goes_away_mid_sentence_does_not_take_the_server_with_it()
+    {
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(port, _ => ExecResult.Ok());
+        server.Start();
+
+        var rude = new ClientWebSocket();
+        await rude.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), CancellationToken.None);
+        await rude.SendAsync(
+            Encoding.UTF8.GetBytes("command focus"), WebSocketMessageType.Text, false, CancellationToken.None);
+        rude.Abort();
+        rude.Dispose();
+
+        await Task.Delay(200);
+
+        // The bar is restarted, a script is killed: the desk carries on.
+        using ClientWebSocket next = await Connect(port);
+        Assert.Contains("client_response", await Ask(next, "query windows"));
+    }
+
+    [Fact]
     public async Task A_port_that_is_already_taken_is_reported_rather_than_thrown()
     {
         int port = FreePort();

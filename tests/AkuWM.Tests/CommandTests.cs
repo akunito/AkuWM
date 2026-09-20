@@ -143,3 +143,59 @@ public class CommandTests
         Assert.False(CommandRouter.NeedsNoDaemon("command"));
     }
 }
+
+/// <summary>
+/// The command surface itself: which verbs need a running window manager, and
+/// what a caller gets when there is not one.
+/// </summary>
+public class CommandSurfaceTests
+{
+    [Fact]
+    public void Every_verb_in_the_help_is_a_verb_the_router_knows()
+    {
+        var router = new CommandRouter(
+            new ConfigCommands(new ConfigPaths("/nowhere", "TEST", "/nowhere")),
+            new DoctorCommand(new ConfigPaths("/nowhere", "TEST", "/nowhere"), () => false));
+
+        foreach (string line in CommandRouter.Help)
+        {
+            string verb = line.Split(' ')[0];
+            CommandResponse response = router.Execute(verb);
+
+            // It may well refuse for want of a platform or an argument. What
+            // it must never say is that it has never heard of it.
+            Assert.DoesNotContain("is not a command AkuWM knows", response.Error ?? string.Empty);
+        }
+    }
+
+    [Fact]
+    public void The_compat_surface_says_so_when_nothing_is_managing_the_desk()
+    {
+        var router = new CommandRouter(
+            new ConfigCommands(new ConfigPaths("/nowhere", "TEST", "/nowhere")),
+            new DoctorCommand(new ConfigPaths("/nowhere", "TEST", "/nowhere"), () => false));
+
+        CommandResponse response = router.Execute("compat query windows");
+
+        Assert.False(response.Success);
+        Assert.Contains("not managing the desk", response.Error);
+    }
+
+    [Fact]
+    public void Only_rescue_refuses_to_be_handed_to_a_running_daemon()
+    {
+        foreach (string line in CommandRouter.Help)
+        {
+            string verb = line.Split(' ')[0];
+            Assert.Equal(verb == "rescue", CommandRouter.NeverDelegates(verb));
+        }
+    }
+
+    [Fact]
+    public void The_build_says_which_milestone_it_is()
+    {
+        // It is the first line of every log and the first line of doctor. A
+        // stale one is a small lie told very often.
+        Assert.Contains("M2", Build.Description);
+    }
+}

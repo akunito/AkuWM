@@ -48,6 +48,12 @@ public sealed partial class Desk
                         if (Live(handle) is { } window && accounted.Add(handle))
                         {
                             WantHidden(window, true, hide, show);
+
+                            // A window that was covering the screen and is now
+                            // out of sight must let the taskbar back up, or it
+                            // stays behind everything for ever and looks
+                            // exactly like a broken shell.
+                            WantMarked(window, false, mark);
                         }
                     }
 
@@ -111,6 +117,19 @@ public sealed partial class Desk
                 WantHidden(window, false, hide, show);
                 WantPlaced(window, FloatingRectOf(window, monitor), place);
                 WantBanded(window, true, band);
+            }
+        }
+
+        // Anything AkuWM has not accounted for in this pass -- a window whose
+        // workspace belongs to a monitor that has been unplugged -- must not
+        // be left invisible because of AkuWM. It is somewhere on the remaining
+        // screens, and the person can reach it.
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (window.Managed && window.Hidden && !accounted.Contains(window.Handle))
+            {
+                WantHidden(window, false, hide, show);
+                WantMarked(window, false, mark);
             }
         }
 

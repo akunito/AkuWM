@@ -306,7 +306,8 @@ public static class Program
 
         return new CommandRouter(
             new ConfigCommands(paths),
-            new DoctorCommand(paths, () => new PipeClient().IsRunning(), platform, PlatformChecks(windows), ledger),
+            new DoctorCommand(
+                paths, () => new PipeClient().IsRunning(), platform, PlatformChecks(windows, manager), ledger),
             query,
             new ShadowCommand(query, Compat.GlazeWmProbe.Ask),
             new MonitorCommands(platform, paths),
@@ -317,8 +318,39 @@ public static class Program
     }
 
     /// <summary>The checks only the Windows host can make.</summary>
-    private static List<Func<Check>> PlatformChecks(WindowsPlatform platform) =>
+    /// <param name="manager">
+    /// Null for a second process answering `doctor` on its own: it can report
+    /// what Windows allows, but not what the running window manager is doing.
+    /// </param>
+    private static List<Func<Check>> PlatformChecks(WindowsPlatform platform, WindowManager? manager = null) =>
     [
+        () => manager is null
+            ? new Check("window manager", CheckStatus.Info, "not running in this process")
+            : new Check(
+                "window manager",
+                manager.Managing ? CheckStatus.Ok : CheckStatus.Warn,
+                manager.Managing
+                    ? $"arranging the desk ({manager.Redraws} redraw(s), last {manager.Last})"
+                    : "watching only: it changes nothing"),
+        () => manager is null
+            ? new Check("hiding windows", CheckStatus.Info, "not running in this process")
+            : new Check(
+                "hiding windows",
+                manager.CanHide ? CheckStatus.Ok : CheckStatus.Fail,
+                manager.CanHide
+                    ? "a hidden window comes back, proven on the first hide of this run"
+                    : "a hidden window does NOT come back on this machine, so nothing is hidden "
+                      + "and every workspace shows all of its windows"),
+        () => manager is null
+            ? new Check("bar and scripts", CheckStatus.Info, "not running in this process")
+            : new Check(
+                "bar and scripts",
+                manager.Compat.Listening ? CheckStatus.Ok : CheckStatus.Warn,
+                manager.Compat.Listening
+                    ? $"listening on 127.0.0.1:{AkuWM.Core.Compat.GlazeProtocol.Port}, "
+                      + $"{manager.Compat.Connections} client(s) connected"
+                    : manager.Compat.Unavailable
+                      ?? "not listening: the bar and the scripts cannot reach AkuWM"),
         () =>
         {
             bool granted = Win32Token.HasUiAccess();
@@ -463,7 +495,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("  daemon [--foreground] [--force] [--shadow] [--compat-port <n>]");
         Console.WriteLine("                          run the window manager");
-        Console.WriteLine("  spike <s1..s5>          M1: what Windows actually allows (see `akuwm spike`)");
+        Console.WriteLine("  spike <s1..s9>          what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)
         {
             Console.WriteLine("  " + help);

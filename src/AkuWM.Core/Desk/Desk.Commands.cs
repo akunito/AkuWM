@@ -221,11 +221,43 @@ public sealed partial class Desk
         Window(handle) is { Managed: true, Workspace: { } name }
         && Workspace(name)?.Tiling.ToggleDirection(handle) == true;
 
+    /// <summary>
+    /// Puts a window back on a workspace, if it was stuck to its monitor.
+    /// </summary>
+    /// <remarks>
+    /// A sticky window belongs to no workspace, and tiling and fullscreen are
+    /// both things a workspace owns. Asking for either is asking for the
+    /// window to rejoin one -- which is a clearer answer than doing nothing
+    /// and saying nothing, which is what a chord pressed on the chat window
+    /// used to get.
+    /// </remarks>
+    private bool Unstick(DeskWindow window)
+    {
+        if (!window.Sticky)
+        {
+            return window.Workspace is not null;
+        }
+
+        SetSticky(window.Handle, false);
+        return window.Workspace is not null;
+    }
+
     /// <summary>Floats a tiled window, or tiles a floating one.</summary>
     public bool SetFloating(WindowHandle handle, bool floating)
     {
-        if (Window(handle) is not { Managed: true } window || window.Workspace is not { } name
-            || Workspace(name) is not { } workspace)
+        if (Window(handle) is not { Managed: true } window)
+        {
+            return false;
+        }
+
+        // Tiling a sticky window means it rejoins the workspace on screen;
+        // floating one is what it already is.
+        if (window.Sticky && floating)
+        {
+            return false;
+        }
+
+        if (!Unstick(window) || window.Workspace is not { } name || Workspace(name) is not { } workspace)
         {
             return false;
         }
@@ -278,8 +310,22 @@ public sealed partial class Desk
             height);
     }
 
-    public bool SetFullscreen(WindowHandle handle, bool fullscreen) =>
-        Window(handle) is { Managed: true } window && SetFullscreen(window, fullscreen);
+    public bool SetFullscreen(WindowHandle handle, bool fullscreen)
+    {
+        if (Window(handle) is not { Managed: true } window)
+        {
+            return false;
+        }
+
+        // Covering the screen is something a workspace owns, so a window stuck
+        // to its monitor joins the workspace in front of the person first.
+        if (fullscreen && !Unstick(window))
+        {
+            return false;
+        }
+
+        return SetFullscreen(window, fullscreen);
+    }
 
     /// <summary>
     /// Puts a window over its whole monitor, or gives it back to the layout.
@@ -301,6 +347,16 @@ public sealed partial class Desk
             if (window.State == WindowState.Fullscreen)
             {
                 return false;
+            }
+
+            // Only one window covers a workspace. Whoever was there goes back
+            // to what it was, or two windows both believe they own the screen
+            // and one of them is drawn nowhere.
+            if (!workspace.Fullscreen.IsNone
+                && workspace.Fullscreen != window.Handle
+                && Window(workspace.Fullscreen) is { } covering)
+            {
+                SetFullscreen(covering, false);
             }
 
             window.PreviousState = window.State;

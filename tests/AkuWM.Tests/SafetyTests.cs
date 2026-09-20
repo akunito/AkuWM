@@ -78,6 +78,71 @@ public class SessionMarkerTests
     }
 }
 
+/// <summary>
+/// The small files everything else depends on: they only ever help, so none of
+/// them may be the reason AkuWM refuses to run.
+/// </summary>
+public class AtomicJsonTests
+{
+    private sealed record Thing(string Name, int Count);
+
+    [Fact]
+    public void What_goes_in_comes_out()
+    {
+        using var dir = new TempDir();
+        string file = dir.File("thing.json");
+
+        AtomicJson.Write(file, new Thing("a window", 3), "the thing");
+
+        Assert.Equal(new Thing("a window", 3), AtomicJson.Read<Thing>(file, "the thing"));
+    }
+
+    [Fact]
+    public void A_file_that_is_not_there_is_not_an_error()
+    {
+        using var dir = new TempDir();
+
+        Assert.Null(AtomicJson.Read<Thing>(dir.File("never-written.json"), "the thing"));
+    }
+
+    [Fact]
+    public void A_file_that_cannot_be_read_is_treated_as_absent()
+    {
+        using var dir = new TempDir();
+        string file = dir.File("broken.json");
+        File.WriteAllText(file, "{ this was half written when the power went");
+
+        // Refusing to start over a file whose only job is recovery would be
+        // exactly the wrong way round.
+        Assert.Null(AtomicJson.Read<Thing>(file, "the thing"));
+    }
+
+    [Fact]
+    public void The_directory_is_made_if_it_is_not_there()
+    {
+        using var dir = new TempDir();
+        string file = Path.Combine(dir.Path, "deep", "deeper", "thing.json");
+
+        AtomicJson.Write(file, new Thing("a window", 1), "the thing");
+
+        Assert.True(File.Exists(file));
+    }
+
+    [Fact]
+    public void Writing_twice_leaves_the_second_one()
+    {
+        using var dir = new TempDir();
+        string file = dir.File("thing.json");
+
+        AtomicJson.Write(file, new Thing("first", 1), "the thing");
+        AtomicJson.Write(file, new Thing("second", 2), "the thing");
+
+        Assert.Equal(new Thing("second", 2), AtomicJson.Read<Thing>(file, "the thing"));
+        // And no temporary file left beside it.
+        Assert.Single(Directory.GetFiles(dir.Path));
+    }
+}
+
 public class WatchdogTests
 {
     private DateTimeOffset _now = DateTimeOffset.UnixEpoch;

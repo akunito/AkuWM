@@ -50,13 +50,16 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     /// <summary>Windows that will not take the size they are given, like the real ones that do not.</summary>
     public HashSet<long> Stubborn { get; } = [];
 
+    /// <summary>Windows the fake refuses to hide, reporting success as the shell does.</summary>
+    public HashSet<long> RefusesToCloak { get; } = [];
+
     public List<string> Calls { get; } = [];
 
     public string? SetCloak(WindowHandle window, bool cloaked)
     {
         Calls.Add($"cloak {window.Value} {cloaked}");
 
-        if (!cloaked && RefusesToUncloak.Contains(window.Value))
+        if (cloaked ? RefusesToCloak.Contains(window.Value) : RefusesToUncloak.Contains(window.Value))
         {
             return null; // reports success, does nothing: what the shell really does
         }

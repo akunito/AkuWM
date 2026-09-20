@@ -144,10 +144,20 @@ public static class GlazeView
         };
     }
 
-    /// <summary>Every window of the desk, flat, as <c>query windows</c> answers.</summary>
+    /// <summary>
+    /// Every window of the desk, flat, as <c>query windows</c> answers.
+    /// </summary>
+    /// <remarks>
+    /// Each window once. A sticky window has two good reasons to be listed --
+    /// it belongs to the monitor, and it is drawn on the workspace that is on
+    /// screen -- and it is still one window. Listing it twice makes the
+    /// raise-or-launch scripts count two of something there is one of, which
+    /// is how a gesture ends up opening a second copy.
+    /// </remarks>
     public static JsonArray Windows(Desk.Desk desk)
     {
         var windows = new JsonArray();
+        var seen = new HashSet<WindowHandle>();
 
         foreach (DeskMonitor monitor in desk.Monitors)
         {
@@ -155,16 +165,19 @@ public static class GlazeView
             {
                 foreach (WindowHandle handle in Ordered(workspace, monitor))
                 {
-                    if (desk.Window(handle) is { Managed: true } window)
+                    if (desk.Window(handle) is { Managed: true } window && seen.Add(handle))
                     {
                         windows.Add(Window(desk, workspace, window));
                     }
                 }
             }
 
+            // Sticky windows of a monitor that is showing nothing: the loop
+            // above reaches them through the displayed workspace, and there
+            // is not one.
             foreach (WindowHandle handle in monitor.Sticky)
             {
-                if (desk.Window(handle) is { Managed: true } window)
+                if (desk.Window(handle) is { Managed: true } window && seen.Add(handle))
                 {
                     windows.Add(Window(desk, monitor.Displayed, window));
                 }
