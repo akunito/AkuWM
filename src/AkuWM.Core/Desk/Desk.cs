@@ -1,0 +1,452 @@
+using AkuWM.Core.Config;
+using AkuWM.Core.Layout;
+using AkuWM.Core.Logging;
+using AkuWM.Core.Model;
+
+namespace AkuWM.Core.Desk;
+
+/// <summary>
+/// The whole desk: the monitors, the workspaces bound to them, and every
+/// window AkuWM is responsible for.
+/// </summary>
+/// <remarks>
+/// <para>
+/// It holds no Win32 and calls nothing. Work comes in as snapshots and
+/// commands; what comes out is a <see cref="Redraw"/> -- the list of moves,
+/// cloaks and restacks that would make the screen match the model. The
+/// platform applies it and says what actually happened.
+/// </para>
+/// <para>
+/// That shape is the reason a window manager can be tested at all. Every
+/// decision here -- which workspace a window opens on, what a workspace switch
+/// costs, where a floating window sits when its monitor has gone away -- is
+/// exercised on Linux against the pixel counts of the two real monitors.
+/// </para>
+/// </remarks>
+public sealed partial class Desk
+{
+    private readonly Dictionary<WindowHandle, DeskWindow> _windows = [];
+    private readonly Dictionary<string, Workspace> _workspaces = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<DeskMonitor> _monitors = [];
+    private readonly Func<WindowSnapshot, bool>? _isOurs;
+
+    public Desk(AkuWmConfig config, Func<WindowSnapshot, bool>? isOurs = null)
+    {
+        Config = config;
+        _isOurs = isOurs;
+        BuildWorkspaces();
+    }
+
+    public AkuWmConfig Config { get; private set; }
+
+    public IReadOnlyList<DeskMonitor> Monitors => _monitors;
+
+    public IReadOnlyCollection<DeskWindow> Windows => _windows.Values;
+
+    public IEnumerable<Workspace> Workspaces => _workspaces.Values;
+
+    public WindowHandle Focused { get; private set; } = WindowHandle.None;
+
+    /// <summary>
+    /// Whether AkuWM may move windows that run at a higher integrity level.
+    /// </summary>
+    /// <remarks>
+    /// True when Windows granted <c>uiAccess</c>. Without it, positioning an
+    /// elevated window is refused by UIPI and the call fails silently, so the
+    /// model does not ask: the window is still hidden and shown by cloak,
+    /// which does work, and it is left where it is.
+    /// </remarks>
+    public bool CanPositionElevated { get; set; } = true;
+
+    public DeskWindow? Window(WindowHandle handle) =>
+        _windows.TryGetValue(handle, out DeskWindow? window) ? window : null;
+
+    public Workspace? Workspace(string name) =>
+        _workspaces.TryGetValue(name, out Workspace? workspace) ? workspace : null;
+
+    public DeskMonitor? MonitorOf(Workspace workspace) =>
+        _monitors.FirstOrDefault(m => string.Equals(m.Role, workspace.MonitorRole, StringComparison.OrdinalIgnoreCase));
+
+    public DeskMonitor? MonitorByRole(string role) =>
+        _monitors.FirstOrDefault(m => string.Equals(m.Role, role, StringComparison.OrdinalIgnoreCase));
+
+    public DeskMonitor? MonitorByHandle(MonitorHandle handle) =>
+        _monitors.FirstOrDefault(m => m.Handle == handle);
+
+    /// <summary>The monitor the focused window is on, or the primary one.</summary>
+    public DeskMonitor? FocusedMonitor =>
+        (Window(Focused) is { } window ? MonitorByHandle(window.Snapshot.Monitor) : null)
+        ?? _monitors.FirstOrDefault(m => m.Snapshot.IsPrimary)
+        ?? _monitors.FirstOrDefault();
+
+    // ---- building --------------------------------------------------------
+
+    private void BuildWorkspaces()
+    {
+        _workspaces.Clear();
+
+        foreach (WorkspaceConfig configured in Config.Workspaces ?? [])
+        {
+            if (configured.Name is not { Length: > 0 } name || configured.Enabled == false)
+            {
+                continue;
+            }
+
+            string role = configured.Monitor ?? "main";
+            var workspace = new Workspace(name, role, ParseDirection(configured.Direction) ?? SplitDirection.Horizontal)
+            {
+                DisplayName = configured.DisplayName,
+                KeepAlive = configured.KeepAlive == true,
+            };
+
+            _workspaces[name] = workspace;
+        }
+    }
+
+    private static SplitDirection? ParseDirection(string? direction) => direction?.ToLowerInvariant() switch
+    {
+        "horizontal" => SplitDirection.Horizontal,
+        "vertical" => SplitDirection.Vertical,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Tells the desk which displays exist, and which role each one plays.
+    /// </summary>
+    /// <remarks>
+    /// Called at startup and on every display change. Workspaces are not
+    /// rebuilt: they belong to the desk, not to a screen, so a monitor that
+    /// goes to sleep and comes back keeps its trees, its floating rectangles
+    /// and which workspace was on it.
+    /// </remarks>
+    public void SetMonitors(IReadOnlyList<MonitorSnapshot> monitors)
+    {
+        Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
+        var kept = new Dictionary<string, DeskMonitor>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (DeskMonitor monitor in _monitors)
+        {
+            kept[monitor.Role] = monitor;
+        }
+
+        _monitors.Clear();
+
+        foreach (MonitorSnapshot snapshot in monitors)
+        {
+            if (!roles.TryGetValue(snapshot.Handle, out string? role))
+            {
+                // A screen the configuration does not name. Windows on it are
+                // left alone rather than dragged onto a role that is not
+                // theirs.
+                continue;
+            }
+
+            if (kept.TryGetValue(role, out DeskMonitor? existing))
+            {
+                existing.Snapshot = snapshot;
+                _monitors.Add(existing);
+            }
+            else
+            {
+                _monitors.Add(new DeskMonitor(snapshot, role));
+            }
+        }
+
+        foreach (DeskMonitor monitor in _monitors)
+        {
+            monitor.Workspaces.Clear();
+            monitor.Workspaces.AddRange(
+                _workspaces.Values.Where(w =>
+                    string.Equals(w.MonitorRole, monitor.Role, StringComparison.OrdinalIgnoreCase)));
+
+            if (monitor.Displayed is null && monitor.Workspaces.Count > 0)
+            {
+                monitor.Workspaces[0].Displayed = true;
+            }
+        }
+
+        // A workspace whose monitor is not here cannot be on screen.
+        foreach (Workspace workspace in _workspaces.Values.Where(w => MonitorOf(w) is null))
+        {
+            workspace.Displayed = false;
+        }
+    }
+
+    // ---- windows coming and going ----------------------------------------
+
+    /// <summary>
+    /// Brings the model up to date with what the OS says is on the desk.
+    /// </summary>
+    /// <remarks>
+    /// Rules decide what a window is <em>once</em>, when it first appears.
+    /// After that its state belongs to AkuWM and to the person using it: a
+    /// window someone floated by hand must not be tiled again by the same rule
+    /// the next time anything happens. What is re-read every time is only what
+    /// the window itself can change -- minimised, and whether it has covered
+    /// the screen.
+    /// </remarks>
+    public void Sync(IReadOnlyList<WindowSnapshot> windows)
+    {
+        var present = new HashSet<WindowHandle>();
+
+        foreach (WindowSnapshot snapshot in windows)
+        {
+            present.Add(snapshot.Handle);
+
+            if (_windows.TryGetValue(snapshot.Handle, out DeskWindow? known))
+            {
+                Update(known, snapshot);
+            }
+            else
+            {
+                Adopt(snapshot);
+            }
+        }
+
+        foreach (WindowHandle gone in _windows.Keys.Where(h => !present.Contains(h)).ToList())
+        {
+            Forget(gone);
+        }
+    }
+
+    /// <summary>Takes a new window in, and decides where it belongs.</summary>
+    public DeskWindow Adopt(WindowSnapshot snapshot)
+    {
+        ManagedWindow decision = ShadowModel.Decide(
+            snapshot,
+            (Config.Rules ?? []).Where(r => r.Enabled != false).ToList(),
+            new Matching.RuleMatcher(),
+            _monitors.ToDictionary(m => m.Handle, m => m.Snapshot),
+            _monitors.ToDictionary(m => m.Handle, m => m.Role),
+            Config,
+            _isOurs,
+            HiddenByUs);
+
+        var window = new DeskWindow(snapshot)
+        {
+            Managed = decision.Managed,
+            Reason = decision.Reason,
+            ReasonDetail = decision.ReasonDetail,
+            State = decision.State,
+            PreviousState = decision.State == WindowState.Fullscreen ? WindowState.Tiling : decision.State,
+            Sticky = decision.Sticky,
+            Rules = decision.Rules,
+        };
+
+        _windows[snapshot.Handle] = window;
+
+        if (!window.Managed)
+        {
+            return window;
+        }
+
+        if (window.Sticky)
+        {
+            MakeSticky(window);
+            return window;
+        }
+
+        Workspace? workspace = TargetWorkspace(decision, snapshot);
+        if (workspace is not null)
+        {
+            Place(window, workspace);
+        }
+
+        return window;
+    }
+
+    private void Update(DeskWindow window, WindowSnapshot snapshot)
+    {
+        WindowSnapshot was = window.Snapshot;
+        window.Snapshot = snapshot;
+
+        if (!window.Managed)
+        {
+            return;
+        }
+
+        if (snapshot.IsMinimized && window.State != WindowState.Minimized)
+        {
+            window.PreviousState = window.State;
+            window.State = WindowState.Minimized;
+            Workspace(window.Workspace ?? string.Empty)?.Tiling.Remove(window.Handle);
+            return;
+        }
+
+        if (!snapshot.IsMinimized && window.State == WindowState.Minimized)
+        {
+            Restore(window);
+            return;
+        }
+
+        // A window that covered its monitor by itself -- a game going
+        // fullscreen -- as opposed to one AkuWM put exactly where it is.
+        MonitorSnapshot? monitor = MonitorByHandle(snapshot.Monitor)?.Snapshot;
+        bool coversTheScreen = ShadowModel.IsFullscreen(snapshot, monitor);
+        bool weMovedItThere = window.Placed == snapshot.FrameBounds;
+
+        if (coversTheScreen && window.State != WindowState.Fullscreen && !weMovedItThere)
+        {
+            SetFullscreen(window, true);
+        }
+        else if (!coversTheScreen && window.State == WindowState.Fullscreen
+                 && was.FrameBounds != snapshot.FrameBounds)
+        {
+            SetFullscreen(window, false);
+        }
+    }
+
+    /// <summary>Lets go of a window that has closed.</summary>
+    public void Forget(WindowHandle handle)
+    {
+        if (!_windows.Remove(handle, out DeskWindow? window))
+        {
+            return;
+        }
+
+        if (window.Workspace is { } name)
+        {
+            Workspace(name)?.Release(handle);
+        }
+
+        foreach (DeskMonitor monitor in _monitors)
+        {
+            monitor.Sticky.Remove(handle);
+        }
+
+        if (Focused == handle)
+        {
+            Focused = WindowHandle.None;
+        }
+    }
+
+    /// <summary>The windows AkuWM currently has the cloak on.</summary>
+    public IReadOnlySet<WindowHandle> HiddenByUs =>
+        _windows.Values.Where(w => w.Hidden).Select(w => w.Handle).ToHashSet();
+
+    private void MakeSticky(DeskWindow window)
+    {
+        DeskMonitor? monitor = MonitorByHandle(window.Snapshot.Monitor) ?? FocusedMonitor;
+        if (monitor is null)
+        {
+            return;
+        }
+
+        if (window.Workspace is { } previous)
+        {
+            Workspace(previous)?.Release(window.Handle);
+            window.Workspace = null;
+        }
+
+        window.Sticky = true;
+        window.StickyMonitor = monitor.Role;
+        window.FloatingRect ??= window.Snapshot.FrameBounds;
+
+        if (window.State == WindowState.Tiling)
+        {
+            // A sticky window is drawn on whichever workspace its monitor
+            // shows, so it cannot be in one workspace's tree. Sticky implies
+            // floating, and says so rather than silently misplacing it.
+            window.State = WindowState.Floating;
+        }
+
+        monitor.Sticky.Add(window.Handle);
+    }
+
+    /// <summary>Where a rule says this window opens, or where the person is looking.</summary>
+    private Workspace? TargetWorkspace(ManagedWindow decision, WindowSnapshot snapshot)
+    {
+        if (decision.Target is { } target)
+        {
+            if (target.Workspace is { Length: > 0 } named && Workspace(named) is { } byName)
+            {
+                return byName;
+            }
+
+            if (target.Monitor is { Length: > 0 } role && MonitorByRole(role) is { } monitor)
+            {
+                int slot = (target.Slot ?? 1) - 1;
+                if (slot >= 0 && slot < monitor.Workspaces.Count)
+                {
+                    return monitor.Workspaces[slot];
+                }
+
+                return monitor.Displayed;
+            }
+        }
+
+        return MonitorByHandle(snapshot.Monitor)?.Displayed
+               ?? FocusedMonitor?.Displayed
+               ?? _workspaces.Values.FirstOrDefault();
+    }
+
+    /// <summary>Puts a window into a workspace, in the layer its state says.</summary>
+    private void Place(DeskWindow window, Workspace workspace)
+    {
+        if (window.Workspace is { } previous && !string.Equals(previous, workspace.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            Workspace(previous)?.Release(window.Handle);
+        }
+
+        window.Workspace = workspace.Name;
+
+        switch (window.State)
+        {
+            case WindowState.Fullscreen:
+                workspace.Fullscreen = window.Handle;
+                break;
+
+            case WindowState.Floating:
+                window.FloatingRect ??= window.Snapshot.FrameBounds;
+                if (!workspace.Floating.Contains(window.Handle))
+                {
+                    workspace.Floating.Add(window.Handle);
+                }
+
+                break;
+
+            case WindowState.Minimized:
+                break;
+
+            default:
+                WindowHandle beside = workspace.FocusOrder
+                    .FirstOrDefault(h => workspace.Tiling.Contains(h));
+                workspace.Tiling.Add(window.Handle, beside, DirectionFor(workspace));
+                break;
+        }
+
+        workspace.Touch(window.Handle);
+    }
+
+    private SplitDirection DirectionFor(Workspace workspace)
+    {
+        if (Config.Layout?.DefaultDirection is { Length: > 0 } configured
+            && ParseDirection(configured) is { } explicitDirection)
+        {
+            return explicitDirection;
+        }
+
+        // "auto": the shape of the screen decides, so the portrait monitor
+        // stacks and the wide one puts windows side by side.
+        return MonitorOf(workspace)?.NaturalDirection ?? workspace.Direction;
+    }
+
+    // ---- gaps -------------------------------------------------------------
+
+    public Gaps GapsFor(DeskMonitor monitor)
+    {
+        GapsConfig? gaps = Config.Gaps;
+        int[] outer = gaps?.Outer ?? [0, 0, 0, 0];
+        var written = new Gaps(
+            gaps?.Inner ?? 0,
+            outer.Length > 0 ? outer[0] : 0,
+            outer.Length > 1 ? outer[1] : 0,
+            outer.Length > 2 ? outer[2] : 0,
+            outer.Length > 3 ? outer[3] : 0);
+
+        return gaps?.ScaleWithDpi == false ? written : written.Scaled(monitor.Snapshot.ScaleFactor);
+    }
+
+    public override string ToString() =>
+        $"{_monitors.Count} monitor(s), {_workspaces.Count} workspace(s), {_windows.Count} window(s)";
+}

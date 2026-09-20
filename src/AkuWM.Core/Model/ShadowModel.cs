@@ -21,6 +21,16 @@ public sealed record ManagedWindow
 
     /// <summary>Every rule that fired, by name, in configuration order.</summary>
     public required IReadOnlyList<string> Rules { get; init; }
+
+    /// <summary>
+    /// Where a rule says this window opens, when one does.
+    /// </summary>
+    /// <remarks>
+    /// Carried out of the decision rather than matched again, so the rules are
+    /// run over a window exactly once. The first rule that names a target
+    /// wins, in configuration order.
+    /// </remarks>
+    public RuleTarget? Target { get; init; }
 }
 
 /// <summary>The whole desk, as AkuWM sees it at one instant.</summary>
@@ -80,7 +90,17 @@ public static class ShadowModel
         };
     }
 
-    private static ManagedWindow Decide(
+    /// <summary>
+    /// What one window is: managed or not, tiling or floating or fullscreen,
+    /// sticky or not, and on which monitor role.
+    /// </summary>
+    /// <remarks>
+    /// Public because it is the same decision whether AkuWM is watching the
+    /// desk or arranging it. Two answers to "is this window mine" would be two
+    /// window managers, and the shadow diff that proved M1 would stop proving
+    /// anything the moment they drifted.
+    /// </remarks>
+    public static ManagedWindow Decide(
         WindowSnapshot window,
         List<RuleConfig> rules,
         RuleMatcher matcher,
@@ -110,6 +130,7 @@ public static class ShadowModel
             Sticky = actions.Contains("sticky") && !actions.Contains("unsticky"),
             MonitorRole = role,
             Rules = fired.Select(r => r.Name ?? r.Id ?? "?").ToList(),
+            Target = fired.FirstOrDefault(r => r.Target is not null)?.Target,
         };
     }
 
