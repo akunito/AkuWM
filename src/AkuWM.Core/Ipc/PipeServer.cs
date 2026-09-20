@@ -1,10 +1,9 @@
 using System.IO.Pipes;
 using System.Text;
-using AkuWM.App.Commands;
-using AkuWM.Core.Ipc;
+using AkuWM.Core.Commands;
 using AkuWM.Core.Logging;
 
-namespace AkuWM.App.Ipc;
+namespace AkuWM.Core.Ipc;
 
 /// <summary>
 /// The named pipe the CLI and the <c>glazewm</c> shim talk to.

@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Everything that touches Win32, COM and DWM. Targets net8.0-windows and
-       builds anywhere; it only *runs* on Windows. Filled in at M1 (hooks, EDID
-       monitors, cloak read-back); M0 carries the shape only. -->
+       builds anywhere; it only *runs* on Windows. -->
   <PropertyGroup>
     <!-- Windows 10 2004 is the floor: that is where the display-configuration
          and cloak APIs AkuWM needs are all present. -->
@@ -12,7 +11,24 @@
          produced on Linux. It cannot run there, which is what AkuWM.Core being
          platform-free is for. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <!-- x64 only, and said out loud: half the window APIs (GetWindowLongPtr,
+         the pointer-sized styles) have no AnyCPU form, and AkuWM ships a
+         win-x64 binary anyway. -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- CsWin32 generates the P/Invoke signatures from Microsoft's own Win32
+         metadata, so the declarations are neither hand-copied nor guessed.
+         What it generates is listed in NativeMethods.txt. -->
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.106">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />

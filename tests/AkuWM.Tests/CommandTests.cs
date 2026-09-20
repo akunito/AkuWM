@@ -1,4 +1,4 @@
-using AkuWM.App.Commands;
+using AkuWM.Core.Commands;
 using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using Xunit;
@@ -138,7 +138,8 @@ public class CommandTests
     {
         Assert.True(CommandRouter.NeedsNoDaemon("config"));
         Assert.True(CommandRouter.NeedsNoDaemon("doctor"));
-        Assert.False(CommandRouter.NeedsNoDaemon("query"));
+        // Only while AkuWM manages nothing: see the remark on NeedsNoDaemon.
+        Assert.True(CommandRouter.NeedsNoDaemon("query"));
         Assert.False(CommandRouter.NeedsNoDaemon("command"));
     }
 }

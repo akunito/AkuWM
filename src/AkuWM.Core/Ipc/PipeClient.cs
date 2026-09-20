@@ -1,8 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
-using AkuWM.Core.Ipc;
 
-namespace AkuWM.Cli;
+namespace AkuWM.Core.Ipc;
 
 /// <summary>
 /// Talks to the running AkuWM over its named pipe.

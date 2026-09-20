@@ -1,20 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The host: the daemon (pipe server, and from M2 the WebSocket server on
-       6123), plus every command that can be answered without one.
-       TargetFramework is net8.0 while M0 has no Win32 in it, which is what
-       lets `akuwm config import glazewm` and `akuwm doctor` run from WSL. It
-       becomes net8.0-windows at M1, when it references AkuWM.Platform. -->
+  <!-- The host: the daemon (pipe server, the platform layer, and from M2 the
+       WebSocket server on 6123) plus every command that can be answered
+       without one.
+
+       Windows-targeted since M1: it references AkuWM.Platform. The pure
+       projects stay platform-free, which is where the logic lives and where
+       the unit tests run — on Linux. The binary is still produced from WSL. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>AkuWM.App</RootNamespace>
     <AssemblyName>akuwm</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
     <ProjectReference Include="../AkuWM.Cli/AkuWM.Cli.csproj" />
+    <ProjectReference Include="../AkuWM.Platform/AkuWM.Platform.csproj" />
   </ItemGroup>
 
 </Project>

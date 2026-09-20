@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
-using AkuWM.Cli;
 using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
+using AkuWM.Core.Model;
+using AkuWM.Core.Platform;
 
-namespace AkuWM.App.Commands;
+namespace AkuWM.Core.Commands;
 
 public enum CheckStatus
 {
@@ -37,11 +38,27 @@ public sealed class DoctorCommand
 {
     private readonly ConfigPaths _paths;
     private readonly Func<bool> _daemonRunning;
+    private readonly IPlatform? _platform;
+    private readonly IReadOnlyList<Func<Check>> _extra;
 
-    public DoctorCommand(ConfigPaths paths, Func<bool>? daemonRunning = null)
+    /// <param name="platform">
+    /// When there is one, doctor also reports the desk itself: the monitors and
+    /// whether every role was recognised by identity.
+    /// </param>
+    /// <param name="extra">
+    /// Checks only the host can make -- the DPI awareness of this process, the
+    /// shell's cloak -- passed in so this class stays free of Win32.
+    /// </param>
+    public DoctorCommand(
+        ConfigPaths paths,
+        Func<bool>? daemonRunning = null,
+        IPlatform? platform = null,
+        IReadOnlyList<Func<Check>>? extra = null)
     {
         _paths = paths;
         _daemonRunning = daemonRunning ?? (() => new PipeClient().IsRunning());
+        _platform = platform;
+        _extra = extra ?? [];
     }
 
     public CommandResponse Execute(string line)
@@ -75,6 +92,21 @@ public sealed class DoctorCommand
         CheckConfig(checks);
         CheckRuntimeDir(checks);
         CheckPipe(checks);
+        CheckMonitors(checks);
+        CheckCloakedWindows(checks);
+
+        foreach (Func<Check> check in _extra)
+        {
+            try
+            {
+                checks.Add(check());
+            }
+            catch (Exception ex)
+            {
+                checks.Add(new Check("a check failed", CheckStatus.Warn, ex.Message));
+            }
+        }
+
         CheckOtherProcesses(checks);
         CheckIpcPort(checks);
 
@@ -148,7 +180,74 @@ public sealed class DoctorCommand
         checks.Add(new("akuwm daemon", running ? CheckStatus.Ok : CheckStatus.Info,
             running
                 ? $"answering on the {Protocol.PipeName} pipe"
-                : "not running (M0 has no window manager to run yet)"));
+                : "not running (in shadow mode it only watches, so this is not yet a problem)"));
+    }
+
+    /// <summary>
+    /// Every monitor role should be recognised by identity. A role assigned by
+    /// position is a role a sleep cycle can move to the wrong screen.
+    /// </summary>
+    private void CheckMonitors(List<Check> checks)
+    {
+        if (_platform is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<MonitorSnapshot> monitors = _platform.Monitors();
+        List<MonitorConfig> configured = ConfigStore.Load(_paths).Effective.Monitors ?? [];
+        Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(configured, monitors);
+
+        var unidentified = monitors
+            .Where(m => !configured.Any(c => MonitorRoles.Matches(c, m)))
+            .ToList();
+
+        checks.Add(new("monitors", unidentified.Count > 0 ? CheckStatus.Warn : CheckStatus.Ok,
+            string.Join("; ", monitors.Select(m =>
+                $"{roles.GetValueOrDefault(m.Handle) ?? "no role"}={m.FriendlyName.Trim()} [{m.HardwareId}] {m.Bounds}"))));
+
+        if (unidentified.Count > 0)
+        {
+            checks.Add(new("monitor identities", CheckStatus.Warn,
+                $"{unidentified.Count} matched by position, not identity; run `akuwm monitors identify`"));
+        }
+    }
+
+    /// <summary>
+    /// Windows the shell has cloaked that AkuWM did not cloak.
+    /// </summary>
+    /// <remarks>
+    /// A cloaked window on another native virtual desktop is normal: the shell
+    /// put it there. A cloaked window on <em>this</em> desktop that nothing
+    /// claims is an orphan -- some window manager hid it and then forgot it,
+    /// which is what happens when one is restarted or reconfigured while
+    /// workspaces are hidden. An orphan is invisible in every way that
+    /// matters: not on screen, not on the taskbar, not in Alt+Tab.
+    /// <c>akuwm uncloak-all</c> gives them back.
+    /// </remarks>
+    private void CheckCloakedWindows(List<Check> checks)
+    {
+        if (_platform is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<WindowSnapshot> windows = _platform.Windows();
+        List<WindowSnapshot> cloaked = windows
+            .Where(w => w.Cloak.HasFlag(CloakKind.Shell))
+            .ToList();
+        List<WindowSnapshot> orphans = cloaked.Where(w => w.OnCurrentVirtualDesktop).ToList();
+
+        checks.Add(new("windows", CheckStatus.Info,
+            $"{windows.Count} on the desk, {cloaked.Count} cloaked by something other than AkuWM"));
+
+        if (orphans.Count > 0)
+        {
+            checks.Add(new("cloaked orphans", CheckStatus.Warn,
+                $"{orphans.Count} window(s) hidden on this desktop by something that no longer claims them " +
+                $"({string.Join(", ", orphans.Take(6).Select(w => w.ProcessName).Distinct())}" +
+                $"{(orphans.Count > 6 ? ", ..." : string.Empty)}); `akuwm uncloak-all` gives them back"));
+        }
     }
 
     private static void CheckOtherProcesses(List<Check> checks)

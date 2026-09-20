@@ -4,7 +4,7 @@ using AkuWM.Core.Import;
 using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 
-namespace AkuWM.App.Commands;
+namespace AkuWM.Core.Commands;
 
 /// <summary>
 /// <c>akuwm config ...</c>: show it, check it, and the one-time import of the

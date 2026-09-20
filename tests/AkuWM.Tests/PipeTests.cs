@@ -1,6 +1,4 @@
-using AkuWM.App.Commands;
-using AkuWM.App.Ipc;
-using AkuWM.Cli;
+using AkuWM.Core.Commands;
 using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using Xunit;

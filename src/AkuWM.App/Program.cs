@@ -1,9 +1,9 @@
-using AkuWM.App.Commands;
-using AkuWM.App.Ipc;
-using AkuWM.Cli;
+using AkuWM.Core.Commands;
 using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
+using AkuWM.Core.Platform;
+using AkuWM.Platform;
 
 namespace AkuWM.App;
 
@@ -13,14 +13,16 @@ namespace AkuWM.App;
 /// <remarks>
 /// One executable, two behaviours. <c>akuwm daemon</c> is the manager itself;
 /// <c>akuwm &lt;command&gt;</c> hands the line to a running daemon over the
-/// pipe, or answers it here when the command needs no window manager -- which
-/// is how <c>config import glazewm</c> and <c>doctor</c> work from WSL, where
-/// there is no session to manage.
+/// pipe, or answers it here when the command needs no daemon.
 /// </remarks>
 public static class Program
 {
+    [STAThread]
     public static int Main(string[] args)
     {
+        // Before anything asks Windows for a rectangle.
+        WindowsPlatform.DeclareDpiAwareness();
+
         ConfigPaths paths = ConfigPaths.Discover();
         Log.Level = File.Exists(paths.DebugMarkerFile) ? LogLevel.Debug : LogLevel.Info;
 
@@ -42,6 +44,13 @@ public static class Program
             return Daemon(paths, args);
         }
 
+        // M1's instrumentation: five questions put to Windows directly, with
+        // no daemon and no configuration in the way.
+        if (verb == "spike")
+        {
+            return Spikes.Run(args);
+        }
+
         string line = CommandLine.Join(args);
         var client = new PipeClient();
 
@@ -49,7 +58,7 @@ public static class Program
         // assembled by a second process that is not managing the desk.
         if (client.IsRunning())
         {
-            return Print(client.Send(line), verb);
+            return Print(client.Send(line), verb, args);
         }
 
         if (!CommandRouter.NeedsNoDaemon(verb))
@@ -60,7 +69,7 @@ public static class Program
         }
 
         Log.Console = false; // the command's own output is the interface here
-        return Print(Router(paths).Execute(line), verb);
+        return Print(Router(paths).Execute(line), verb, args);
     }
 
     private static int Daemon(ConfigPaths paths, string[] args)
@@ -69,6 +78,13 @@ public static class Program
         Log.Console = args.Contains("--foreground");
         Log.Info(Build.Description + " starting");
         Log.Info($"config: {paths.ConfigDir} (profile {paths.Profile})");
+
+        if (!WindowsPlatform.IsPerMonitorDpiAware())
+        {
+            // Without it every rectangle on the 150 % monitor is a lie, and a
+            // layout computed from lies puts windows in the wrong place.
+            Log.Warn("this process is not per-monitor DPI aware; rectangles will be wrong on scaled monitors");
+        }
 
         LoadedConfig loaded;
         try
@@ -119,7 +135,7 @@ public static class Program
         };
         AppDomain.CurrentDomain.ProcessExit += (_, _) => stopping.Set();
 
-        Log.Info("up. M0 manages no windows yet: the pipe, the configuration and doctor are the whole of it.");
+        Log.Info("up, in shadow mode: AkuWM watches the desk and changes nothing.");
         stopping.Wait();
 
         Log.Info("stopping");
@@ -128,20 +144,67 @@ public static class Program
         return 0;
     }
 
-    private static CommandRouter Router(ConfigPaths paths) =>
-        new(new ConfigCommands(paths), new DoctorCommand(paths));
+    private static CommandRouter Router(ConfigPaths paths)
+    {
+        var windows = new WindowsPlatform();
+        IPlatform platform = windows;
+        var query = new QueryCommands(platform, paths);
+
+        return new CommandRouter(
+            new ConfigCommands(paths),
+            new DoctorCommand(paths, () => new PipeClient().IsRunning(), platform, PlatformChecks(windows)),
+            query,
+            new ShadowCommand(query, Compat.GlazeWmProbe.Ask),
+            new MonitorCommands(platform, paths),
+            new UncloakCommand(platform, windows),
+            new BenchCommand(platform, paths, windows));
+    }
+
+    /// <summary>The checks only the Windows host can make.</summary>
+    private static List<Func<Check>> PlatformChecks(WindowsPlatform platform) =>
+    [
+        () => new Check(
+            "dpi awareness",
+            WindowsPlatform.IsPerMonitorDpiAware() ? CheckStatus.Ok : CheckStatus.Fail,
+            WindowsPlatform.IsPerMonitorDpiAware()
+                ? "per-monitor v2"
+                : "NOT per-monitor: every rectangle on a scaled monitor will be wrong"),
+        () => new Check(
+            "virtual desktops",
+            platform.Desktops.Available ? CheckStatus.Ok : CheckStatus.Warn,
+            platform.Desktops.Available
+                ? $"IVirtualDesktopManager answering ({platform.Desktops.Failures} failed calls)"
+                : platform.Desktops.Unavailable
+                  ?? "not available: a window on another desktop cannot be told from one AkuWM hid"),
+        () =>
+        {
+            using var shell = new ImmersiveShell();
+            return new Check(
+                "shell cloak",
+                shell.Available ? CheckStatus.Ok : CheckStatus.Fail,
+                shell.Available
+                    ? "available: windows can be hidden and shown"
+                    : shell.Unavailable ?? "not available");
+        },
+    ];
 
     /// <summary>
-    /// Prints a reply. <c>doctor</c> gets the readable table, everything else
-    /// the JSON a script can read -- the same rule the GlazeWM CLI followed, so
-    /// the suites keep working when the shim lands.
+    /// Prints a reply. <c>doctor</c> and <c>shadow diff</c> get their readable
+    /// form, everything else the JSON a script can read.
     /// </summary>
-    private static int Print(CommandResponse response, string verb)
+    private static int Print(CommandResponse response, string verb, string[] args)
     {
         if (verb == "doctor" && response.Success && response.Data is not null)
         {
             Console.Write(DoctorText(response));
             return response.Data["ok"]?.GetValue<bool>() == true ? 0 : 1;
+        }
+
+        if (verb == "shadow" && args.Length > 1 && args[1] == "diff"
+            && response.Success && response.Data?["text"] is { } text)
+        {
+            Console.Write(text.GetValue<string>());
+            return response.Data["agrees"]?.GetValue<bool>() == true ? 0 : 1;
         }
 
         return Cli.Program.Print(response);
@@ -174,6 +237,7 @@ public static class Program
         Console.WriteLine("usage: akuwm <command>");
         Console.WriteLine();
         Console.WriteLine("  daemon [--foreground]   run the window manager");
+        Console.WriteLine("  spike <s1..s5>          M1: what Windows actually allows (see `akuwm spike`)");
         foreach (string help in CommandRouter.Help)
         {
             Console.WriteLine("  " + help);

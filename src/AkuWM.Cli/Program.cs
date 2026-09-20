@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AkuWM.Core.Ipc;
 
 namespace AkuWM.Cli;
@@ -22,8 +21,7 @@ public static class Program
             return 2;
         }
 
-        CommandResponse response = new PipeClient().Send(CommandLine.Join(args));
-        return Print(response);
+        return Print(new PipeClient().Send(CommandLine.Join(args)));
     }
 
     /// <summary>Prints a reply the way the CLI always does, and returns the exit code.</summary>
@@ -44,7 +42,4 @@ public static class Program
 
         return 0;
     }
-
-    /// <summary>Formats a value the way a command's <c>data</c> is printed.</summary>
-    public static string Format(object value) => JsonSerializer.Serialize(value, Protocol.Pretty);
 }

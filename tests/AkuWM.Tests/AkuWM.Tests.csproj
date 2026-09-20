@@ -13,9 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Core only, on purpose: it holds the configuration, the rules, the
+         model, the commands and the pipe, none of which touch Win32, so the
+         whole of AkuWM's logic is tested on Linux. AkuWM.App and
+         AkuWM.Platform are Windows-targeted and are covered by the driven
+         suites on the desk. -->
     <ProjectReference Include="../../src/AkuWM.Core/AkuWM.Core.csproj" />
-    <ProjectReference Include="../../src/AkuWM.App/AkuWM.App.csproj" />
-    <ProjectReference Include="../../src/AkuWM.Cli/AkuWM.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>

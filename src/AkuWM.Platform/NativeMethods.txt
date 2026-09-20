@@ -1,0 +1,108 @@
+// What CsWin32 generates for AkuWM. Every name here is a documented Win32 or
+// DWM entry point; the undocumented shell interfaces AkuWM also needs
+// (IApplicationView and friends) are not in Microsoft's metadata and are
+// declared by hand in ImmersiveShell.cs, from the MIT sources listed in
+// LICENSING.md.
+
+// --- windows -----------------------------------------------------------
+EnumWindows
+GetWindow
+GetTopWindow
+GetCursorPos
+GetThreadDpiAwarenessContext
+AreDpiAwarenessContextsEqual
+SetProcessDpiAwarenessContext
+IsWindowVisible
+IsIconic
+IsZoomed
+IsWindow
+GetWindowRect
+GetClientRect
+GetWindowTextW
+GetWindowTextLengthW
+GetClassNameW
+GetWindowThreadProcessId
+GetWindowLongPtrW
+GetAncestor
+GetLastActivePopup
+GetShellWindow
+GetDesktopWindow
+GetForegroundWindow
+SetForegroundWindow
+AttachThreadInput
+GetCurrentThreadId
+ShowWindow
+SetWindowPos
+BeginDeferWindowPos
+DeferWindowPos
+EndDeferWindowPos
+WINDOW_STYLE
+WINDOW_EX_STYLE
+WINDOW_LONG_PTR_INDEX
+SET_WINDOW_POS_FLAGS
+SHOW_WINDOW_CMD
+HWND_TOPMOST
+HWND_NOTOPMOST
+HWND_TOP
+HWND_BOTTOM
+
+// --- dwm ---------------------------------------------------------------
+DwmGetWindowAttribute
+DwmSetWindowAttribute
+DWMWINDOWATTRIBUTE
+
+// --- processes ---------------------------------------------------------
+OpenProcess
+QueryFullProcessImageNameW
+GetTokenInformation
+OpenProcessToken
+TOKEN_ELEVATION
+TOKEN_INFORMATION_CLASS
+PROCESS_ACCESS_RIGHTS
+TOKEN_ACCESS_MASK
+CloseHandle
+
+// --- virtual desktops (the documented half) -----------------------------
+IVirtualDesktopManager
+VirtualDesktopManager
+
+// --- monitors ----------------------------------------------------------
+EnumDisplayMonitors
+GetMonitorInfoW
+MONITORINFOEXW
+MonitorFromWindow
+MonitorFromPoint
+GetDpiForMonitor
+MONITOR_DPI_TYPE
+GetDisplayConfigBufferSizes
+QueryDisplayConfig
+DisplayConfigGetDeviceInfo
+DISPLAYCONFIG_TARGET_DEVICE_NAME
+DISPLAYCONFIG_SOURCE_DEVICE_NAME
+DISPLAYCONFIG_DEVICE_INFO_TYPE
+QUERY_DISPLAY_CONFIG_FLAGS
+
+// --- events and hooks --------------------------------------------------
+SetWinEventHook
+UnhookWinEvent
+GetModuleHandleW
+SetWindowsHookExW
+UnhookWindowsHookEx
+CallNextHookEx
+WINDOWS_HOOK_ID
+KBDLLHOOKSTRUCT
+MSLLHOOKSTRUCT
+GetMessageW
+TranslateMessage
+DispatchMessageW
+PostQuitMessage
+PostThreadMessageW
+
+// --- input -------------------------------------------------------------
+SendInput
+INPUT
+GetAsyncKeyState
+VIRTUAL_KEY
+SystemParametersInfoW
+SYSTEM_PARAMETERS_INFO_ACTION
+SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS
