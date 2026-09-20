@@ -152,7 +152,7 @@ if ($line -match 'granted:') {
     exit 0
 }
 
-Bad ($line ? $line.Trim() : 'doctor did not report on uiAccess')
+if ($line) { Bad $line.Trim() } else { Bad 'doctor did not report on uiAccess' }
 Write-Host ''
 Write-Host 'Windows started the process but did not grant uiAccess. The usual causes:' -ForegroundColor Yellow
 Write-Host '  - the destination is writable by non-administrators (it must not be)' -ForegroundColor Yellow
