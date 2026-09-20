@@ -149,6 +149,13 @@ if (-not $Yes) {
     }
 }
 
+# The watcher first. It is a child of `glazewm.exe start` (the only thing in
+# the Startup folder), it exists to put the desk back when the manager dies,
+# and leaving it alive while the manager is force-stopped is asking it to do
+# exactly that -- possibly by starting the manager again, which would take
+# port 6123 back from under AkuWM. It returns with GlazeWM.
+Stop-Them 'glazewm-watcher' | Out-Null
+
 if (Stop-Them 'glazewm') {
     Say '  GlazeWM stopped'
     Start-Sleep -Milliseconds 600
@@ -186,10 +193,24 @@ $doctor = Join-Path $env:TEMP 'akuwm-switch-doctor.txt'
 # A uiAccess process is launched through AppInfo and its output cannot be
 # redirected by the caller, so it writes the file itself.
 & $akuwm doctor --out $doctor | Out-Null
-if (Test-Path $doctor) {
-    Get-Content $doctor | ForEach-Object { Say "  $_" }
-}
+$report = if (Test-Path $doctor) { Get-Content $doctor } else { @() }
+$report | ForEach-Object { Say "  $_" }
 
 Restart-Hotkeys
 Restart-Zebar
+
+# The one failure that has to shout. If AkuWM did not get port 6123 -- the old
+# manager restarted by its watcher, a leftover process -- then the hotkeys and
+# the bar are talking to one window manager while another arranges the desk,
+# and the desk does two things for every gesture.
+$bar = $report | Where-Object { $_ -match 'bar and scripts' }
+if ($bar -and $bar -notmatch '^ok') {
+    Say ''
+    Say 'The bar and the scripts cannot reach AkuWM:'
+    Say "  $bar"
+    Say 'Two window managers may now be arguing over the desk. Go back with:'
+    Say '  tools\akuwm-switch.ps1 -To glazewm'
+    exit 1
+}
+
 Say 'Done. The desk is on AkuWM -- until the next reboot, which returns to GlazeWM.'

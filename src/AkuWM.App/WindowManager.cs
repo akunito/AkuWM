@@ -301,7 +301,7 @@ public sealed class WindowManager : IAsyncDisposable
             {
                 Redraws++;
                 Last = _applier.Apply(redraw);
-                _desk.Applied(redraw, Last.Refused);
+                _desk.Applied(redraw, Last.Refused, Last.Unmarked);
 
                 // The platform proves, once, that a window it hides can be
                 // brought back. If it cannot, the model stops asking.

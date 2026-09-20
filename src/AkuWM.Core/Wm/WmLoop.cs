@@ -86,6 +86,11 @@ public sealed class WmLoop : IAsyncDisposable
 
     public void Start()
     {
+        // Deliberately left MTA. The COM the applier reaches -- IApplicationView
+        // for the cloak, ITaskbarList2 for the taskbar -- lives in the shell's
+        // apartment either way, and an STA thread owes Windows a message pump.
+        // This one blocks on a queue and pumps nothing, which is the classic
+        // way to deadlock a call coming the other way.
         _thread = new Thread(Run)
         {
             Name = "akuwm-wm",

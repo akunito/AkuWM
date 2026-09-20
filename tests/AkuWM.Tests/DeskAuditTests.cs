@@ -121,6 +121,24 @@ public class DeskAuditTests
     }
 
     [Fact]
+    public void A_mark_the_shell_refused_is_asked_for_again_on_the_next_pass()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+
+        Redraw first = Desk.Compute();
+        Assert.Contains((W(1), true), first.TaskbarMark);
+
+        // The shell said no -- explorer restarting is the ordinary way that
+        // happens. The model must not remember a mark it never made, or the
+        // taskbar sits over the game for the rest of the session.
+        Desk.Applied(first, refused: null, unmarked: new HashSet<WindowHandle> { W(1) });
+
+        Assert.Contains((W(1), true), Desk.Compute().TaskbarMark);
+    }
+
+    [Fact]
     public void A_window_that_closes_while_fullscreen_releases_the_taskbar()
     {
         _fixture.Open(1);

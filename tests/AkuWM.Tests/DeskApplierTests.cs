@@ -10,10 +10,13 @@ internal sealed class FakeTaskbar : ITaskbar
 {
     public List<(WindowHandle Window, bool Fullscreen)> Marks { get; } = [];
 
+    /// <summary>What the shell does when explorer has just restarted.</summary>
+    public bool Refuses { get; set; }
+
     public bool MarkFullscreen(WindowHandle window, bool fullscreen)
     {
         Marks.Add((window, fullscreen));
-        return true;
+        return !Refuses;
     }
 }
 
@@ -177,6 +180,27 @@ public class DeskApplierTests
         _applier.Apply(new Redraw { TaskbarMark = [(W(1), false)] });
 
         Assert.Equal([(W(1), true), (W(1), false)], _taskbar.Marks);
+    }
+
+    [Fact]
+    public void A_mark_the_shell_refuses_is_reported_rather_than_assumed()
+    {
+        Open(1);
+        _taskbar.Refuses = true;
+
+        ApplyResult result = _applier.Apply(new Redraw { TaskbarMark = [(W(1), true)] });
+
+        Assert.Equal([W(1)], result.Unmarked!);
+    }
+
+    [Fact]
+    public void Nothing_is_allocated_for_marks_that_worked()
+    {
+        Open(1);
+
+        ApplyResult result = _applier.Apply(new Redraw { TaskbarMark = [(W(1), true)] });
+
+        Assert.Null(result.Unmarked);
     }
 
     [Fact]

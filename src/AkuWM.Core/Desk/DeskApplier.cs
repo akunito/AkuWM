@@ -8,7 +8,12 @@ namespace AkuWM.Core.Desk;
 /// <param name="Placed">Windows moved.</param>
 /// <param name="Refused">Windows whose cloak did not take, read back from DWM.</param>
 /// <param name="Elapsed">How long the whole batch took.</param>
-public readonly record struct ApplyResult(int Placed, IReadOnlySet<WindowHandle> Refused, TimeSpan Elapsed)
+/// <param name="Unmarked">Windows the shell would not take the fullscreen mark for.</param>
+public readonly record struct ApplyResult(
+    int Placed,
+    IReadOnlySet<WindowHandle> Refused,
+    TimeSpan Elapsed,
+    IReadOnlySet<WindowHandle>? Unmarked = null)
 {
     public override string ToString() =>
         $"{Placed} placed, {Refused.Count} refused, {Elapsed.TotalMilliseconds:F2} ms";
@@ -128,9 +133,18 @@ public sealed class DeskApplier
             _actions.SetTopmost(window, topmost);
         }
 
+        // The shell can refuse, and does when explorer.exe has just restarted.
+        // Recording the mark as applied anyway left the taskbar sitting over a
+        // game for the rest of the session, with the model certain it had told
+        // it otherwise. Allocated only when something actually fails.
+        HashSet<WindowHandle>? unmarked = null;
+
         foreach ((WindowHandle window, bool fullscreen) in redraw.TaskbarMark)
         {
-            _taskbar.MarkFullscreen(window, fullscreen);
+            if (!_taskbar.MarkFullscreen(window, fullscreen))
+            {
+                (unmarked ??= []).Add(window);
+            }
         }
 
         if (!redraw.Focus.IsNone)
@@ -141,7 +155,7 @@ public sealed class DeskApplier
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
         Log.Debug(() => $"redraw: {redraw} -> {placed} placed, {refused.Count} refused, {elapsed.TotalMilliseconds:F2} ms");
 
-        return new ApplyResult(placed, refused, elapsed);
+        return new ApplyResult(placed, refused, elapsed, unmarked);
     }
 
     /// <summary>

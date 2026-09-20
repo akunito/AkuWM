@@ -306,7 +306,10 @@ public sealed partial class Desk
     /// keeps its old state in the model, so the next redraw tries again
     /// instead of believing a lie.
     /// </remarks>
-    public void Applied(Redraw redraw, IReadOnlySet<WindowHandle>? refused = null)
+    public void Applied(
+        Redraw redraw,
+        IReadOnlySet<WindowHandle>? refused = null,
+        IReadOnlySet<WindowHandle>? unmarked = null)
     {
 
         foreach (Placement placement in redraw.Place)
@@ -346,7 +349,9 @@ public sealed partial class Desk
 
         foreach ((WindowHandle handle, bool fullscreen) in redraw.TaskbarMark)
         {
-            if (Window(handle) is { } window)
+            // A mark the shell would not take is one the next pass has to make
+            // again, so the model must not remember it as done.
+            if (Window(handle) is { } window && unmarked?.Contains(handle) != true)
             {
                 window.Marked = fullscreen;
             }
