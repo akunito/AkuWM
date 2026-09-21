@@ -283,12 +283,11 @@ public static class ConfigValidator
                 continue;
             }
 
-            if (!ConfigDefaults.MonitorRoles.Contains(monitor.Id))
-            {
-                issues.Add(ValidationIssue.Warning(
-                    path + ".id",
-                    $"'{monitor.Id}' is not one of the known roles ({string.Join(", ", ConfigDefaults.MonitorRoles)})"));
-            }
+            // No list of blessed names. A role is whatever this desk calls a
+            // screen, and a fourth or a fifth one is a person buying a
+            // monitor, not a mistake. The four AkuWM ships are a starting
+            // point, not a vocabulary -- warning about anything else would
+            // have made "however many screens I like" a warning per start.
 
             bool identified = monitor.Match is not null &&
                               (monitor.Match.Edid is { Length: > 0 }
@@ -433,12 +432,44 @@ public static class ConfigValidator
                         path + ".target.workspace", $"'{name}' is not a declared workspace"));
                 }
 
-                if (target.Slot is < 1 or > 10)
+                // Counted, not assumed. Ten was a literal, and a person with
+                // twelve workspaces on a screen could not aim a rule at the
+                // eleventh -- for no reason except that nobody had thought
+                // about it.
+                if (target.Slot is { } slot)
                 {
-                    issues.Add(ValidationIssue.Error(path + ".target.slot", "a slot is 1-10"));
+                    int available = target.Monitor is { Length: > 0 } role
+                        ? Slots(config, role)
+                        : workspaceNames.Count;
+
+                    if (slot < 1 || (available > 0 && slot > available))
+                    {
+                        issues.Add(ValidationIssue.Error(
+                            path + ".target.slot",
+                            available > 0
+                                ? $"is 1 to {available} on '{target.Monitor ?? "this desk"}'"
+                                : "starts at 1"));
+                    }
                 }
             }
         }
+    }
+
+    /// <summary>How many workspaces one screen has been given.</summary>
+    private static int Slots(AkuWmConfig config, string role)
+    {
+        int count = 0;
+
+        foreach (WorkspaceConfig workspace in config.Workspaces ?? [])
+        {
+            if (workspace.Enabled != false
+                && string.Equals(workspace.Monitor, role, StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static void ValidateCriteria(MatchCriteria criteria, string path, List<ValidationIssue> issues)
