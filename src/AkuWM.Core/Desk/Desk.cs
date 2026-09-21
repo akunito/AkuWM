@@ -934,9 +934,15 @@ public sealed partial class Desk
         }
     }
 
-    private void MakeSticky(DeskWindow window)
+    /// <param name="onto">
+    /// The screen it becomes sticky to. Given by the caller when it knows
+    /// better than the snapshot does -- a window dropped on a screen too small
+    /// to hold it is still reported by Windows as being on the big one it
+    /// covers most of, and re-deriving the monitor here threw that away.
+    /// </param>
+    private void MakeSticky(DeskWindow window, DeskMonitor? onto = null)
     {
-        DeskMonitor? monitor = MonitorByHandle(window.Snapshot.Monitor) ?? FocusedMonitor;
+        DeskMonitor? monitor = onto ?? MonitorByHandle(window.Snapshot.Monitor) ?? FocusedMonitor;
         if (monitor is null)
         {
             return;
@@ -1036,12 +1042,61 @@ public sealed partial class Desk
     /// that -- so the desk moving a window to a workspace of the other monitor
     /// does not read as a drag and send it round again.
     /// </remarks>
+    /// <summary>The screen a window was just dropped on.</summary>
+    /// <remarks>
+    /// Windows' own answer, which is the screen the window covers most of,
+    /// except when it does not FIT there. A window bigger than a screen can
+    /// never win that comparison for it: most of such a window is always over
+    /// the larger screen it came from, however deliberately it was dropped on
+    /// the small one, so the area rule is structurally unable to express what
+    /// the person did. Then the corner they dragged decides instead. Diego's
+    /// terminal, 2020x2591, could not be put on the BenQ's 1920x1052 any other
+    /// way (2026-09-21) -- it went back to the main monitor every time.
+    /// </remarks>
+    private DeskMonitor? LandedOn(WindowSnapshot snapshot)
+    {
+        DeskMonitor? named = MonitorByHandle(snapshot.Monitor);
+        Rect frame = snapshot.FrameBounds;
+
+        if (named is null
+            || (frame.Width <= named.TilingArea.Width && frame.Height <= named.TilingArea.Height))
+        {
+            return named;
+        }
+
+        for (int at = 0; at < _monitors.Count; at++)
+        {
+            if (_monitors[at].Snapshot.Bounds.Contains(frame.X, frame.Y))
+            {
+                return _monitors[at];
+            }
+        }
+
+        return named;
+    }
+
     private void Rehome(DeskWindow window, WindowSnapshot snapshot)
     {
+        if (LandedOn(snapshot) is not { } landed)
+        {
+            return;
+        }
+
         if (window.Sticky)
         {
-            // It follows its monitor by being sticky; changing that here would
-            // silently un-stick it.
+            // Sticky means "on every workspace of ITS monitor", so a sticky
+            // window dragged onto another screen follows that one from now on.
+            // It was skipped here at first, for fear of un-sticking it, and the
+            // result was the one window on this desk that could not be dragged
+            // anywhere at all: clamped straight back onto the screen it was
+            // stuck to, every time (Diego's PowerShell terminal, 2026-09-21).
+            // MakeSticky re-binds it and leaves it sticky, which is the whole
+            // difference from moving it to a workspace.
+            if (!ReferenceEquals(MonitorByRole(window.StickyMonitor ?? string.Empty), landed))
+            {
+                MakeSticky(window, landed);
+            }
+
             return;
         }
 
@@ -1050,8 +1105,7 @@ public sealed partial class Desk
             return;
         }
 
-        DeskMonitor? landed = MonitorByHandle(snapshot.Monitor);
-        if (landed is null || ReferenceEquals(landed, MonitorOf(workspace)))
+        if (ReferenceEquals(landed, MonitorOf(workspace)))
         {
             return;
         }

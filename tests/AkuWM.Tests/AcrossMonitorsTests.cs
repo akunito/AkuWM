@@ -1,3 +1,4 @@
+using System.Linq;
 using AkuWM.Core.Desk;
 using AkuWM.Core.Model;
 using Xunit;
@@ -75,6 +76,48 @@ public class AcrossMonitorsTests
         DeskWindow window = fixture.Desk.Window(DeskFixture.W(1))!;
         Assert.Equal("11", window.Workspace);
         Assert.Equal(OnTheMain, fixture.Platform.Window(DeskFixture.W(1))!.FrameBounds);
+    }
+
+    [Fact]
+    public void A_sticky_window_dropped_on_another_monitor_follows_that_one_now()
+    {
+        // Diego's PowerShell terminal is sticky, and it was the one window he
+        // could not drag anywhere: sticky was skipped by the re-homing, so it
+        // was clamped straight back onto the screen it was stuck to. Sticky
+        // means "on every workspace of ITS monitor" -- dragged to another
+        // screen, that screen is the one it follows. It does not stop being
+        // sticky, which is what moving it to a workspace would do.
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        fixture.Desk.SetSticky(DeskFixture.W(1), true);
+        fixture.Turn();
+
+        fixture.Move(1, OnTheSecond);
+        fixture.Turn();
+        fixture.Turn();
+
+        DeskWindow window = fixture.Desk.Window(DeskFixture.W(1))!;
+        Assert.True(window.Sticky);
+        Assert.Equal("second", window.StickyMonitor);
+        Assert.Equal(OnTheSecond, fixture.Platform.Window(DeskFixture.W(1))!.FrameBounds);
+    }
+
+    [Fact]
+    public void A_sticky_window_is_shown_by_its_new_monitor_and_not_the_old_one()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        fixture.Desk.SetSticky(DeskFixture.W(1), true);
+        fixture.Turn();
+
+        fixture.Move(1, OnTheSecond);
+        fixture.Turn();
+
+        // In one monitor's set, not two: which one drew it would otherwise be
+        // decided by enumeration order.
+        Assert.Equal(
+            1,
+            fixture.Desk.Monitors.Count(m => m.Sticky.Contains(DeskFixture.W(1))));
     }
 
     [Fact]

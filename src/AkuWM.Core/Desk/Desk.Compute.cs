@@ -296,7 +296,25 @@ public sealed partial class Desk
         Rect rect = window.FloatingRect ?? window.Snapshot.FrameBounds;
         Rect area = monitor.TilingArea;
 
-        if (rect.FractionInside(area) > 0.5)
+        // Bigger than the screen it is on. A floating window's size is the
+        // person's choice everywhere else in here, but a window that does not
+        // fit cannot be put inside the work area at all -- the move below has
+        // nowhere to move it to -- so it hangs off the edge for ever and, worse,
+        // Windows goes on reporting it as being on the screen it covers most
+        // of, which is the one it came from. That is why Diego's terminal could
+        // not be dropped on the BenQ: 2020x2591 onto a work area of 1920x1052
+        // (2026-09-21). Trimmed to fit, and only the placement -- the
+        // remembered rectangle keeps his size for when it goes back to a screen
+        // that has room.
+        if (rect.Width > area.Width || rect.Height > area.Height)
+        {
+            rect = rect with
+            {
+                Width = Math.Min(rect.Width, area.Width),
+                Height = Math.Min(rect.Height, area.Height),
+            };
+        }
+        else if (rect.FractionInside(area) > 0.5)
         {
             return rect;
         }

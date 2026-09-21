@@ -284,6 +284,68 @@ public class GeometryMatrixTests
 
     [Theory]
     [MemberData(nameof(Arrangements))]
+    public void A_window_too_big_for_a_screen_is_sized_to_fit_it(string name, MonitorSnapshot[] screens)
+    {
+        // Diego's terminal, dropped on the BenQ: 2020x2591 going onto a screen
+        // whose work area is 1920x1052. Windows says a window that size is on
+        // whichever screen most of it covers -- which is the screen it came
+        // from, every time -- so it was pulled straight back (2026-09-21). A
+        // window that cannot fit on the screen it was dropped on is not a size
+        // worth defending: keeping it is the same as losing the window.
+        for (int at = 0; at < screens.Length; at++)
+        {
+            DeskFixture fixture = Desk(screens);
+            fixture.Open(1, frame: Inside(screens[0]), monitor: screens[0].Handle);
+            fixture.Desk.SetFloating(DeskFixture.W(1), true);
+            fixture.Turn();
+
+            Rect area = screens[at].WorkArea;
+            fixture.Move(1, new Rect(area.X + 20, area.Y + 20, area.Width + 600, area.Height + 900));
+            fixture.Turn();
+            fixture.Turn();
+
+            Rect where = fixture.FrameOf(1);
+            Assert.True(where.Width <= area.Width && where.Height <= area.Height,
+                $"{name}: {where} does not fit {area}");
+            Assert.True(where.FractionInside(area) > 0.99,
+                $"{name}: {where} is not on {area}");
+        }
+    }
+
+    [Fact]
+    public void A_window_bigger_than_the_small_screen_still_lands_on_it()
+    {
+        // Diego's case exactly: a window far too big for the BenQ, dropped
+        // with its top-left corner well inside it. Most of it lies over the
+        // main monitor, so Windows says that is where it is, and it went home
+        // every time.
+        MonitorSnapshot[] screens =
+        [
+            Screen(1, "main", new Rect(0, 0, 3840, 2160), 144, primary: true, taskbar: 0, bar: 42),
+            Screen(2, "second", new Rect(3840, -720, 1440, 2560), 120, bar: 35),
+            Screen(3, "third", new Rect(-1920, -706, 1920, 1080), 96, bar: 28),
+        ];
+
+        DeskFixture fixture = Desk(screens);
+        fixture.Open(1, frame: Inside(screens[0]), monitor: screens[0].Handle);
+        fixture.Desk.SetSticky(DeskFixture.W(1), true);
+        fixture.Turn();
+
+        // 2020x2591 at -1500,-300: the top-left is on the third screen, the
+        // middle is not on any, and the bulk of it is over the main one.
+        fixture.Move(1, new Rect(-1500, -300, 2020, 2591));
+        fixture.Turn();
+        fixture.Turn();
+
+        Assert.Equal("third", fixture.Managed(1)!.StickyMonitor);
+
+        Rect area = screens[2].WorkArea;
+        Rect where = fixture.FrameOf(1);
+        Assert.True(where.FractionInside(area) > 0.99, $"{where} is not on the BenQ {area}");
+    }
+
+    [Theory]
+    [MemberData(nameof(Arrangements))]
     public void A_fullscreen_window_covers_its_screen_exactly(string name, MonitorSnapshot[] screens)
     {
         for (int at = 0; at < screens.Length; at++)
