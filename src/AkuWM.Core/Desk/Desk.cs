@@ -564,17 +564,53 @@ public sealed partial class Desk
     }
 
     /// <summary>Takes a new window in, and decides where it belongs.</summary>
+    /// <summary>What the rules and the platform make of one window.</summary>
+    private ManagedWindow Decide(WindowSnapshot snapshot) => ShadowModel.Decide(
+        snapshot,
+        _activeRules,
+        _matcher,
+        _monitorSnapshots,
+        _monitorRoles,
+        Config,
+        _isOurs,
+        _hidden);
+
+    /// <summary>Decides a window again, now that the reason it was refused is gone.</summary>
+    private void Reconsider(DeskWindow window, WindowSnapshot snapshot)
+    {
+        ManagedWindow decision = Decide(snapshot);
+
+        window.Managed = decision.Managed;
+        window.Reason = decision.Reason;
+        window.ReasonDetail = decision.ReasonDetail;
+        window.Rules = decision.Rules;
+        window.Effects = EffectsFor(decision.Rules);
+
+        if (!decision.Managed)
+        {
+            return;
+        }
+
+        window.State = decision.State;
+        window.PreviousState = decision.State == WindowState.Fullscreen ? WindowState.Tiling : decision.State;
+        window.Sticky = false;
+
+        Log.Info($"adopting {snapshot.ProcessName} \"{snapshot.Title}\" now that it is no longer cloaked");
+
+        if (TargetWorkspace(decision, snapshot) is { } workspace)
+        {
+            Place(window, workspace);
+        }
+
+        if (decision.Sticky)
+        {
+            SetSticky(window.Handle, true);
+        }
+    }
+
     public DeskWindow Adopt(WindowSnapshot snapshot)
     {
-        ManagedWindow decision = ShadowModel.Decide(
-            snapshot,
-            _activeRules,
-            _matcher,
-            _monitorSnapshots,
-            _monitorRoles,
-            Config,
-            _isOurs,
-            _hidden);
+        ManagedWindow decision = Decide(snapshot);
 
         var window = new DeskWindow(snapshot)
         {
@@ -610,6 +646,17 @@ public sealed partial class Desk
         return window;
     }
 
+    /// <summary>
+    /// Reasons a window is refused that can stop being true.
+    /// </summary>
+    /// <remarks>
+    /// Everything else -- a rule that says ignore, a window that is not a
+    /// window -- is a fact about the window and does not change while it is
+    /// open. These two are facts about the MOMENT it was looked at.
+    /// </remarks>
+    private static bool Temporary(UnmanagedReason reason) =>
+        reason is UnmanagedReason.CloakedElsewhere or UnmanagedReason.OtherVirtualDesktop;
+
     private void Update(DeskWindow window, WindowSnapshot snapshot)
     {
         WindowSnapshot was = window.Snapshot;
@@ -617,6 +664,20 @@ public sealed partial class Desk
 
         if (!window.Managed)
         {
+            // A window refused because it was cloaked when AkuWM first saw it,
+            // and is not cloaked any more, gets asked again. Deciding once was
+            // right for rules and wrong for this: a UWP application is cloaked
+            // while it starts, so the Calculator, Settings, the Store and
+            // everything else of that kind was adopted at exactly the wrong
+            // moment and stayed unmanaged for ever. Found by tests/wm.
+            if (Temporary(window.Reason)
+                && !snapshot.Cloak.HasFlag(CloakKind.Shell)
+                && !snapshot.Cloak.HasFlag(CloakKind.InheritedOrOtherDesktop)
+                && snapshot.OnCurrentVirtualDesktop != false)
+            {
+                Reconsider(window, snapshot);
+            }
+
             return;
         }
 

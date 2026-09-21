@@ -223,6 +223,57 @@ public class LiveUseTests
         Assert.Equal(new Rect(500, 400, 700, 500), fixture.Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds);
     }
 
+    [Fact]
+    public void A_window_that_was_cloaked_when_it_appeared_is_asked_again_once_it_is_not()
+    {
+        // Every UWP application is cloaked while it starts, and AkuWM decided
+        // once, at the moment it first saw a window. So the Calculator,
+        // Settings, the Store and everything of that kind was adopted at
+        // exactly the wrong moment and stayed unmanaged for ever. Found by
+        // tests/wm on the desk, 2026-09-21.
+        _fixture.Platform.WindowList.Add(FakePlatform.Window(
+            7, "ApplicationFrameHost", className: "ApplicationFrameWindow", title: "Calculator",
+            cloak: CloakKind.Shell));
+        _fixture.Sync();
+
+        Assert.False(Desk.Window(DeskFixture.W(7))!.Managed);
+        Assert.Equal(UnmanagedReason.CloakedElsewhere, Desk.Window(DeskFixture.W(7))!.Reason);
+
+        _fixture.Platform.Uncloak(7);
+        _fixture.Sync();
+
+        Assert.True(Desk.Window(DeskFixture.W(7))!.Managed);
+        Assert.NotNull(Desk.Window(DeskFixture.W(7))!.Workspace);
+    }
+
+    [Fact]
+    public void A_window_refused_for_a_reason_that_cannot_change_is_not_asked_again()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Rules =
+        [
+            new RuleConfig
+            {
+                Id = "leave-it-alone",
+                Match = [new MatchCriteria { Process = "shareX" }],
+                Actions = ["ignore"],
+            },
+        ];
+
+        var fixture = new DeskFixture(config);
+        fixture.Open(1, process: "shareX");
+
+        Assert.False(fixture.Desk.Window(DeskFixture.W(1))!.Managed);
+
+        // A rule that says ignore is a fact about the window, not about the
+        // moment it was looked at. Re-deciding those would undo the
+        // configuration every time anything moved.
+        fixture.Sync();
+        fixture.Turn();
+
+        Assert.False(fixture.Desk.Window(DeskFixture.W(1))!.Managed);
+    }
+
     // ---- how a window looks, per rule -------------------------------------
 
     private static AkuWmConfig Looking(Action<AkuWmConfig> edit)

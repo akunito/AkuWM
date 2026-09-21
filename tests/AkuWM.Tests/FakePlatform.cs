@@ -137,6 +137,13 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         return true;
     }
 
+    /// <summary>Windows letting go of a window it had cloaked while it started.</summary>
+    public void Uncloak(long handle)
+    {
+        int at = WindowList.FindIndex(w => w.Handle.Value == handle);
+        WindowList[at] = WindowList[at] with { Cloak = CloakKind.None };
+    }
+
     private void Replace(WindowHandle handle, Func<WindowSnapshot, WindowSnapshot> change)
     {
         int at = WindowList.FindIndex(w => w.Handle == handle);
