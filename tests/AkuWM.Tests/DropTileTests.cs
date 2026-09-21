@@ -130,6 +130,17 @@ public class DropTileTests
         Assert.Equal(first.Width / 2, preview.Value.Preview.Width);
     }
 
+    [Fact]
+    public void There_is_no_preview_where_the_drop_would_be_refused()
+    {
+        DeskFixture fixture = TwoTiles();
+        Rect own = fixture.FrameOf(1);
+
+        // Over its own tile: the outline must show nothing rather than promise
+        // the whole work area.
+        Assert.Null(fixture.Desk.DropPreview(DeskFixture.W(1), own.X + 40, own.Y + 40));
+    }
+
     /// <summary>The handle of the tile furthest left on the main monitor.</summary>
     private static WindowHandle Leftmost(DeskFixture fixture)
     {

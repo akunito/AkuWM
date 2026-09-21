@@ -506,12 +506,23 @@ public sealed partial class Desk
             return null;
         }
 
-        return DropTargets.Resolve(
+        DropTarget target = DropTargets.Resolve(
             workspace.Tiling.Rects(monitor.TilingArea, GapsFor(monitor)),
             monitor.TilingArea,
             x,
             y,
             handle);
+
+        // Nothing, for a point the drop would refuse -- the window's own tile,
+        // or the gap between two. An outline drawn over the whole work area
+        // there would promise something that is not going to happen, which is
+        // the exact complaint this whole gesture was rebuilt to answer.
+        if (target.NextTo.IsNone && workspace.Tiling.Windows.Any(w => w != handle))
+        {
+            return null;
+        }
+
+        return target;
     }
 
     /// <summary>
