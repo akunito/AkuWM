@@ -71,10 +71,29 @@ public sealed class GapsConfig
 
 public sealed class EffectsConfig
 {
-    /// <summary>#rrggbb, or null for no border.</summary>
+    /// <summary>
+    /// <c>#rrggbb</c>, <c>"none"</c> for no border, or null to inherit.
+    /// </summary>
+    /// <remarks>
+    /// Null and "none" are different on purpose. Null means the layer below
+    /// decides, which is what every other option in this file means by null;
+    /// "none" is a choice. Without the distinction a GUI could never clear a
+    /// border -- unsetting the field would hand back the default colour from
+    /// the layer underneath.
+    /// </remarks>
     public string? FocusedBorder { get; set; }
 
+    /// <summary>The same, for every window that does not have the focus.</summary>
     public string? OtherBorder { get; set; }
+
+    /// <summary>
+    /// <c>square</c> | <c>round</c> | <c>round_small</c> | <c>default</c>.
+    /// </summary>
+    /// <remarks>
+    /// Square is what tiling wants: a rounded corner leaks the desktop through
+    /// the corner of every gap. Windows 11 only; older builds ignore it.
+    /// </remarks>
+    public string? Corners { get; set; }
 }
 
 public sealed class LayoutConfig

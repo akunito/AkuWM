@@ -132,6 +132,11 @@ public sealed class DeskFixture
             Platform.SetTopmost(handle, topmost);
         }
 
+        foreach ((WindowHandle handle, Decoration how) in redraw.Decorate)
+        {
+            Platform.Decorate(handle, how);
+        }
+
         Desk.Applied(redraw);
         Sync();
         return redraw;

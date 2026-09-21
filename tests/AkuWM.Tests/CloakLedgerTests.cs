@@ -58,6 +58,8 @@ internal sealed class FakeActions : IPlatformActions
 
     public void SetTopmost(WindowHandle window, bool topmost) => _platform.SetTopmost(window, topmost);
 
+    public bool Decorate(WindowHandle window, Decoration decoration) => true;
+
     public bool Focus(WindowHandle window) => _platform.Focus(window);
 }
 

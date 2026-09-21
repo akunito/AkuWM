@@ -111,6 +111,25 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         Replace(window, w => w with { IsTopmost = topmost });
     }
 
+    /// <summary>What the shell was last asked to draw, by window.</summary>
+    public Dictionary<WindowHandle, Decoration> Decorations { get; } = [];
+
+    /// <summary>An old Windows build, which takes none of it.</summary>
+    public bool RefusesDecoration { get; set; }
+
+    public bool Decorate(WindowHandle window, Decoration decoration)
+    {
+        Calls.Add($"decorate {window.Value} {decoration.Border:x8} {decoration.Corners}");
+
+        if (RefusesDecoration)
+        {
+            return false;
+        }
+
+        Decorations[window] = decoration;
+        return true;
+    }
+
     public bool Focus(WindowHandle window)
     {
         Calls.Add($"focus {window.Value}");

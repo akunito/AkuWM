@@ -38,17 +38,20 @@ public sealed record Redraw
     /// <summary>Windows the taskbar must be told about, so it drops behind a game.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Fullscreen)> TaskbarMark { get; init; } = [];
 
+    /// <summary>Windows whose border or corners should change.</summary>
+    public IReadOnlyList<(WindowHandle Window, Decoration How)> Decorate { get; init; } = [];
+
     /// <summary>Where the focus should end up, or none to leave it alone.</summary>
     public WindowHandle Focus { get; init; } = WindowHandle.None;
 
     public bool IsNothing =>
         Place.Count == 0 && Hide.Count == 0 && Show.Count == 0
-        && Band.Count == 0 && TaskbarMark.Count == 0 && Focus.IsNone;
+        && Band.Count == 0 && TaskbarMark.Count == 0 && Decorate.Count == 0 && Focus.IsNone;
 
     public override string ToString() =>
         IsNothing
             ? "nothing to do"
             : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, "
-              + $"{Band.Count} to reband, {TaskbarMark.Count} to mark"
+              + $"{Band.Count} to reband, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate"
               + (Focus.IsNone ? string.Empty : $", focus {Focus}");
 }

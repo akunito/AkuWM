@@ -25,6 +25,13 @@ Plan: `~/.dotfiles/docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
 - **Hiding a window has no undo.** Anything that can leave a window cloaked with nobody
   who knows is the worst class of bug here. Records are written before the change they
   describe, and read back after it.
+- **Everything the person could want to change is configuration, not code.** The GUI in
+  M5 edits the JSON; anything baked into C# is something the GUI can never offer, so a
+  new behaviour arrives with its config key, its default, its validation and its entry in
+  the effective-config round trip. A magic number in `Desk/` or `Layout/` is a bug
+  report waiting to happen. Two questions for every option: does it survive a save, and
+  does it take effect on `wm-reload-config` or only on a restart? The GUI has to say
+  which, so the code has to know.
 - Every change ships with its tests: `dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj`.
 
 ## Measured Windows facts — do not rediscover these

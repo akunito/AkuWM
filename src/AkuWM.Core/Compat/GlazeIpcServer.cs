@@ -263,6 +263,45 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// What a client on this socket is allowed to ask for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This socket is not a private channel. It is plain TCP on loopback with
+    /// no authentication, and a WebSocket handshake is not subject to the
+    /// same-origin policy: a page in any browser can open one, and the browser
+    /// will not stop it. So everything reachable from here is reachable by any
+    /// web page the person happens to visit.
+    /// </para>
+    /// <para>
+    /// <c>shell-exec</c> was, which meant one text frame from a web page could
+    /// start any program on the desk -- and AkuWM is installed to run with
+    /// uiAccess, so the program it starts may inherit a token the page's own
+    /// process could never obtain. That is the whole of the reason this list
+    /// exists. <c>wm-exit</c> was a one-frame kill switch and <c>close</c>
+    /// destroys work, so neither is here either.
+    /// </para>
+    /// <para>
+    /// Everything left is window arrangement: a hostile page can shuffle
+    /// windows, which is a nuisance and not a breach. The scripts are
+    /// unaffected -- they reach AkuWM over the named pipe, which no page can
+    /// open. Deliberately not configurable: an option to widen this is an
+    /// option to hand a web page a shell.
+    /// </para>
+    /// </remarks>
+    private static readonly HashSet<string> OnTheSocket = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "focus", "move", "resize", "move-workspace",
+        "toggle-floating", "set-floating", "toggle-tiling", "set-tiling",
+        "toggle-fullscreen", "set-fullscreen",
+        "toggle-minimized", "set-minimized",
+        "toggle-sticky", "set-sticky", "unset-sticky",
+        "toggle-tiling-direction", "set-tiling-direction",
+        "wm-redraw", "wm-toggle-pause",
+        "ignore", "adjust-borders", "set-title-bar-visibility", "set-transparency",
+    };
+
     /// <summary>One request, one reply, in the envelope the callers expect.</summary>
     private string Answer(string request, Subscriber subscriber)
     {
@@ -276,6 +315,8 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             {
                 "sub" or "subscribe" => Subscribe(subscriber, rest),
                 "unsub" or "unsubscribe" => Unsubscribe(subscriber, rest),
+                "command" when !OnTheSocket.Contains(GlazeCommandLine.Parse(rest).Verb) =>
+                    Refuse(rest),
                 _ => _handle(request),
             };
         }
@@ -289,6 +330,16 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         }
 
         return GlazeProtocol.Reply(request, result).ToJsonString(GlazeProtocol.Compact);
+    }
+
+    private static ExecResult Refuse(string rest)
+    {
+        string verb = GlazeCommandLine.Parse(rest).Verb;
+        Log.Warn(
+            $"'{verb}' was asked for on the bar's socket and refused: anything reachable there is "
+            + "reachable by a web page. Scripts should use the akuwm pipe.");
+
+        return ExecResult.Fail($"'{verb}' is not available on this connection");
     }
 
     private ExecResult Subscribe(Subscriber subscriber, string rest)

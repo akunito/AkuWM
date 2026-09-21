@@ -83,6 +83,15 @@ public sealed class DeskWindow
     /// <summary>Whether the taskbar has been told this window is fullscreen.</summary>
     public bool Marked { get; set; }
 
+    /// <summary>
+    /// What AkuWM last asked the shell to draw around it.
+    /// </summary>
+    /// <remarks>
+    /// Null while AkuWM has never decorated it, which is what tells the unmanage
+    /// path there is nothing to put back.
+    /// </remarks>
+    public Decoration? Decorated { get; set; }
+
     /// <summary>Rules that fired for it, by name, for <c>query</c> and the GUI.</summary>
     public IReadOnlyList<string> Rules { get; set; } = [];
 

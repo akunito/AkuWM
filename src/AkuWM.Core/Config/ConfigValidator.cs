@@ -77,13 +77,24 @@ public static class ConfigValidator
 
         CheckColour(effects.FocusedBorder, "effects.focused_border", issues);
         CheckColour(effects.OtherBorder, "effects.other_border", issues);
+
+        if (effects.Corners is { Length: > 0 } corners
+            && corners is not ("default" or "square" or "round" or "round_small"))
+        {
+            issues.Add(ValidationIssue.Error(
+                "effects.corners", $"'{corners}' is not default, square, round or round_small"));
+        }
     }
 
     private static void CheckColour(string? value, string path, List<ValidationIssue> issues)
     {
-        if (value is { Length: > 0 } && !Colour.IsMatch(value))
+        // "none" is a choice, and a different one from absent: absent means the
+        // layer below decides, which is what null means everywhere in this
+        // file. Without the word a GUI could never clear a border -- clearing
+        // the field would inherit the default colour straight back.
+        if (value is { Length: > 0 } and not "none" && !Colour.IsMatch(value))
         {
-            issues.Add(ValidationIssue.Error(path, $"'{value}' is not a #rrggbb colour"));
+            issues.Add(ValidationIssue.Error(path, $"'{value}' is not a #rrggbb colour or 'none'"));
         }
     }
 

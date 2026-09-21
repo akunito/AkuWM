@@ -77,6 +77,9 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
 
+    public bool Decorate(WindowHandle window, Decoration decoration) =>
+        Win32Decorations.Apply(new Windows.Win32.Foundation.HWND((IntPtr)window.Value), decoration);
+
     public bool Focus(WindowHandle window)
     {
         FocusResult result = Win32Focus.Focus(window);

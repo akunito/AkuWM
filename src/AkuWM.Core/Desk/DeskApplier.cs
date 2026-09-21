@@ -139,6 +139,13 @@ public sealed class DeskApplier
         // it otherwise. Allocated only when something actually fails.
         HashSet<WindowHandle>? unmarked = null;
 
+        // Last of the visible changes, and cheapest: two shell calls that
+        // change nothing a person could lose.
+        foreach ((WindowHandle window, Decoration how) in redraw.Decorate)
+        {
+            _actions.Decorate(window, how);
+        }
+
         foreach ((WindowHandle window, bool fullscreen) in redraw.TaskbarMark)
         {
             if (!_taskbar.MarkFullscreen(window, fullscreen))

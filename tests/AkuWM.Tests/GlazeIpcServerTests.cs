@@ -44,6 +44,64 @@ public class GlazeIpcServerTests
     }
 
     [Fact]
+    public async Task The_bar_socket_will_not_run_a_program()
+    {
+        // The reason this test exists: a WebSocket handshake is not subject to
+        // the same-origin policy, so any page in any browser can open this
+        // socket. `shell-exec` on it meant one text frame from a web page
+        // could start any program on the desk -- and AkuWM runs with uiAccess.
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(
+            port, _ => ExecResult.Ok(data: new JsonObject { ["ran"] = true }));
+        Assert.True(server.Start());
+
+        using ClientWebSocket client = await Connect(port);
+
+        foreach (string forbidden in new[]
+        {
+            "command shell-exec calc.exe",
+            "command shell-exec \"C:\\Windows\\System32\\cmd.exe\"",
+            "command wm-exit",
+            "command close",
+            "command wm-reload-config",
+        })
+        {
+            JsonObject reply = (JsonObject)JsonNode.Parse(await Ask(client, forbidden))!;
+
+            Assert.False((bool)reply["success"]!, forbidden + " was allowed");
+            Assert.Contains("not available", (string)reply["error"]!, StringComparison.Ordinal);
+            Assert.Null(reply["data"]);
+        }
+    }
+
+    [Fact]
+    public async Task The_bar_socket_still_does_everything_a_bar_needs()
+    {
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(
+            port, request => ExecResult.Ok(data: new JsonObject { ["asked"] = request }));
+        Assert.True(server.Start());
+
+        using ClientWebSocket client = await Connect(port);
+
+        // Captured from Zebar on the desk, plus what a pill click sends.
+        foreach (string allowed in new[]
+        {
+            "query monitors",
+            "query windows",
+            "query focused",
+            "query paused",
+            "command focus --workspace 11",
+            "command toggle-floating",
+            "command wm-redraw",
+        })
+        {
+            JsonObject reply = (JsonObject)JsonNode.Parse(await Ask(client, allowed))!;
+            Assert.True((bool)reply["success"]!, allowed + " was refused");
+        }
+    }
+
+    [Fact]
     public void The_handshake_matches_the_worked_example_in_the_specification()
     {
         // RFC 6455's own pair. The constant behind this is one that looks
@@ -82,14 +140,19 @@ public class GlazeIpcServerTests
 
         using ClientWebSocket client = await Connect(port);
 
-        JsonNode first = JsonNode.Parse(await Ask(client, "command x"))!;
+        // A verb the socket allows, refused by the window manager itself.
+        JsonNode first = JsonNode.Parse(await Ask(client, "command focus --nowhere"))!;
         Assert.False(first["success"]!.GetValue<bool>());
         Assert.Equal("unrecognized subcommand 'x'", first["error"]!.GetValue<string>());
 
         // A script that sends a command the window manager does not know must
-        // not have to reconnect to send the next one.
-        JsonNode second = JsonNode.Parse(await Ask(client, "command y"))!;
+        // not have to reconnect to send the next one -- and neither must one
+        // that sends a verb this socket does not carry.
+        JsonNode second = JsonNode.Parse(await Ask(client, "command shell-exec calc.exe"))!;
         Assert.False(second["success"]!.GetValue<bool>());
+
+        JsonNode third = JsonNode.Parse(await Ask(client, "query windows"))!;
+        Assert.False(third["success"]!.GetValue<bool>());
     }
 
     [Fact]

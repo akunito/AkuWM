@@ -37,6 +37,7 @@ public sealed partial class Desk
         var show = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
         var mark = new List<(WindowHandle, bool)>();
+        var decorate = new List<(WindowHandle, Decoration)>();
         var accounted = new HashSet<WindowHandle>();
 
         foreach (DeskMonitor monitor in _monitors)
@@ -138,6 +139,23 @@ public sealed partial class Desk
             }
         }
 
+        // One pass over everything, after the workspaces have decided what is
+        // managed and what is visible: decoration follows the focus, and the
+        // focus is not a property of any one workspace.
+        foreach (DeskWindow window in _windows.Values)
+        {
+            Decoration want = window.Managed ? DecorationFor(window) : Decoration.Untouched;
+
+            // Null means AkuWM has never touched it, and Untouched means put it
+            // back: a window that was never decorated needs neither.
+            if (window.Decorated == want || (window.Decorated is null && want == Decoration.Untouched))
+            {
+                continue;
+            }
+
+            decorate.Add((window.Handle, want));
+        }
+
         return new Redraw
         {
             Place = place,
@@ -145,6 +163,7 @@ public sealed partial class Desk
             Show = show,
             Band = band,
             TaskbarMark = mark,
+            Decorate = decorate,
 
             // The focus goes last, after the windows are where they belong and
             // visible. Focusing a window that is still cloaked hands the
@@ -286,6 +305,26 @@ public sealed partial class Desk
         into.Add((window.Handle, topmost));
     }
 
+    /// <summary>What the shell should draw around one window, right now.</summary>
+    private Decoration DecorationFor(DeskWindow window)
+    {
+        Config.EffectsConfig? effects = Config.Effects;
+
+        string? border = Focused == window.Handle
+            ? effects?.FocusedBorder
+            : effects?.OtherBorder;
+
+        return new Decoration(Decoration.ColorRef(border), ParseCorners(effects?.Corners));
+    }
+
+    private static Corners ParseCorners(string? corners) => corners?.ToLowerInvariant() switch
+    {
+        "square" or "none" => Model.Corners.Square,
+        "round" => Model.Corners.Round,
+        "round_small" or "round-small" => Model.Corners.RoundSmall,
+        _ => Model.Corners.Default,
+    };
+
     private static void WantMarked(DeskWindow window, bool fullscreen, List<(WindowHandle, bool)> into)
     {
         if (window.Marked == fullscreen)
@@ -344,6 +383,14 @@ public sealed partial class Desk
             if (Window(handle) is { } window)
             {
                 window.Banded = topmost;
+            }
+        }
+
+        foreach ((WindowHandle handle, Decoration how) in redraw.Decorate)
+        {
+            if (Window(handle) is { } decorated)
+            {
+                decorated.Decorated = how == Decoration.Untouched ? null : how;
             }
         }
 

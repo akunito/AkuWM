@@ -29,7 +29,8 @@ public static class ConfigDefaults
         Effects = new EffectsConfig
         {
             FocusedBorder = "#c4a7e7",
-            OtherBorder = null,
+            OtherBorder = "none",
+            Corners = "square",
         },
         Layout = new LayoutConfig
         {

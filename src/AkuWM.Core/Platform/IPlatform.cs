@@ -66,6 +66,18 @@ public interface IPlatformActions
     /// <summary>Gives a window the keyboard focus.</summary>
     /// <returns>True when the foreground window is this one afterwards.</returns>
     bool Focus(WindowHandle window);
+
+    /// <summary>
+    /// Asks the shell for a border colour and a corner shape.
+    /// </summary>
+    /// <remarks>
+    /// Cosmetic, and the only thing here that is: it changes nothing a person
+    /// could lose. It is still reverted on unmanage, because a window left
+    /// wearing AkuWM's border after AkuWM is gone is a puzzle nobody can
+    /// solve. Windows 11 only; older builds refuse and that is not an error.
+    /// </remarks>
+    /// <returns>False when the shell would not take it.</returns>
+    bool Decorate(WindowHandle window, Decoration decoration);
 }
 
 /// <summary>The shell's taskbar, for the one thing a window manager tells it.</summary>
