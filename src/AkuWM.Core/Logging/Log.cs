@@ -70,10 +70,24 @@ public static class Log
                 AutoFlush = true,
             };
             _fileName = path;
+            _maxBytes = maxBytes;
+            _written = File.Exists(path) ? new FileInfo(path).Length : 0;
         }
     }
 
     public static string? FileName => _fileName;
+
+    /// <summary>Lets the log file go. For tests, which must be able to delete it.</summary>
+    public static void ToConsoleOnly()
+    {
+        lock (Gate)
+        {
+            _file?.Dispose();
+            _file = null;
+            _fileName = null;
+            _written = 0;
+        }
+    }
 
     public static void Debug(Func<string> message)
     {
@@ -107,12 +121,63 @@ public static class Log
 
         lock (Gate)
         {
-            _file?.WriteLine(line);
+            if (_file is not null)
+            {
+                _file.WriteLine(line);
+
+                // Rotation used to happen only when the daemon STARTED, which
+                // was fine while the log was a few hundred kilobytes a day.
+                // With debug tracing left on it is megabytes an hour -- every
+                // frame the bar exchanges goes through here -- and a daemon
+                // that runs for days never got the chance. Counted rather than
+                // asked: a FileInfo per line would be a syscall per line.
+                _written += line.Length + 2;
+                if (_written > _maxBytes)
+                {
+                    Roll();
+                }
+            }
+
             if (Console)
             {
                 System.Console.Error.WriteLine(line);
             }
         }
+    }
+
+    private static long _written;
+    private static long _maxBytes = 4 * 1024 * 1024;
+
+    /// <summary>Called with the lock held.</summary>
+    private static void Roll()
+    {
+        if (_fileName is not { } path)
+        {
+            return;
+        }
+
+        _file?.Dispose();
+        _file = null;
+
+        try
+        {
+            string previous = path + ".1";
+            File.Delete(previous);
+            File.Move(path, previous);
+        }
+        catch (IOException)
+        {
+            // Somebody has it open (a tail, an editor). Keep writing to the
+            // one we have rather than losing the log over a tidy-up.
+        }
+
+        _file = new StreamWriter(
+            new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
+            new UTF8Encoding(false))
+        {
+            AutoFlush = true,
+        };
+        _written = new FileInfo(path).Length;
     }
 
     private static string Name(LogLevel level) => level switch

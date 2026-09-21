@@ -67,6 +67,15 @@ Copy-Item $src (Join-Path $home_ 'akuwm.exe') -Force
 $bootSrc = Join-Path $PSScriptRoot 'akuwm-boot.ps1'
 Copy-Item $bootSrc (Join-Path $home_ 'akuwm-boot.ps1') -Force
 
+# Debug tracing on, by Diego's decision (2026-09-21): when something goes wrong
+# on this desk the traces are what turns a guess into an answer, and every real
+# fault of this milestone was found by reading them. The daemon reads this
+# marker at start. It costs a log that rolls at 4 MB, which it now does while
+# RUNNING and not only at startup -- with tracing on it is megabytes an hour.
+$state = Join-Path $env:LOCALAPPDATA 'akuwm'
+New-Item -ItemType Directory -Force -Path $state | Out-Null
+New-Item -ItemType File -Force -Path (Join-Path $state 'debug') | Out-Null
+
 if ($Shim) {
     $shimSrc = Join-Path $Shim 'glazewm.exe'
     if (Test-Path $shimSrc) {
