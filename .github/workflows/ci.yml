@@ -29,6 +29,30 @@ jobs:
       - name: Test
         run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=linux.trx" --results-directory test-results
 
+      # An artifact needs a token to download, even on a public repo, and the
+      # job log needs admin. Annotations need neither, so the trx is turned
+      # into them: that is the only public channel for "which test failed".
+      - name: Which test failed
+        if: failure()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for trx in test-results/*.trx; do
+            python3 - "$trx" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          root = ET.parse(sys.argv[1]).getroot()
+          for r in root.iterfind('.//t:UnitTestResult', ns):
+              if r.get('outcome') != 'Failed':
+                  continue
+              name = r.get('testName', '?')
+              msg = (r.findtext('.//t:Message', default='', namespaces=ns) or '').strip()
+              trace = (r.findtext('.//t:StackTrace', default='', namespaces=ns) or '').strip()
+              one = ' | '.join(x for x in (msg, trace.splitlines()[0] if trace else '') if x)
+              print(f"::error title={name}::{one[:900]}")
+          PY
+          done
+
       - name: Test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,6 +94,30 @@ jobs:
 
       - name: Test
         run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=windows.trx" --results-directory test-results
+
+      # An artifact needs a token to download, even on a public repo, and the
+      # job log needs admin. Annotations need neither, so the trx is turned
+      # into them: that is the only public channel for "which test failed".
+      - name: Which test failed
+        if: failure()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for trx in test-results/*.trx; do
+            python3 - "$trx" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          root = ET.parse(sys.argv[1]).getroot()
+          for r in root.iterfind('.//t:UnitTestResult', ns):
+              if r.get('outcome') != 'Failed':
+                  continue
+              name = r.get('testName', '?')
+              msg = (r.findtext('.//t:Message', default='', namespaces=ns) or '').strip()
+              trace = (r.findtext('.//t:StackTrace', default='', namespaces=ns) or '').strip()
+              one = ' | '.join(x for x in (msg, trace.splitlines()[0] if trace else '') if x)
+              print(f"::error title={name}::{one[:900]}")
+          PY
+          done
 
       - name: Test results
         if: always()
