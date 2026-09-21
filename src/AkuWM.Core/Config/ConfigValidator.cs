@@ -272,6 +272,15 @@ public static class ConfigValidator
                 "layout.drag_to_top",
                 $"'{drag}' is not fullscreen, float_maximized, float_fullscreen or none"));
         }
+
+        foreach ((string path, string value) in layout.AcrossMonitors?.Named() ?? [])
+        {
+            if (!Layout.AcrossMonitors.Names.Contains(value.ToLowerInvariant()))
+            {
+                issues.Add(ValidationIssue.Error(
+                    path, $"'{value}' is not absolute, proportional or hybrid"));
+            }
+        }
     }
 
     private static void ValidateMonitors(AkuWmConfig config, List<ValidationIssue> issues)

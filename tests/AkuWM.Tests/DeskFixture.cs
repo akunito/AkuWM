@@ -119,7 +119,8 @@ public sealed class DeskFixture
     /// still reported as being on the one it left -- and the desk could not
     /// have noticed the difference no matter what it did.
     /// </remarks>
-    public void Move(long handle, Rect to)
+    /// <param name="at">Where the hand is on the window. Defaults to a title-bar grab.</param>
+    public void Move(long handle, Rect to, (int X, int Y)? hand = null)
     {
         int at = Platform.WindowList.FindIndex(w => w.Handle.Value == handle);
         Platform.WindowList[at] = Platform.WindowList[at] with
@@ -129,6 +130,12 @@ public sealed class DeskFixture
             Monitor = MonitorUnder(to),
         };
 
+        // The pointer goes with it, near the top-left, where a title bar is.
+        // A person moving a window has their hand on it, and the desk anchors
+        // a window that changes size on the point they are holding -- so a
+        // fixture whose cursor stays at 0,0 for ever is testing a drag nobody
+        // is doing.
+        Platform.Cursor = hand ?? (to.X + 40, to.Y + 40);
         Sync();
     }
 

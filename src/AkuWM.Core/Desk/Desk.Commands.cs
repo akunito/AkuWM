@@ -204,7 +204,7 @@ public sealed partial class Desk
             return false;
         }
 
-        Place(window, destination);
+        PlaceAcross(window, destination);
         return true;
     }
 
@@ -246,7 +246,7 @@ public sealed partial class Desk
 
         if (MonitorInDirection(monitor, direction)?.Displayed is { } destination)
         {
-            Place(window, destination);
+            PlaceAcross(window, destination);
             return true;
         }
 

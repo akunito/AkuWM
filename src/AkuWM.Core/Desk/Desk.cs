@@ -72,6 +72,16 @@ public sealed partial class Desk
     /// second apart, and the longer this is the likelier it swallows a click
     /// the person meant.
     internal const int FocusHoldMs = 250;
+
+    /// <summary>
+    /// How long after a crossing a resize belongs to Windows, not the person.
+    /// </summary>
+    /// <remarks>
+    /// The DPI rescale lands 125 to 156 ms after the move, measured six times
+    /// on this desk. A second is comfortably past that and far short of
+    /// anything a person does deliberately after dropping a window.
+    /// </remarks>
+    internal const int CrossingMs = 1000;
     internal const int PointerSlack = 4;
 
     /// <summary>
@@ -863,8 +873,19 @@ public sealed partial class Desk
             && was.FrameBounds != snapshot.FrameBounds
             && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
         {
-            window.FloatingRect = snapshot.FrameBounds;
-            Rehome(window, snapshot);
+            // Just crossed to another screen: what is arriving now is Windows
+            // rescaling the window for the new DPI, a beat after the move, and
+            // not the person resizing it. Reading it as theirs overwrote the
+            // size the crossing had just chosen, which left
+            // layout.across_monitors with no effect at all.
+            // Zero is "never crossed", not "crossed at time zero" -- the same
+            // trap MovedAt has, and it silently stopped every floating window
+            // from ever learning where the person put it.
+            if (window.CrossedAt == 0 || Now - window.CrossedAt >= CrossingMs)
+            {
+                window.FloatingRect = snapshot.FrameBounds;
+                Rehome(window, snapshot);
+            }
         }
 
         if (coversTheScreen && window.State != WindowState.Fullscreen && !weMovedItThere)
@@ -1053,6 +1074,41 @@ public sealed partial class Desk
     /// terminal, 2020x2591, could not be put on the BenQ's 1920x1052 any other
     /// way (2026-09-21) -- it went back to the main monitor every time.
     /// </remarks>
+    /// <summary>How geometry is carried between screens. See the config note.</summary>
+    internal AcrossMode Across(bool tiling, bool dragged) =>
+        Config.Layout?.AcrossMonitors?.Mode(tiling, dragged) ?? AcrossMode.Hybrid;
+
+    /// <summary>
+    /// The window keeps the point the person is holding it by.
+    /// </summary>
+    /// <remarks>
+    /// A window that changes size as it crosses has to change size around
+    /// something, and the cursor is the only thing on screen the person is
+    /// actually looking at: grabbed a third of the way along its title bar, it
+    /// is still a third of the way along after it shrinks, so the pointer never
+    /// ends up outside the window it is dragging. Diego chose this over keeping
+    /// the corner (2026-09-21).
+    ///
+    /// Only when the pointer is really on the window. A move that came from a
+    /// command, or from a script, has nothing to anchor to and keeps the corner.
+    /// </remarks>
+    private Rect UnderTheCursor(Rect was, Rect now)
+    {
+        if ((was.Width == now.Width && was.Height == now.Height)
+            || was.Width <= 0 || was.Height <= 0
+            || _cursor?.Invoke() is not { } at
+            || !was.Contains(at.X, at.Y))
+        {
+            return now;
+        }
+
+        return now with
+        {
+            X = at.X - (int)Math.Round((at.X - was.X) / (double)was.Width * now.Width),
+            Y = at.Y - (int)Math.Round((at.Y - was.Y) / (double)was.Height * now.Height),
+        };
+    }
+
     private DeskMonitor? LandedOn(WindowSnapshot snapshot)
     {
         DeskMonitor? named = MonitorByHandle(snapshot.Monitor);
@@ -1075,11 +1131,35 @@ public sealed partial class Desk
         return named;
     }
 
+    /// <summary>The screen a window counts as being on now.</summary>
+    private DeskMonitor? HomeOf(DeskWindow window) =>
+        window.Sticky
+            ? MonitorByRole(window.StickyMonitor ?? string.Empty)
+            : window.Workspace is { } name && Workspace(name) is { } workspace
+                ? MonitorOf(workspace)
+                : null;
+
     private void Rehome(DeskWindow window, WindowSnapshot snapshot)
     {
         if (LandedOn(snapshot) is not { } landed)
         {
             return;
+        }
+
+        DeskMonitor? from = HomeOf(window);
+        if (from is not null && !ReferenceEquals(from, landed) && window.FloatingRect is { } dropped)
+        {
+            // The size the new screen gives it, by layout.across_monitors. The
+            // POSITION is left where the person dropped it in every mode --
+            // that is the one thing about this move they chose themselves.
+            Rect resized = AcrossMonitors.Resize(
+                dropped,
+                from.TilingArea,
+                landed.TilingArea,
+                Across(window.State == WindowState.Tiling, dragged: true));
+
+            window.FloatingRect = UnderTheCursor(dropped, resized);
+            window.CrossedAt = Now;
         }
 
         if (window.Sticky)
@@ -1114,6 +1194,36 @@ public sealed partial class Desk
         {
             Place(window, destination);
         }
+    }
+
+    /// <summary>
+    /// Puts a window on a workspace, carrying its geometry over when that is
+    /// on another screen.
+    /// </summary>
+    /// <remarks>
+    /// What a COMMAND does -- a workspace key, the raise-or-launch table, a
+    /// monitor going away. Nobody chose a position, so the whole rectangle is
+    /// mapped by <c>layout.across_monitors</c>, position included. A window
+    /// the person DRAGGED goes through Rehome instead, which maps the size and
+    /// leaves the corner they dropped it at alone.
+    /// </remarks>
+    private void PlaceAcross(DeskWindow window, Workspace destination)
+    {
+        if (HomeOf(window) is { } from
+            && MonitorOf(destination) is { } to
+            && !ReferenceEquals(from, to)
+            && window.FloatingRect is { } rect)
+        {
+            window.FloatingRect = AcrossMonitors.Map(
+                rect,
+                from.TilingArea,
+                to.TilingArea,
+                Across(window.State == WindowState.Tiling, dragged: false));
+
+            window.CrossedAt = Now;
+        }
+
+        Place(window, destination);
     }
 
     private void Place(DeskWindow window, Workspace workspace)

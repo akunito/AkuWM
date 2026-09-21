@@ -47,6 +47,7 @@ public static class ConfigDefaults
             FloatUnresizable = true,
             FloatCentered = true,
             DragToTop = "fullscreen",
+            AcrossMonitors = new AcrossConfig { All = "hybrid" },
         },
         Monitors = [],
         Workspaces = [],

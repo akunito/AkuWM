@@ -179,6 +179,25 @@ public sealed class LayoutConfig
     /// A floating window is snapped by Windows itself and never reaches this.
     /// </remarks>
     public string? DragToTop { get; set; }
+
+    /// <summary>
+    /// How a window's geometry is carried from one screen to another.
+    /// </summary>
+    /// <remarks>
+    /// <c>absolute</c> keeps the pixels: a window of 990x990 arrives as
+    /// 990x990 whatever the screen. <c>proportional</c> keeps the share of the
+    /// screen: the same window, off a 1000x1000 screen onto a 2000x2000 one,
+    /// arrives as 1980x1980, and at the same fraction across it.
+    /// <c>hybrid</c> (the default) is absolute until the window would not fit,
+    /// and proportional then -- so the size a person chose is respected except
+    /// where respecting it means a window hanging off the screen.
+    ///
+    /// A window DRAGGED across keeps the corner it was dropped at in every
+    /// mode: the position on the new screen is the one thing the person did
+    /// choose. The mode governs the size for those, and both for a window
+    /// moved by a command.
+    /// </remarks>
+    public AcrossConfig? AcrossMonitors { get; set; }
 }
 
 public sealed class MonitorConfig : IConfigItem

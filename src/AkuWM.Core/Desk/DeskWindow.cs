@@ -89,6 +89,17 @@ public sealed class DeskWindow
     /// </remarks>
     public bool Landed { get; set; }
 
+    /// <summary>When this window last crossed onto another screen.</summary>
+    /// <remarks>
+    /// Windows rescales a window that crosses between screens of different
+    /// scaling, 125 to 156 ms after the move (measured). That arrives as a
+    /// resize nobody asked for, and without this it was read as the person
+    /// resizing the window -- which overwrote the size the crossing had just
+    /// decided, so <c>layout.across_monitors</c> had no effect at all beyond
+    /// the first moment.
+    /// </remarks>
+    public long CrossedAt { get; set; }
+
     /// <summary>
     /// It was asked to go somewhere, it did not, and AkuWM has stopped asking.
     /// </summary>
