@@ -159,6 +159,13 @@ public sealed class WindowManager : IAsyncDisposable
                 ExitRequested?.Invoke();
             }
 
+            // Before the reply goes back, not after the batch. A script that
+            // resizes and then measures -- which is what tests/wm does, and
+            // what any act-then-check gesture does -- would otherwise read the
+            // rectangles the window had before the command it just made.
+            // Same thread, and the batch-end pass finds nothing left to do.
+            Redraw();
+
             return result;
         });
     }

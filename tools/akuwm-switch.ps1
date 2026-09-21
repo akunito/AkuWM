@@ -37,13 +37,24 @@ param(
     [ValidateSet('akuwm', 'glazewm')]
     [string]$To,
 
-    [switch]$Yes
+    [switch]$Yes,
+
+    # Where akuwm.exe and the glazewm shim are. The installed, signed pair in
+    # Program Files by default; a build directory when a change is being tried
+    # on the desk before it is installed -- that one has no uiAccess, which
+    # costs nothing in M2 because AutoHotkey is still the thing holding the
+    # hooks and it has its own.
+    [string]$Build = (Join-Path $env:ProgramFiles 'AkuWM'),
+
+    # The shim, when it was published somewhere else (the dev loop puts it in
+    # its own directory so the two single-file builds do not share one).
+    [string]$Shim
 )
 
 $ErrorActionPreference = 'Stop'
 
-$akuwm   = Join-Path $env:ProgramFiles 'AkuWM\akuwm.exe'
-$shim    = Join-Path $env:ProgramFiles 'AkuWM\glazewm.exe'
+$akuwm   = Join-Path $Build 'akuwm.exe'
+$shim    = if ($Shim) { $Shim } else { Join-Path $Build 'glazewm.exe' }
 $glazewm = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\glazewm.exe'
 $glazeCli = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
 $zebar   = Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe'
@@ -197,6 +208,15 @@ if (-not $Yes) {
         Say 'Left alone.'
         exit 0
     }
+}
+
+# An AkuWM that is already running has the pipe and the port, and a second one
+# does not fail -- it manages the desk alongside the first, and every gesture
+# is carried out twice. Found by doing it, 2026-09-21: switching twice left two
+# daemons and a doctor that reported the older one's state.
+if (Stop-Them 'akuwm') {
+    Say '  a running AkuWM was stopped first'
+    Start-Sleep -Milliseconds 400
 }
 
 # The watcher first. It is a child of `glazewm.exe start` (the only thing in
