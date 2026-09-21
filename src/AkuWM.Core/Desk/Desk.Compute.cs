@@ -114,6 +114,16 @@ public sealed partial class Desk
                 }
             }
 
+            // A game on the screen this window follows takes it out of the
+            // always-on-top band, exactly as it does to a floating window of
+            // its own workspace. Without this a sticky Telegram or terminal
+            // sat above a fullscreen game -- and a visible always-on-top
+            // window over one costs it the direct path to the screen: DWM
+            // composes the frame instead, measured at 45 fps and +60 ms on
+            // Aion 2. That is the whole reason this window manager exists, and
+            // it was true of every sticky window on the desk.
+            bool covered = displayed is not null && Live(displayed.Fullscreen) is not null;
+
             foreach (WindowHandle handle in monitor.Sticky)
             {
                 if (Live(handle) is not { } window || !accounted.Add(handle))
@@ -123,7 +133,7 @@ public sealed partial class Desk
 
                 WantHidden(window, false, hide, show);
                 WantPlaced(window, FloatingRectOf(window, monitor), place);
-                WantBanded(window, true, band);
+                WantBanded(window, !covered, band);
             }
         }
 

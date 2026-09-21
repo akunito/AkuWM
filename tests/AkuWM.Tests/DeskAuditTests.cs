@@ -139,6 +139,42 @@ public class DeskAuditTests
     }
 
     [Fact]
+    public void A_sticky_window_goes_under_a_game_on_the_screen_it_follows()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetSticky(W(1), true);
+        Assert.Contains((W(1), true), _fixture.Turn().Band);
+
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(2), true);
+
+        // A visible always-on-top window over a fullscreen game costs it the
+        // direct path to the screen: DWM composes the frame instead, measured
+        // at 45 fps and +60 ms on Aion 2. The floating windows of a workspace
+        // already left the band for a game; every sticky window on the desk
+        // did not. Found by tests/fullscreen 2026-09-21.
+        Assert.Contains((W(1), false), _fixture.Turn().Band);
+    }
+
+    [Fact]
+    public void And_comes_back_up_when_the_game_is_gone()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetSticky(W(1), true);
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(2), true);
+        _fixture.Turn();
+
+        _fixture.Close(2);
+
+        Assert.Contains((W(1), true), _fixture.Turn().Band);
+    }
+
+    [Fact]
     public void A_window_that_closes_while_fullscreen_releases_the_taskbar()
     {
         _fixture.Open(1);
