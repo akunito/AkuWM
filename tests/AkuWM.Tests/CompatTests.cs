@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -46,6 +47,59 @@ public class CompatTests
 
     private static string Compact(JsonNode? node) =>
         node?.ToJsonString(new JsonSerializerOptions { WriteIndented = false }) ?? "null";
+
+    // ---- the drag verbs ---------------------------------------------------
+
+    [Fact]
+    public void Drag_tile_needs_a_point()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        ExecResult result = _executor.Command($"drag-tile --id {_fixture.Managed(1)!.Id}");
+
+        Assert.False(result.Success);
+        Assert.Contains("--x and --y", result.Error);
+    }
+
+    [Fact]
+    public void Drag_tile_drops_the_window_where_the_point_is()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        _fixture.Turn();
+
+        // The middle of the second monitor.
+        Rect second = _fixture.Desk.Monitors.Single(m => m.Role == "second").TilingArea;
+        ExecResult result = _executor.Command(
+            $"drag-tile --id {_fixture.Managed(2)!.Id} --x {second.X + (second.Width / 2)} --y {second.Y + (second.Height / 2)}");
+
+        Assert.True(result.Success);
+        Assert.Equal("21", _fixture.Managed(2)!.Workspace);
+    }
+
+    [Fact]
+    public void The_drop_target_query_answers_with_a_rectangle()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Open(3);
+        _fixture.Turn();
+        _fixture.Turn();
+
+        Rect first = _fixture.FrameOf(1);
+        ExecResult result = _executor.Query(
+            $"drop-target --id {_fixture.Managed(3)!.Id} --x {first.X + (first.Width / 4)} --y {first.Y + (first.Height / 2)}");
+
+        Assert.True(result.Success);
+
+        JsonNode? target = result.Data?["dropTarget"];
+        Assert.NotNull(target);
+        Assert.Equal(first.Width / 2, target!["width"]!.GetValue<int>());
+        Assert.True(target["before"]!.GetValue<bool>());
+        Assert.Equal("horizontal", target["direction"]!.GetValue<string>());
+    }
 
     // ---- the command line -------------------------------------------------
 

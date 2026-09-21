@@ -48,7 +48,11 @@ public sealed class TilingTree
     /// workspace nobody is looking at.
     /// </param>
     /// <param name="direction">Which way to split, when a split is needed.</param>
-    public void Add(WindowHandle window, WindowHandle nextTo, SplitDirection direction)
+    /// <param name="before">
+    /// On the other side of <paramref name="nextTo"/>. What dropping a window
+    /// on the LEFT half of a tile means, as against the right.
+    /// </param>
+    public void Add(WindowHandle window, WindowHandle nextTo, SplitDirection direction, bool before = false)
     {
         if (window.IsNone || Contains(window))
         {
@@ -70,11 +74,20 @@ public sealed class TilingTree
             // otherwise wrap the whole workspace in a new split.
             if (!Root.IsLeaf && Root.Direction == direction)
             {
-                Root.Add(leaf);
+                if (before)
+                {
+                    Root.Insert(0, leaf);
+                }
+                else
+                {
+                    Root.Add(leaf);
+                }
             }
             else
             {
-                Root = Tile.Split(direction, Root, leaf);
+                Root = before
+                    ? Tile.Split(direction, leaf, Root)
+                    : Tile.Split(direction, Root, leaf);
             }
 
             return;
@@ -85,11 +98,13 @@ public sealed class TilingTree
         // than a column and a nested pair.
         if (beside.Parent is { } parent && parent.Direction == direction)
         {
-            parent.Insert(beside.IndexInParent + 1, leaf);
+            parent.Insert(before ? beside.IndexInParent : beside.IndexInParent + 1, leaf);
             return;
         }
 
-        var split = Tile.Split(direction, Tile.Leaf(beside.Window), leaf);
+        Tile split = before
+            ? Tile.Split(direction, leaf, Tile.Leaf(beside.Window))
+            : Tile.Split(direction, Tile.Leaf(beside.Window), leaf);
         if (beside.Parent is { } grandparent)
         {
             grandparent.ReplaceChild(beside, split);

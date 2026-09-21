@@ -474,6 +474,99 @@ public sealed partial class Desk
     /// area -- the taskbar stays visible and, because it does not cover the
     /// whole monitor, AkuWM does not read it as fullscreen.
     /// </remarks>
+    /// <summary>The monitor a point is on.</summary>
+    public DeskMonitor? MonitorAtPoint(int x, int y)
+    {
+        for (int at = 0; at < _monitors.Count; at++)
+        {
+            if (_monitors[at].Snapshot.Bounds.Contains(x, y))
+            {
+                return _monitors[at];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Where a tiled window dropped at this point would land.
+    /// </summary>
+    /// <remarks>
+    /// What the drag outline draws, asked for while the drag is running. A
+    /// tiled window is not moved live -- it is still in its tile, and the
+    /// layout it came from does not close the gap until the drop -- so the
+    /// outline is the only thing that can show where it is going.
+    /// </remarks>
+    public DropTarget? DropPreview(WindowHandle handle, int x, int y)
+    {
+        if (Window(handle) is not { Managed: true } window
+            || window.State != WindowState.Tiling
+            || MonitorAtPoint(x, y) is not { Displayed: { } workspace } monitor)
+        {
+            return null;
+        }
+
+        return DropTargets.Resolve(
+            workspace.Tiling.Rects(monitor.TilingArea, GapsFor(monitor)),
+            monitor.TilingArea,
+            x,
+            y,
+            handle);
+    }
+
+    /// <summary>
+    /// Drops a tiled window into the layout under a point.
+    /// </summary>
+    /// <remarks>
+    /// The same rule wherever the point is, on its own monitor or another:
+    /// Diego asked for one thing to learn rather than two (2026-09-21). The
+    /// gap where it came from closes now and not at the start of the drag, so
+    /// a drag that is thought better of leaves the desk as it was.
+    ///
+    /// A FLOATING window is refused. Floating is a decision of the person's
+    /// and only the floating toggle undoes it -- dragging never changes what a
+    /// window is, which is the rule that makes this safe to do with any window
+    /// under the pointer.
+    /// </remarks>
+    public bool DropTile(WindowHandle handle, int x, int y)
+    {
+        if (Window(handle) is not { Managed: true, State: WindowState.Tiling } window
+            || MonitorAtPoint(x, y) is not { Displayed: { } destination } monitor)
+        {
+            return false;
+        }
+
+        DropTarget target = DropTargets.Resolve(
+            destination.Tiling.Rects(monitor.TilingArea, GapsFor(monitor)),
+            monitor.TilingArea,
+            x,
+            y,
+            handle);
+
+        if (target.NextTo == handle)
+        {
+            return false;
+        }
+
+        // Nothing under the pointer but the window being dragged, or the gap
+        // between two tiles. On a workspace that already has tiles that is not
+        // an instruction, and appending the window at the end -- which is what
+        // "beside nobody" means to the tree -- would move it for no reason.
+        if (target.NextTo.IsNone && destination.Tiling.Windows.Any(w => w != handle))
+        {
+            return false;
+        }
+
+        PlaceAcross(window, destination);
+
+        // Place put it in the layout wherever the focus order suggested. Now
+        // exactly where the pointer asked for.
+        destination.Tiling.Remove(handle);
+        destination.Tiling.Add(handle, target.NextTo, target.Direction, target.Before);
+        destination.Touch(handle);
+        return true;
+    }
+
     public bool DragToTop(WindowHandle handle)
     {
         if (Window(handle) is not { Managed: true } window)

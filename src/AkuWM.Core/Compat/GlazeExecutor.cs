@@ -100,10 +100,53 @@ public sealed class GlazeExecutor
                 ["name"] = "AkuWM",
             }),
             "tiling-direction" => TilingDirection(),
+            "drop-target" => DropTarget(parsed),
             "binding-modes" => ExecResult.Ok(data: new JsonObject { ["bindingModes"] = new JsonArray() }),
             "paused" => ExecResult.Ok(data: (JsonNode)Paused),
             _ => ExecResult.Fail($"unrecognized subcommand '{parsed.Verb}'"),
         };
+    }
+
+    /// <summary>Reads --x and --y, which both of the drag verbs need.</summary>
+    private static ExecResult At(ParsedCommand parsed, Func<int, int, ExecResult> then)
+    {
+        if (!int.TryParse(parsed.Value("x"), out int x) || !int.TryParse(parsed.Value("y"), out int y))
+        {
+            return ExecResult.Fail("needs --x and --y, the point the pointer is on");
+        }
+
+        return then(x, y);
+    }
+
+    private ExecResult DropTarget(ParsedCommand parsed)
+    {
+        DeskWindow? subject = Subject(parsed);
+        if (subject is null)
+        {
+            return ExecResult.Fail("no window");
+        }
+
+        return At(parsed, (x, y) =>
+        {
+            if (_desk.DropPreview(subject.Handle, x, y) is not { } target)
+            {
+                return ExecResult.Ok(data: new JsonObject { ["dropTarget"] = null });
+            }
+
+            return ExecResult.Ok(data: new JsonObject
+            {
+                ["dropTarget"] = new JsonObject
+                {
+                    ["x"] = target.Preview.X,
+                    ["y"] = target.Preview.Y,
+                    ["width"] = target.Preview.Width,
+                    ["height"] = target.Preview.Height,
+                    ["nextTo"] = target.NextTo.IsNone ? null : target.NextTo.Value,
+                    ["direction"] = target.Direction.ToString().ToLowerInvariant(),
+                    ["before"] = target.Before,
+                },
+            });
+        });
     }
 
     public ExecResult Command(string line)
@@ -150,6 +193,13 @@ public sealed class GlazeExecutor
             // is what lets the GUI change it without touching the hotkeys.
             case "drag-to-top":
                 return Toggle(subject, w => _desk.DragToTop(w.Handle));
+
+            // Also AkuWM's own. The script reports the point the pointer is
+            // on and the layout decides what that means, which is what keeps
+            // the rule in one place -- and lets the outline ask for exactly
+            // the rectangle the drop will produce.
+            case "drag-tile":
+                return At(parsed, (x, y) => Toggle(subject, w => _desk.DropTile(w.Handle, x, y)));
 
             case "toggle-sticky":
                 return Toggle(subject, w => _desk.SetSticky(w.Handle, !w.Sticky));
