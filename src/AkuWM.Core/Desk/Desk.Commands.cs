@@ -238,6 +238,39 @@ public sealed partial class Desk
     }
 
     /// <summary>Moves an edge of the focused window, in points of its split.</summary>
+    /// <summary>
+    /// Resizes by a number of pixels rather than a share of the workspace.
+    /// </summary>
+    /// <remarks>
+    /// What an Alt+drag sends: it knows exactly how far the pointer went, and
+    /// turning that into a percentage at the far end would need the monitor,
+    /// which the caller has and the command grammar does not carry.
+    /// </remarks>
+    public bool ResizeByPixels(WindowHandle handle, Direction direction, int pixels)
+    {
+        if (Window(handle) is not { Managed: true } window)
+        {
+            return false;
+        }
+
+        if (window.State != WindowState.Tiling)
+        {
+            return ResizeFloating(window, direction, pixels);
+        }
+
+        if (window.Workspace is not { } on || Workspace(on) is not { } where
+            || MonitorOf(where) is not { } monitor)
+        {
+            return false;
+        }
+
+        Rect area = monitor.TilingArea;
+        int extent = direction.Axis() == SplitDirection.Horizontal ? area.Width : area.Height;
+
+        return extent > 0
+            && Resize(handle, direction, (int)Math.Round(pixels * 100.0 / extent));
+    }
+
     public bool Resize(WindowHandle handle, Direction direction, int points)
     {
         if (Window(handle) is not { Managed: true } window || window.Workspace is not { } name
@@ -249,20 +282,26 @@ public sealed partial class Desk
         if (window.State != WindowState.Tiling)
         {
             // A floating window is resized directly; the tree has no say.
-            if (window.FloatingRect is not { } rect)
-            {
-                return false;
-            }
-
-            int by = points * 10;
-            window.FloatingRect = direction.Axis() == SplitDirection.Horizontal
-                ? rect with { Width = Math.Max(100, rect.Width + (direction.IsBackwards() ? -by : by)) }
-                : rect with { Height = Math.Max(100, rect.Height + (direction.IsBackwards() ? -by : by)) };
-
-            return true;
+            return ResizeFloating(window, direction, points * 10);
         }
 
         return workspace.Tiling.Resize(handle, direction, points / 100.0);
+    }
+
+    private static bool ResizeFloating(DeskWindow window, Direction direction, int pixels)
+    {
+        if (window.FloatingRect is not { } rect)
+        {
+            return false;
+        }
+
+        int by = direction.IsBackwards() ? -pixels : pixels;
+
+        window.FloatingRect = direction.Axis() == SplitDirection.Horizontal
+            ? rect with { Width = Math.Max(100, rect.Width + by) }
+            : rect with { Height = Math.Max(100, rect.Height + by) };
+
+        return true;
     }
 
     public bool ToggleDirection(WindowHandle handle) =>

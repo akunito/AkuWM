@@ -112,6 +112,12 @@ public sealed class GlazeExecutor
             case "move":
                 return Move(parsed, subject);
 
+            case "position":
+                return Position(parsed, subject);
+
+            case "size":
+                return Size(parsed, subject);
+
             case "resize":
                 return Resize(parsed, subject);
 
@@ -330,22 +336,95 @@ public sealed class GlazeExecutor
             return ExecResult.Fail("there is no window to resize");
         }
 
+        // Both, when both are given. An Alt+drag on a corner sends a width and
+        // a height in one command, and honouring only the first turned every
+        // diagonal resize into a horizontal one.
+        bool any = false;
+        bool all = true;
+
         if (parsed.Number("width") is { } width)
         {
-            return _desk.Resize(subject.Handle, Direction.Right, width)
-                ? ExecResult.Ok(subject.Id)
-                : ExecResult.Fail("the width could not be changed");
+            any = true;
+            all &= Change(subject, Direction.Right, width, parsed.InPixels("width"));
         }
 
         if (parsed.Number("height") is { } height)
         {
-            return _desk.Resize(subject.Handle, Direction.Down, height)
-                ? ExecResult.Ok(subject.Id)
-                : ExecResult.Fail("the height could not be changed");
+            any = true;
+            all &= Change(subject, Direction.Down, height, parsed.InPixels("height"));
         }
 
-        return ExecResult.Fail("resize needs --width or --height");
+        if (!any)
+        {
+            return ExecResult.Fail("resize needs --width or --height");
+        }
+
+        return all ? ExecResult.Ok(subject.Id) : ExecResult.Fail("the size could not be changed");
     }
+
+    /// <summary>
+    /// <c>position --x-pos N --y-pos N</c>: put a floating window exactly there.
+    /// </summary>
+    /// <remarks>
+    /// The layout journal and the raise-or-launch table both send this, with
+    /// coordinates they remembered from the last time the window was seen. It
+    /// was unrecognised, so every app launched by a chord lost the geometry it
+    /// had, and the repair after a monitor came back placed nothing at all.
+    /// </remarks>
+    private ExecResult Position(ParsedCommand parsed, DeskWindow? subject)
+    {
+        if (subject is null)
+        {
+            return ExecResult.Fail("there is no window to position");
+        }
+
+        if (subject.FloatingRect is not { } rect)
+        {
+            return ExecResult.Fail("only a floating window can be positioned");
+        }
+
+        int x = parsed.Number("x-pos") ?? rect.X;
+        int y = parsed.Number("y-pos") ?? rect.Y;
+
+        return _desk.SetFloatingRect(subject.Handle, rect with { X = x, Y = y })
+            ? ExecResult.Ok(subject.Id)
+            : ExecResult.Fail("the window could not be positioned");
+    }
+
+    /// <summary>
+    /// <c>size --width Npx --height Nph</c>: an exact size, not a change to one.
+    /// </summary>
+    /// <remarks>
+    /// The partner of <c>position</c>, and sent right after it. `resize` says
+    /// "by this much", this one says "be this big" -- reading one as the other
+    /// gives a window the size of the difference.
+    /// </remarks>
+    private ExecResult Size(ParsedCommand parsed, DeskWindow? subject)
+    {
+        if (subject is null)
+        {
+            return ExecResult.Fail("there is no window to size");
+        }
+
+        if (subject.FloatingRect is not { } rect)
+        {
+            return ExecResult.Fail("only a floating window can be sized");
+        }
+
+        int width = parsed.Number("width") ?? rect.Width;
+        int height = parsed.Number("height") ?? rect.Height;
+
+        return _desk.SetFloatingRect(
+            subject.Handle,
+            rect with { Width = Math.Max(1, width), Height = Math.Max(1, height) })
+            ? ExecResult.Ok(subject.Id)
+            : ExecResult.Fail("the window could not be sized");
+    }
+
+    private bool Change(DeskWindow subject, Direction direction, int by, bool pixels) =>
+        pixels
+            ? _desk.ResizeByPixels(subject.Handle, direction, by)
+            : _desk.Resize(subject.Handle, direction, by);
 
     private ExecResult Toggle(DeskWindow? subject, Func<DeskWindow, bool> change)
     {
@@ -386,6 +465,20 @@ public sealed class GlazeExecutor
             return ExecResult.Fail($"'{text}' is not a direction");
         }
 
+        // The SCREEN in that direction first, which is what the chord means:
+        // `Hyper+Shift+Left` is "send this window to the monitor on my left".
+        // Walking this monitor's own list instead meant the leftmost workspace
+        // had nothing to the left of it and the window never moved -- and when
+        // it did move, it moved somewhere the person was not looking.
+        if (_desk.MonitorInDirection(monitor, direction) is { Displayed: { } there })
+        {
+            return _desk.MoveToWorkspace(subject.Handle, there.Name)
+                ? ExecResult.Ok(subject.Id)
+                : ExecResult.Fail($"the window could not be moved to {there.Name}");
+        }
+
+        // No screen that way: the workspace next along on this one, which is
+        // what it does on a single-monitor desk.
         int at = monitor.Workspaces.IndexOf(from) + (direction.IsBackwards() ? -1 : 1);
         if (at < 0 || at >= monitor.Workspaces.Count)
         {

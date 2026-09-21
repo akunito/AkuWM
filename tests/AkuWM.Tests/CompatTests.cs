@@ -344,15 +344,33 @@ public class CompatTests
     }
 
     [Fact]
-    public void Move_workspace_in_direction_goes_to_the_next_one_along()
+    public void Move_workspace_in_direction_sends_the_window_to_the_screen_that_way()
     {
         _fixture.Open(1);
         _fixture.Turn();
         _fixture.Desk.Focus(DeskFixture.W(1));
 
+        // `Hyper+Shift+Right` means "send this to the monitor on my right".
+        // It used to walk this monitor's own workspace list, so the window
+        // landed on 12 -- still on the screen the person was looking at.
         Assert.True(_executor.Command("move --workspace-in-direction right").Success);
 
-        Assert.Equal("12", _fixture.Managed(1)!.Workspace);
+        Assert.Equal("21", _fixture.Managed(1)!.Workspace);
+    }
+
+    [Fact]
+    public void With_no_screen_that_way_it_falls_back_to_the_next_workspace_along()
+    {
+        _fixture.Open(1, monitor: new MonitorHandle(2));
+        _fixture.Turn();
+        _fixture.Desk.FocusWorkspace("21");
+        _fixture.Desk.Focus(DeskFixture.W(1));
+
+        // Nothing to the right of the second monitor, so it behaves as it
+        // would on a desk with one screen.
+        Assert.True(_executor.Command("move --workspace-in-direction right").Success);
+
+        Assert.Equal("22", _fixture.Managed(1)!.Workspace);
     }
 
     [Fact]

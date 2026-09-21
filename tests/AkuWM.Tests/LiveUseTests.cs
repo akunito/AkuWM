@@ -1,4 +1,5 @@
 using AkuWM.Core.Desk;
+using AkuWM.Core.Compat;
 using AkuWM.Core.Layout;
 using AkuWM.Core.Model;
 using Xunit;
@@ -126,6 +127,73 @@ public class LiveUseTests
 
         Assert.Equal("11", Desk.Window(DeskFixture.W(1))!.Workspace);
         Assert.Equal("21", Desk.Window(DeskFixture.W(2))!.Workspace);
+    }
+
+    // ---- what the scripts send every day ----------------------------------
+
+    [Fact]
+    public void A_remembered_position_and_size_are_given_back_to_a_floating_window()
+    {
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFloating(DeskFixture.W(1), true);
+        _fixture.Turn();
+
+        Guid id = Desk.Window(DeskFixture.W(1))!.Id;
+
+        // Verbatim from lib-repair.ahk and lib-app-toggle.ahk: both were
+        // "unrecognized subcommand", so every app launched by a chord lost the
+        // geometry it had and the repair after a monitor nap placed nothing.
+        Assert.True(executor.Command($"--id {id} position --x-pos 400 --y-pos 300").Success);
+        Assert.True(executor.Command($"--id {id} size --width 1100px --height 720px").Success);
+        _fixture.Turn();
+
+        Rect where = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds;
+        Assert.Equal(new Rect(400, 300, 1100, 720), where);
+    }
+
+    [Fact]
+    public void A_resize_written_in_pixels_is_not_read_as_a_percentage()
+    {
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        int before = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds.Width;
+        Guid id = Desk.Window(DeskFixture.W(1))!.Id;
+
+        // What Alt+drag sends. `300px` parsed as null before, so the drop did
+        // nothing; parsed as a percentage it would move the split three times
+        // the width of the screen.
+        Assert.True(executor.Command($"--id {id} resize --width 300px").Success);
+        _fixture.Turn();
+
+        int after = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds.Width;
+        Assert.InRange(after - before, 240, 360);
+    }
+
+    [Fact]
+    public void A_diagonal_resize_moves_both_axes()
+    {
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFloating(DeskFixture.W(1), true);
+        _fixture.Turn();
+
+        Rect before = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds;
+        Guid id = Desk.Window(DeskFixture.W(1))!.Id;
+
+        // A corner drag sends both, and only the first was honoured -- every
+        // diagonal resize came out horizontal.
+        Assert.True(executor.Command($"--id {id} resize --width 100px --height 80px").Success);
+        _fixture.Turn();
+
+        Rect after = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds;
+        Assert.Equal(before.Width + 100, after.Width);
+        Assert.Equal(before.Height + 80, after.Height);
     }
 
     // ---- resize reaches the neighbour it has ------------------------------

@@ -16,8 +16,46 @@ public readonly record struct ParsedCommand(
 
     public string? Value(string option) => Options.TryGetValue(option, out string? value) ? value : null;
 
-    public int? Number(string option) =>
-        int.TryParse(Value(option)?.TrimEnd('%'), out int number) ? number : null;
+    /// <summary>The number in an option, whatever unit it was written with.</summary>
+    public int? Number(string option) => ParseNumber(Value(option));
+
+    /// <summary>
+    /// True when the value was written in pixels rather than as a share.
+    /// </summary>
+    /// <remarks>
+    /// The scripts send both: `resize --width 10%` from a keyboard chord and
+    /// `resize --width 300px` from an Alt+drag, which knows exactly how far the
+    /// pointer went. Reading the second as a percentage moves the split three
+    /// times the width of the screen; reading it as null, which is what
+    /// happened, moves nothing at all.
+    /// </remarks>
+    public bool InPixels(string option) =>
+        Value(option)?.EndsWith("px", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static int? ParseNumber(string? value)
+    {
+        if (value is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> digits = value.AsSpan();
+
+        if (digits.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+        {
+            digits = digits[..^2];
+        }
+        else if (digits.EndsWith("ppt", StringComparison.OrdinalIgnoreCase))
+        {
+            digits = digits[..^3];
+        }
+        else if (digits.Length > 0 && digits[^1] == '%')
+        {
+            digits = digits[..^1];
+        }
+
+        return int.TryParse(digits, out int number) ? number : null;
+    }
 }
 
 /// <summary>
