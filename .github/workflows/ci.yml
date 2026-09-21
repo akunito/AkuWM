@@ -32,26 +32,25 @@ jobs:
       # An artifact needs a token to download, even on a public repo, and the
       # job log needs admin. Annotations need neither, so the trx is turned
       # into them: that is the only public channel for "which test failed".
+      # pwsh, not bash: it is on both runners and reads XML natively, where
+      # the bash + python + heredoc version died on the Windows runner
+      # without producing a single annotation.
       - name: Which test failed
         if: failure()
-        shell: bash
+        shell: pwsh
         run: |
-          shopt -s nullglob
-          for trx in test-results/*.trx; do
-            python3 - "$trx" <<'PY'
-          import sys, xml.etree.ElementTree as ET
-          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
-          root = ET.parse(sys.argv[1]).getroot()
-          for r in root.iterfind('.//t:UnitTestResult', ns):
-              if r.get('outcome') != 'Failed':
-                  continue
-              name = r.get('testName', '?')
-              msg = (r.findtext('.//t:Message', default='', namespaces=ns) or '').strip()
-              trace = (r.findtext('.//t:StackTrace', default='', namespaces=ns) or '').strip()
-              one = ' | '.join(x for x in (msg, trace.splitlines()[0] if trace else '') if x)
-              print(f"::error title={name}::{one[:900]}")
-          PY
-          done
+          $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
+          Get-ChildItem test-results -Filter *.trx -EA SilentlyContinue | ForEach-Object {
+            [xml] $doc = Get-Content $_.FullName -Raw
+            Select-Xml -Xml $doc -Namespace $ns -XPath '//t:UnitTestResult[@outcome="Failed"]' | ForEach-Object {
+              $r = $_.Node
+              $msg = ($r.Output.ErrorInfo.Message -replace '\s+', ' ').Trim()
+              $at = (($r.Output.ErrorInfo.StackTrace -split "`n") | Select-Object -First 1).Trim()
+              $line = ("$msg | $at").Trim()
+              if ($line.Length -gt 900) { $line = $line.Substring(0, 900) }
+              Write-Host "::error title=$($r.testName)::$line"
+            }
+          }
 
       - name: Test results
         if: always()
@@ -98,26 +97,25 @@ jobs:
       # An artifact needs a token to download, even on a public repo, and the
       # job log needs admin. Annotations need neither, so the trx is turned
       # into them: that is the only public channel for "which test failed".
+      # pwsh, not bash: it is on both runners and reads XML natively, where
+      # the bash + python + heredoc version died on the Windows runner
+      # without producing a single annotation.
       - name: Which test failed
         if: failure()
-        shell: bash
+        shell: pwsh
         run: |
-          shopt -s nullglob
-          for trx in test-results/*.trx; do
-            python3 - "$trx" <<'PY'
-          import sys, xml.etree.ElementTree as ET
-          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
-          root = ET.parse(sys.argv[1]).getroot()
-          for r in root.iterfind('.//t:UnitTestResult', ns):
-              if r.get('outcome') != 'Failed':
-                  continue
-              name = r.get('testName', '?')
-              msg = (r.findtext('.//t:Message', default='', namespaces=ns) or '').strip()
-              trace = (r.findtext('.//t:StackTrace', default='', namespaces=ns) or '').strip()
-              one = ' | '.join(x for x in (msg, trace.splitlines()[0] if trace else '') if x)
-              print(f"::error title={name}::{one[:900]}")
-          PY
-          done
+          $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
+          Get-ChildItem test-results -Filter *.trx -EA SilentlyContinue | ForEach-Object {
+            [xml] $doc = Get-Content $_.FullName -Raw
+            Select-Xml -Xml $doc -Namespace $ns -XPath '//t:UnitTestResult[@outcome="Failed"]' | ForEach-Object {
+              $r = $_.Node
+              $msg = ($r.Output.ErrorInfo.Message -replace '\s+', ' ').Trim()
+              $at = (($r.Output.ErrorInfo.StackTrace -split "`n") | Select-Object -First 1).Trim()
+              $line = ("$msg | $at").Trim()
+              if ($line.Length -gt 900) { $line = $line.Substring(0, 900) }
+              Write-Host "::error title=$($r.testName)::$line"
+            }
+          }
 
       - name: Test results
         if: always()
