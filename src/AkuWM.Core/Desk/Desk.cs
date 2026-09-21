@@ -703,6 +703,16 @@ public sealed partial class Desk
         WindowSnapshot was = window.Snapshot;
         window.Snapshot = snapshot;
 
+        if (was.FrameBounds != snapshot.FrameBounds)
+        {
+            window.MovedAt = Now;
+        }
+
+        if (window.Placed is { } asked && asked.CloseTo(snapshot.FrameBounds, PlacementSlack))
+        {
+            window.Landed = true;
+        }
+
         if (!window.Managed)
         {
             // A window refused because it was cloaked when AkuWM first saw it,

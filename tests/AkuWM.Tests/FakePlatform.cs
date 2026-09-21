@@ -144,6 +144,17 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         WindowList[at] = WindowList[at] with { Cloak = CloakKind.None };
     }
 
+    /// <summary>
+    /// The application moves its OWN window, behind the window manager's back.
+    /// </summary>
+    /// <remarks>
+    /// What a game does coming out of fullscreen: it recreates its swapchain
+    /// and sizes itself over the next second or so, arriving at neither the
+    /// old rectangle nor the one it was asked for.
+    /// </remarks>
+    public void ApplicationMoves(WindowHandle handle, Rect to) =>
+        Replace(handle, w => w with { FrameBounds = to, WindowRect = to.Inflate(9) });
+
     private void Replace(WindowHandle handle, Func<WindowSnapshot, WindowSnapshot> change)
     {
         int at = WindowList.FindIndex(w => w.Handle == handle);

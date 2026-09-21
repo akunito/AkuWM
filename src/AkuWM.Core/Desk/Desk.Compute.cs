@@ -311,6 +311,9 @@ public sealed partial class Desk
     /// <summary>How long a window has to reach where it was put before AkuWM stops asking.</summary>
     public const int PlacementPatienceMs = 2000;
 
+    /// <summary>How still a window must be before it is asked again.</summary>
+    public const int SettleMs = 300;
+
     /// <summary>
     /// How far from where it was put a window may land and still count as
     /// there.
@@ -343,6 +346,26 @@ public sealed partial class Desk
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;
+            return;
+        }
+
+        // Asked for this already, and the window is STILL MOVING. It is not
+        // refusing, it is on its way: an application sizing itself -- a game
+        // leaving fullscreen -- passes through a second's worth of rectangles
+        // that are neither where it was nor where it is going. Asking again at
+        // every step makes it lay out its content again each time, which is
+        // what is seen as the inside of the window redrawing for a second or
+        // two after it is tiled. Measured on the desk 2026-09-21: six asks in
+        // one and a half seconds. The patience clock above is not reset by
+        // this, so a window that moves for ever is still given up on.
+        // MovedAt of zero is "never seen to move", not "moved at time zero":
+        // a window that has never budged is refusing, not settling, and must
+        // not be given the benefit of the doubt for ever.
+        if (window.Placed == frame
+            && !window.Landed
+            && window.MovedAt != 0
+            && Now - window.MovedAt < SettleMs)
+        {
             return;
         }
 
@@ -496,6 +519,10 @@ public sealed partial class Desk
             if (window.Placed != placement.Frame)
             {
                 window.PlacedAt = Now;
+
+                // A new rectangle: it has not been there yet, whatever it did
+                // about the last one.
+                window.Landed = false;
             }
 
             window.Placed = placement.Frame;

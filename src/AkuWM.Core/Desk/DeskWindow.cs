@@ -66,6 +66,30 @@ public sealed class DeskWindow
     public long PlacedAt { get; set; }
 
     /// <summary>
+    /// When the window's own rectangle last changed, whoever changed it.
+    /// </summary>
+    /// <remarks>
+    /// A window that is still moving is not refusing: an application sizing
+    /// ITSELF -- a game coming out of fullscreen recreates its swapchain and
+    /// takes a second or more about it -- passes through rectangles that are
+    /// neither the old one nor the one it was asked for. Asking again at every
+    /// step makes it lay its content out again each time.
+    /// </remarks>
+    public long MovedAt { get; set; }
+
+    /// <summary>
+    /// Whether the window has been where AkuWM last asked it to be.
+    /// </summary>
+    /// <remarks>
+    /// This is what separates "still on its way" from "somebody moved it". A
+    /// window that has NOT landed yet and is moving is settling, and asking
+    /// again at every step is what makes an application redraw its content
+    /// over and over. A window that HAD landed and then moved was dragged, and
+    /// goes back at once.
+    /// </remarks>
+    public bool Landed { get; set; }
+
+    /// <summary>
     /// It was asked to go somewhere, it did not, and AkuWM has stopped asking.
     /// </summary>
     /// <remarks>

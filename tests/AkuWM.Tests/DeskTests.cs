@@ -557,6 +557,64 @@ public class DeskTests
     }
 
     [Fact]
+    public void A_window_still_settling_into_its_tile_is_not_asked_again_on_every_step()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        // AkuWM's own moves stop landing, so the window's rectangle is whatever
+        // the APPLICATION makes it -- the situation a game is in when it comes
+        // out of fullscreen and sizes itself over the next second.
+        _fixture.Platform.Stubborn.Add(1);
+        _fixture.Open(2);
+        Redraw first = _fixture.Turn();
+        Assert.Contains(first.Place, p => p.Window == DeskFixture.W(1));
+
+        int asked = 0;
+        for (int i = 0; i < 6; i++)
+        {
+            _fixture.Wait(120);
+            // Far from the tile, and different every step: a game leaving
+            // fullscreen goes to its own windowed size first, nowhere near
+            // the half-screen it is being asked for.
+            _fixture.Platform.ApplicationMoves(DeskFixture.W(1), new Rect(100 + (i * 40), 200, 1280, 720));
+            _fixture.Sync();
+
+            if (_fixture.Turn().Place.Any(p => p.Window == DeskFixture.W(1)))
+            {
+                asked++;
+            }
+        }
+
+        // While it is moving, AkuWM waits. Asking again on every step makes
+        // the application lay its content out again each time, which is what
+        // is seen as the INSIDE of the window redrawing for a second or two
+        // after it is tiled (reported from the desk, 2026-09-21).
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public void But_once_it_stops_moving_and_is_still_wrong_it_is_asked_again()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        _fixture.Platform.Stubborn.Add(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        _fixture.Wait(120);
+        _fixture.Platform.ApplicationMoves(DeskFixture.W(1), new Rect(100, 200, 1280, 720));
+        _fixture.Sync();
+        _fixture.Turn();
+
+        // Still, now, and still not where it belongs.
+        _fixture.Wait(400);
+        _fixture.Sync();
+
+        Assert.Contains(Desk.Compute().Place, p => p.Window == DeskFixture.W(1));
+    }
+
+    [Fact]
     public void When_a_hidden_window_cannot_be_brought_back_nothing_is_hidden()
     {
         // Measured on this machine: one spelling of the call that hides a
