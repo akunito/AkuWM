@@ -19,6 +19,7 @@ public sealed class CommandRouter
     private readonly RescueCommand? _rescue;
     private readonly CompatCommand? _compat;
     private readonly StateCommand? _state;
+    private readonly RulesCommand? _rules;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -35,7 +36,8 @@ public sealed class CommandRouter
         BenchCommand? bench = null,
         RescueCommand? rescue = null,
         CompatCommand? compat = null,
-        StateCommand? state = null)
+        StateCommand? state = null,
+        RulesCommand? rules = null)
     {
         _config = config;
         _doctor = doctor;
@@ -47,6 +49,7 @@ public sealed class CommandRouter
         _rescue = rescue;
         _compat = compat;
         _state = state;
+        _rules = rules;
     }
 
     /// <summary>
@@ -107,6 +110,8 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "there is no state directory on this host"),
                 "compat" => _compat?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "AkuWM is not managing the desk, so there is nothing to ask"),
+                "rules" => _rules?.Execute(line, tokens)
+                    ?? CommandResponse.Fail(line, "rules needs a running window manager"),
                 "doctor" => _doctor.Execute(line),
                 "version" => CommandResponse.Ok(line, new { version = Build.Version, build = Build.Description }),
                 "help" => CommandResponse.Ok(line, new { commands = Help }),
@@ -128,6 +133,11 @@ public sealed class CommandRouter
         "config show [--layer common|<profile>|effective]",
         "config path",
         "config validate",
+        "config set --path <a.b> --value <v> [--layer common|profile]",
+        "config unset --path <a.b> [--layer common|profile]",
+        "rules list",
+        "rules for --focused | --id <container> | --handle <hwnd>",
+        "rules processes",
         "query monitors",
         "query windows [--all]",
         "query focused",

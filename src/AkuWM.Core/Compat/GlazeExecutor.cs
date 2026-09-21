@@ -446,9 +446,16 @@ public sealed class GlazeExecutor
             return ExecResult.Fail("there is no focused window");
         }
 
-        return change(subject)
-            ? ExecResult.Ok(subject.Id)
-            : ExecResult.Fail("the window did not change");
+        if (!change(subject))
+        {
+            return ExecResult.Fail("the window did not change");
+        }
+
+        // A chord that floats a window is a decision, and it outranks the
+        // configuration that would have tiled it. Anything that re-decides
+        // windows later has to leave this one alone.
+        _desk.PersonDecided(subject.Handle);
+        return ExecResult.Ok(subject.Id);
     }
 
     private ExecResult FocusNeighbouringWorkspace(int by)

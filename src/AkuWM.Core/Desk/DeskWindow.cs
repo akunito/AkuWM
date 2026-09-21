@@ -104,6 +104,19 @@ public sealed class DeskWindow
     /// <summary>Rules that fired for it, by name, for <c>query</c> and the GUI.</summary>
     public IReadOnlyList<string> Rules { get; set; } = [];
 
+    /// <summary>
+    /// Whether the person has changed this window's state themselves.
+    /// </summary>
+    /// <remarks>
+    /// A chord that floats a window is a decision, and it outranks the
+    /// configuration that would have tiled it. Without this, editing an
+    /// unrelated rule and reloading -- or anything else that re-decides a
+    /// window -- would quietly put it back, and the person would have to make
+    /// the same decision twice. Reset when the window is closed, never by a
+    /// reload.
+    /// </remarks>
+    public bool DecidedByHand { get; set; }
+
     public override string ToString() =>
         $"{Handle} {Snapshot.ProcessName} \"{Snapshot.Title}\" {State}"
         + (Workspace is null ? string.Empty : $" on {Workspace}")

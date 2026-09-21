@@ -352,7 +352,10 @@ public static class Program
             // daemon is gone, so it cannot borrow the daemon's.
             new RescueCommand(paths, platform, windows, taskbar: new Win32Taskbar()),
             manager is null ? null : new CompatCommand(manager.Envelope),
-            new StateCommand(paths));
+            new StateCommand(paths),
+            manager is null
+                ? null
+                : new RulesCommand(read => manager.Do("rules", read).GetAwaiter().GetResult()));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>

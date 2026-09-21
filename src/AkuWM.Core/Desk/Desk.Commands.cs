@@ -534,6 +534,22 @@ public sealed partial class Desk
     }
 
     /// <summary>Remembers where a floating window has been dragged to.</summary>
+    /// <summary>
+    /// Records that the person, not a rule, decided how this window behaves.
+    /// </summary>
+    /// <remarks>
+    /// Called from the command path only. Everything inside the model that
+    /// changes a state is carrying out a decision already made -- by a rule,
+    /// by a redraw, or by this.
+    /// </remarks>
+    public void PersonDecided(WindowHandle handle)
+    {
+        if (Window(handle) is { } window)
+        {
+            window.DecidedByHand = true;
+        }
+    }
+
     public bool SetFloatingRect(WindowHandle handle, Rect rect)
     {
         if (Window(handle) is not { Managed: true } window
