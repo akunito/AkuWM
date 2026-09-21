@@ -112,6 +112,27 @@ public class LiveUseTests
     }
 
     [Fact]
+    public void Two_windows_opened_on_the_second_monitor_both_land_there()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("21");
+        _fixture.Turn();
+
+        // Windows opens both on the primary, as it does. The first was going
+        // to the right screen and the second was not: focusing the first told
+        // the desk "you are on the primary", because that is where Windows
+        // still had it while AkuWM was on its way to moving it.
+        _fixture.Open(2);
+        _fixture.Turn();
+        _fixture.Open(3);
+        _fixture.Turn();
+
+        Assert.Equal("21", Desk.Window(DeskFixture.W(2))!.Workspace);
+        Assert.Equal("21", Desk.Window(DeskFixture.W(3))!.Workspace);
+    }
+
+    [Fact]
     public void The_windows_already_on_the_desk_stay_where_they_are()
     {
         // The first sync is the exception: every window is new then, and

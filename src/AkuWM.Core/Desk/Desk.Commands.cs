@@ -41,11 +41,23 @@ public sealed partial class Desk
         }
 
         Focused = handle;
-        LookingAt(MonitorByHandle(window.Snapshot.Monitor));
 
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
             workspace.Touch(handle);
+
+            // The screen the desk says it belongs to, not the one Windows has
+            // it on this instant. A window adopted a moment ago is still
+            // physically where Windows opened it while AkuWM is on its way to
+            // moving it, so taking the snapshot's monitor sent the answer back
+            // to the screen the person had just left -- and the NEXT window
+            // opened there. Found by tests/wm: two windows started on the
+            // vertical monitor, the first landed there and the second did not.
+            LookingAt(MonitorOf(workspace));
+        }
+        else
+        {
+            LookingAt(MonitorByHandle(window.Snapshot.Monitor));
         }
 
         return true;
