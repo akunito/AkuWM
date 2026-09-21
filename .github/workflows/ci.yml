@@ -23,8 +23,18 @@ jobs:
       - name: Build
         run: dotnet build AkuWM.sln --configuration Release
 
+      # A trx alongside the console output: the job log needs admin rights to
+      # read through the API, so a failure that only reproduces on the runner
+      # is otherwise just "exit code 1". The artifact is public.
       - name: Test
-        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal"
+        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=linux.trx" --results-directory test-results
+
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-linux
+          path: test-results/
 
       - name: Formatting
         run: dotnet format AkuWM.sln --verify-no-changes --severity warn
@@ -59,4 +69,11 @@ jobs:
         run: dotnet build AkuWM.sln --configuration Release
 
       - name: Test
-        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release
+        run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=windows.trx" --results-directory test-results
+
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows
+          path: test-results/
