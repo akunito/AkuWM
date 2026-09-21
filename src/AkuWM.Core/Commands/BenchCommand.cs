@@ -56,20 +56,53 @@ public sealed class BenchCommand
         double buildModel = Time(rounds, () => ShadowModel.Build(config, monitors, windows));
         double ledgerWrite = TimeLedger(rounds, one);
 
+        // What the daemon actually does on a gesture. Everything above this
+        // line was the platform layer and a full model rebuild -- which the
+        // running window manager never does, because it observes one window
+        // and recomputes. Measuring only that over-counted a rebuild that does
+        // not happen and left out the decision, the placement and the JSON the
+        // bar asks for on every event, twice over.
+        var desk = new Desk.Desk(config);
+        desk.SetMonitors(monitors);
+        desk.Sync(windows);
+
+        double compute = Time(rounds, () => desk.Compute());
+
+
+        double observeOne = one is null
+            ? 0
+            : Time(rounds * 10, () =>
+            {
+                if (_platform.Window(one.Handle) is { } fresh)
+                {
+                    desk.Observe(fresh);
+                }
+            });
+
+        // The bar re-reads the whole desk on every event it is sent, and there
+        // are two widgets, so this is paid twice per event.
+        double serialise = Time(rounds, () => Compat.GlazeView.Monitors(desk).ToJsonString());
+
         var results = new List<object>
         {
             Measurement("read one window", readOne, "an event becoming a fact"),
-            Measurement("build the model", buildModel, $"{windows.Count} windows, rules and all"),
+            Measurement("observe one window", observeOne, "the read, and the model taking it in"),
+            Measurement("decide (Compute)", compute, $"{windows.Count} windows: what has to change"),
+            Measurement("serialise the desk for the bar", serialise,
+                "what `query monitors` costs; the bar asks on EVERY event, per widget"),
+            Measurement("build the model", buildModel,
+                $"{windows.Count} windows, rules and all -- startup only, NOT on a gesture"),
             Measurement("record one cloak", ledgerWrite, "paid once per window hidden, inside the gesture"),
-            Measurement("a workspace switch of 8", (readOne * 8) + buildModel + (ledgerWrite * 16),
-                "8 hidden and 8 shown: the reads and the records a real switch pays"),
+            Measurement("a workspace switch of 8", compute + (ledgerWrite * 16) + (serialise * 2),
+                "decide once, record 16 cloaks, and answer the bar twice"),
             Measurement("enumerate every window", enumerateWindows,
                 "every window appearing or disappearing, menus and tooltips included"),
             Measurement("enumerate the monitors", enumerateMonitors, "only after a display change"),
         };
 
-        // The hot path: one event read, the model updated, the window moved.
-        double hotPath = readOne + buildModel;
+        // The hot path as the daemon runs it: one window observed, the desk
+        // decided. Not a model rebuild, which happens once at startup.
+        double hotPath = observeOne + compute;
 
         return CommandResponse.Ok(line, new
         {

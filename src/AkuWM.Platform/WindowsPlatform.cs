@@ -24,22 +24,53 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
         // enumeration: a full pass asks about the same twenty processes over
         // and over, and opening a process handle is the expensive part.
         Win32Windows.ForgetProcesses();
+
+        // The enumeration is the one place that asks the shell, and it is also
+        // the one that runs when a native virtual desktop changes. Cleared
+        // first so a handle Windows has handed to somebody else since does not
+        // keep an answer that was about a different window.
+        _onThisDesktop.Clear();
         return [.. Win32Windows.Enumerate().Select(WithDesktop)];
     }
 
+    /// <summary>
+    /// Which native virtual desktop each window was last seen on.
+    /// </summary>
+    /// <remarks>
+    /// Filled by the full enumeration, read by the single-window path. The
+    /// answer only changes when the person switches native virtual desktops,
+    /// which raises an event of its own and re-enumerates -- and asking the
+    /// shell is an out-of-process COM call, paid once per window MOVE, which
+    /// during an Alt+drag is mouse-rate, on the wm thread.
+    /// </remarks>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<WindowHandle, bool> _onThisDesktop = new();
+
     public WindowSnapshot? Window(WindowHandle handle)
     {
-        WindowSnapshot? window = Win32Windows.Read(handle);
-        return window is null ? null : WithDesktop(window);
+        if (Win32Windows.Read(handle) is not { } window)
+        {
+            _onThisDesktop.TryRemove(handle, out _);
+            return null;
+        }
+
+        // Only a window nobody has enumerated yet costs the call.
+        if (_onThisDesktop.TryGetValue(handle, out bool known))
+        {
+            return window with { OnCurrentVirtualDesktop = known };
+        }
+
+        return WithDesktop(window);
     }
 
     // One COM call to the shell, not two. DesktopOf is consumed by exactly one
     // caller -- the human-readable `query windows` -- and it was being paid for
     // every window of every enumeration, an out-of-process call each.
-    private WindowSnapshot WithDesktop(WindowSnapshot window) => window with
+    private WindowSnapshot WithDesktop(WindowSnapshot window)
     {
-        OnCurrentVirtualDesktop = _desktops.IsOnCurrentDesktop(window.Handle),
-    };
+        bool here = _desktops.IsOnCurrentDesktop(window.Handle);
+        _onThisDesktop[window.Handle] = here;
+        return window with { OnCurrentVirtualDesktop = here };
+    }
 
     /// <summary>Which native virtual desktop, for the query that prints it.</summary>
     public string? VirtualDesktopOf(WindowHandle window) =>
