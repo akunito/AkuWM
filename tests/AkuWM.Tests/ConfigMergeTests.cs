@@ -104,7 +104,13 @@ public class ConfigMergeTests
 
         Assert.Equal(4, merged.Gaps!.Inner);
         Assert.Equal("#c4a7e7", merged.Effects!.FocusedBorder);
-        Assert.Equal(60, merged.Settings!.Journal!.IntervalS);
+        Assert.Equal("auto", merged.Layout!.DefaultDirection);
+
+        // And nothing underneath for an option this build does not act on:
+        // a default for one of those is a promise not kept, written into the
+        // file a person then reads and sets and wonders about.
+        Assert.Null(merged.Settings);
+        Assert.Null(merged.General!.FocusFollowsMouse);
     }
 
     [Fact]

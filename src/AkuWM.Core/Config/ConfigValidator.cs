@@ -28,6 +28,7 @@ public static class ConfigValidator
         ValidateMonitors(config, issues);
         ValidateWorkspaces(config, issues);
         ValidateRules(config, issues);
+        WarnAboutTheDecorative(config, issues);
         ValidateShortcuts(config, issues);
         ValidateStartup(config, issues);
         ValidateSettings(config.Settings, issues);
@@ -47,6 +48,81 @@ public static class ConfigValidator
                 "version",
                 $"{config.Version} was written by a newer AkuWM (this one speaks {ConfigDefaults.SchemaVersion})"));
         }
+    }
+
+    /// <summary>
+    /// Says so when a set option does nothing in this build.
+    /// </summary>
+    /// <remarks>
+    /// A warning, never an error: a configuration written for a newer AkuWM
+    /// must still boot an older one. Only options that are actually SET are
+    /// mentioned -- warning about every unimplemented key on every start would
+    /// train a person to ignore the warnings, which is worse than not having
+    /// them.
+    /// </remarks>
+    private static void WarnAboutTheDecorative(AkuWmConfig config, List<ValidationIssue> issues)
+    {
+        foreach ((string path, string when) in ConfigDefaults.NotImplemented)
+        {
+            if (IsSet(config, path))
+            {
+                issues.Add(ValidationIssue.Warning(
+                    path, $"is read and validated, but this build does not act on it ({when})"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a dotted path holds anything, walked over the serialised form.
+    /// </summary>
+    /// <remarks>
+    /// Over the JSON rather than by reflection so the paths in the list above
+    /// read the way the file does, which is how a person will look for them.
+    /// A <c>[]</c> segment means "any item of this list".
+    /// </remarks>
+    private static bool IsSet(AkuWmConfig config, string path)
+    {
+        System.Text.Json.Nodes.JsonNode? at;
+        try
+        {
+            at = System.Text.Json.Nodes.JsonNode.Parse(ConfigJson.Write(config));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+
+        foreach (string step in path.Split('.'))
+        {
+            if (step.EndsWith("[]", StringComparison.Ordinal))
+            {
+                if (at?[step[..^2]] is not System.Text.Json.Nodes.JsonArray list)
+                {
+                    return false;
+                }
+
+                // Any item that carries the next step is enough: the point is
+                // "somebody set this", not which one.
+                string rest = path[(path.IndexOf(step, StringComparison.Ordinal) + step.Length + 1)..];
+                foreach (System.Text.Json.Nodes.JsonNode? item in list)
+                {
+                    if (item?[rest] is not null)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if (at is not System.Text.Json.Nodes.JsonObject holder
+                || !holder.TryGetPropertyValue(step, out at))
+            {
+                return false;
+            }
+        }
+
+        return at is not null;
     }
 
     private static void ValidateGaps(GapsConfig? gaps, List<ValidationIssue> issues)
