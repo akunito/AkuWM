@@ -26,8 +26,15 @@ namespace AkuWM.Tests;
 /// </remarks>
 public class GeometryMatrixTests
 {
+    /// <param name="taskbar">Taken off the BOTTOM of the primary, as Windows does.</param>
+    /// <param name="bar">
+    /// Taken off the TOP of this screen: Zebar, which sits on every monitor
+    /// and is what makes a real work area differ from the bounds on all three
+    /// of this desk's screens.
+    /// </param>
     private static MonitorSnapshot Screen(
-        long handle, string id, Rect bounds, uint dpi, bool primary = false, int taskbar = 42)
+        long handle, string id, Rect bounds, uint dpi,
+        bool primary = false, int taskbar = 42, int bar = 0)
         => new()
         {
             Handle = new MonitorHandle(handle),
@@ -35,11 +42,11 @@ public class GeometryMatrixTests
             FriendlyName = id,
             HardwareId = id,
             Bounds = bounds,
-            // The taskbar eats the bottom of the primary screen and nothing of
-            // the others, which is what Windows does with one taskbar.
-            WorkArea = primary
-                ? bounds with { Height = bounds.Height - taskbar }
-                : bounds,
+            WorkArea = new Rect(
+                bounds.X,
+                bounds.Y + bar,
+                bounds.Width,
+                bounds.Height - bar - (primary ? taskbar : 0)),
             Dpi = dpi,
             IsPrimary = primary,
         };
@@ -90,6 +97,18 @@ public class GeometryMatrixTests
                 Screen(1, "main", new Rect(0, 0, 3840, 2160), 144, primary: true),
                 Screen(2, "second", new Rect(3840, -408, 1440, 2560), 120),
                 Screen(3, "third", new Rect(-2560, 100, 2560, 1440), 96),
+            ]
+        },
+        {
+            // THIS desk, as it stands tonight: `monitors list` 2026-09-21,
+            // after the ZOWIE went on the left and the vertical one moved up.
+            // Three scales at once, two screens starting above the main one's
+            // top, one starting left of zero, and a bar on each.
+            "this desk with three screens",
+            [
+                Screen(1, "main", new Rect(0, 0, 3840, 2160), 144, primary: true, taskbar: 0, bar: 42),
+                Screen(2, "second", new Rect(3840, -720, 1440, 2560), 120, bar: 35),
+                Screen(3, "third", new Rect(-1920, -706, 1920, 1080), 96, bar: 28),
             ]
         },
     };

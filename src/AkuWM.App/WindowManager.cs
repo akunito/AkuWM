@@ -289,9 +289,26 @@ public sealed class WindowManager : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// The screens, checked from time to time in case the notification never
+    /// came. See <see cref="ScreenWatch"/> -- it was dead for a while and
+    /// nothing said so.
+    /// </summary>
+    private readonly ScreenWatch _screens = new();
+
     /// <summary>Once per burst: look if anything appeared, decide, apply.</summary>
     private void Redraw()
     {
+        // Before the early return: an idle desk is exactly when a monitor gets
+        // plugged in, and an idle pass is the only thing running then.
+        if (_screens.Changed(_platform.Monitors))
+        {
+            Log.Info($"the screens changed without a notification; {_screens.Last.Count} now");
+            _desk.SetMonitors(_screens.Last);
+            _resync = true;
+            _dirty = true;
+        }
+
         if (!_dirty && !_resync)
         {
             return;

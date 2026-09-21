@@ -68,10 +68,34 @@ public sealed class Win32MessageWindow : IDisposable
             return false;
         }
 
-        // HWND_MESSAGE: no pixels, no taskbar entry, not enumerated -- and it
-        // still receives broadcasts.
+        // A real top-level window, and never HWND_MESSAGE. A message-only
+        // window does NOT receive broadcasts -- Windows sends those to top-level
+        // windows only, and a message-only window is not one. WM_DISPLAYCHANGE
+        // and WM_SETTINGCHANGE are both broadcasts, so with HWND_MESSAGE this
+        // class heard neither: AkuWM laid the desk out against the screens it
+        // saw at startup for the whole run. Measured on the desk 2026-09-21 --
+        // a third monitor plugged in and the vertical one moved, AutoHotkey saw
+        // all three immediately, `query monitors` still answered with the two
+        // old ones and their old rectangles, and not one display event reached
+        // the log. The comment that used to be here claimed the opposite.
+        //
+        // Invisible and 0x0, with WS_EX_TOOLWINDOW: no pixels, no taskbar
+        // button, nothing to click. It is still a window, which is the point.
+        // AkuWM does not adopt it -- it is never visible, and that is the first
+        // thing the window filter asks.
         _window = PInvoke.CreateWindowEx(
-            0, ClassName, "AkuWM", 0, 0, 0, 0, 0, HWND.HWND_MESSAGE, null, null, null);
+            WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
+            ClassName,
+            "AkuWM",
+            WINDOW_STYLE.WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            HWND.Null,
+            null,
+            null,
+            null);
 
         if (_window.IsNull)
         {
