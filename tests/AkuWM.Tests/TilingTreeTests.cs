@@ -306,11 +306,30 @@ public class TilingTreeTests
     }
 
     [Fact]
-    public void Resizing_against_the_edge_of_the_workspace_does_nothing()
+    public void Resizing_the_only_window_of_a_workspace_does_nothing()
+    {
+        Open(1);
+
+        // Nothing to take the room from. A window alone on a workspace already
+        // fills it, whichever way it is asked to grow.
+        Assert.False(_tree.Resize(W(1), Direction.Left, 0.05));
+        Assert.False(_tree.Resize(W(1), Direction.Right, 0.05));
+        Ok();
+    }
+
+    [Fact]
+    public void Resizing_the_window_at_the_end_of_a_row_takes_from_the_neighbour_it_has()
     {
         Open(1, 2);
 
-        Assert.False(_tree.Resize(W(1), Direction.Left, 0.05));
+        // `resize --width 10%` means make it wider, not move the edge on the
+        // side it is asked for: there is nothing to the left of the first
+        // window and it still has to grow. It used to do nothing at all --
+        // found by tests/wm on the desk, 2026-09-21.
+        double was = _tree.Root!.Children[0].Share;
+
+        Assert.True(_tree.Resize(W(1), Direction.Left, 0.05));
+        Assert.True(_tree.Root!.Children[0].Share > was);
         Ok();
     }
 

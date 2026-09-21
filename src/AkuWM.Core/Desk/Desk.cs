@@ -102,6 +102,15 @@ public sealed partial class Desk
 
     public IReadOnlyCollection<DeskWindow> Windows => _windows.Values;
 
+    /// <summary>
+    /// Whether AkuWM has taken stock of the desk at least once.
+    /// </summary>
+    /// <remarks>
+    /// Before it has, every window is "new" and belongs where it already is.
+    /// After, a window that appears belongs where the person is looking.
+    /// </remarks>
+    public bool Settled { get; private set; }
+
     public IEnumerable<Workspace> Workspaces => _workspaces.Values;
 
     public WindowHandle Focused { get; private set; } = WindowHandle.None;
@@ -167,11 +176,42 @@ public sealed partial class Desk
     public DeskMonitor? MonitorByHandle(MonitorHandle handle) =>
         _monitors.FirstOrDefault(m => m.Handle == handle);
 
-    /// <summary>The monitor the focused window is on, or the primary one.</summary>
-    public DeskMonitor? FocusedMonitor =>
-        (Window(Focused) is { } window ? MonitorByHandle(window.Snapshot.Monitor) : null)
-        ?? _monitors.FirstOrDefault(m => m.Snapshot.IsPrimary)
-        ?? _monitors.FirstOrDefault();
+    private DeskMonitor? _focusedMonitor;
+
+    /// <summary>
+    /// The monitor the person is on.
+    /// </summary>
+    /// <remarks>
+    /// Remembered, not derived from the focused window. Deriving it meant that
+    /// switching to an EMPTY workspace on the second monitor left the answer
+    /// at the primary -- there was no focused window there to derive it from --
+    /// so every window opened afterwards was born on the wrong screen. Found
+    /// by tests/wm 2026-09-21, and it is what a person does all day: go to an
+    /// empty workspace and start something.
+    /// </remarks>
+    public DeskMonitor? FocusedMonitor
+    {
+        get
+        {
+            if (_focusedMonitor is { } remembered && _monitors.Contains(remembered))
+            {
+                return remembered;
+            }
+
+            return (Window(Focused) is { } window ? MonitorByHandle(window.Snapshot.Monitor) : null)
+                   ?? _monitors.FirstOrDefault(m => m.Snapshot.IsPrimary)
+                   ?? _monitors.FirstOrDefault();
+        }
+    }
+
+    /// <summary>Records which screen the person is on; whichever happened last wins.</summary>
+    private void LookingAt(DeskMonitor? monitor)
+    {
+        if (monitor is not null)
+        {
+            _focusedMonitor = monitor;
+        }
+    }
 
     // ---- building --------------------------------------------------------
 
@@ -278,6 +318,7 @@ public sealed partial class Desk
     public void Sync(IReadOnlyList<WindowSnapshot> windows)
     {
         var present = new HashSet<WindowHandle>();
+        bool first = !Settled;
 
         foreach (WindowSnapshot snapshot in windows)
         {
@@ -317,6 +358,13 @@ public sealed partial class Desk
             {
                 Forget(gone[i]);
             }
+        }
+
+        // Only now is "where the person is looking" a question with an
+        // answer: before the first sync every window is new.
+        if (first)
+        {
+            Settled = true;
         }
     }
 
@@ -431,6 +479,23 @@ public sealed partial class Desk
         MonitorSnapshot? monitor = MonitorByHandle(snapshot.Monitor)?.Snapshot;
         bool coversTheScreen = ShadowModel.IsFullscreen(snapshot, monitor);
         bool weMovedItThere = window.Placed == snapshot.FrameBounds;
+
+        // A floating window keeps where the person put it. Without this the
+        // next redraw asked for the rectangle AkuWM still remembered and
+        // dragged it straight back, so moving or resizing a floating window --
+        // by its title bar, or with Alt+drag -- looked like it did not work at
+        // all (reported from the desk, 2026-09-21).
+        //
+        // Within the slack counts as ours: a window that rounds its own size
+        // to character cells lands near what was asked for, not on it, and
+        // learning that as a move would drift the remembered rectangle a
+        // little further every redraw.
+        if ((window.State == WindowState.Floating || window.Sticky)
+            && was.FrameBounds != snapshot.FrameBounds
+            && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
+        {
+            window.FloatingRect = snapshot.FrameBounds;
+        }
 
         if (coversTheScreen && window.State != WindowState.Fullscreen && !weMovedItThere)
         {
@@ -555,6 +620,20 @@ public sealed partial class Desk
 
                 return monitor.Displayed;
             }
+        }
+
+        // Where the person is looking, once AkuWM knows where that is. A window
+        // that opens while the vertical monitor has the focus belongs there,
+        // even though Windows put it on the primary -- which is what the stack
+        // AkuWM replaces did, and what a person means by opening something
+        // "here". Measured 2026-09-21: without this, focusing a workspace of
+        // the second monitor and starting two windows put both on the first.
+        //
+        // Not during the first sync. Every window on the desk is new then, and
+        // they belong where they already are, not piled onto one workspace.
+        if (Settled && FocusedMonitor?.Displayed is { } here)
+        {
+            return here;
         }
 
         return MonitorByHandle(snapshot.Monitor)?.Displayed

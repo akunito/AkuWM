@@ -41,6 +41,7 @@ public sealed partial class Desk
         }
 
         Focused = handle;
+        LookingAt(MonitorByHandle(window.Snapshot.Monitor));
 
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
@@ -101,6 +102,13 @@ public sealed partial class Desk
             Log.Warn($"workspace {name} belongs to the monitor role '{workspace.MonitorRole}', which is not here");
             return WindowHandle.None;
         }
+
+        // Before anything else, including the back-and-forth below: asking for
+        // a workspace is saying where you are, and it is true even when that
+        // workspace was ALREADY the one showing on the other monitor -- which
+        // is the ordinary way of hopping screens, and used to leave the desk
+        // believing the person was still on the first one.
+        LookingAt(monitor);
 
         Workspace? outgoing = monitor.Displayed;
 

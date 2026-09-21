@@ -66,7 +66,8 @@ public sealed class DeskFixture
         bool resizable = true,
         bool elevated = false,
         string className = "Window",
-        string title = "a window")
+        string title = "a window",
+        bool sync = true)
     {
         WindowSnapshot window = FakePlatform.Window(
             handle,
@@ -79,8 +80,24 @@ public sealed class DeskFixture
             elevated: elevated);
 
         Platform.WindowList.Add(window);
-        Sync();
+
+        // `sync: false` for a window that is already on the desk when AkuWM
+        // starts: those all arrive in ONE sync, and the desk tells them apart
+        // from a window opened later by exactly that.
+        if (sync)
+        {
+            Sync();
+        }
+
         return window;
+    }
+
+    /// <summary>The person moves or resizes a window; Windows says where it went.</summary>
+    public void Move(long handle, Rect to)
+    {
+        int at = Platform.WindowList.FindIndex(w => w.Handle.Value == handle);
+        Platform.WindowList[at] = Platform.WindowList[at] with { FrameBounds = to, WindowRect = to };
+        Sync();
     }
 
     public void Close(long handle)

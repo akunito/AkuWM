@@ -48,9 +48,12 @@ public class DeskTests
     [Fact]
     public void The_portrait_monitor_stacks()
     {
+        // The person goes to the portrait monitor first, then opens two
+        // windows: that is the order it happens in, and since 2026-09-21 it is
+        // also what decides which screen they are born on.
+        Desk.FocusWorkspace("21");
         _fixture.Open(1, monitor: new MonitorHandle(2));
         _fixture.Open(2, monitor: new MonitorHandle(2));
-        Desk.FocusWorkspace("21");
         _fixture.Turn();
 
         Rect top = _fixture.FrameOf(1);

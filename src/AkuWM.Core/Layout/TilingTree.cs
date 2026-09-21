@@ -306,6 +306,18 @@ public sealed class TilingTree
             int at = node.IndexInParent;
             int neighbourAt = at + towards;
 
+            // The other side when there is no neighbour the way we are growing:
+            // making the LAST window in a row wider moves its other edge, and
+            // asking for it used to do nothing at all, because the only
+            // neighbour considered was the one that does not exist. The share
+            // still moves the same way -- into this tile, out of whichever
+            // neighbour there is. Found by tests/wm 2026-09-21, in a case that
+            // swapped two windows and then resized the one now on the end.
+            if (parent.Direction == axis && (neighbourAt < 0 || neighbourAt >= parent.Children.Count))
+            {
+                neighbourAt = at - towards;
+            }
+
             if (parent.Direction == axis && neighbourAt >= 0 && neighbourAt < parent.Children.Count)
             {
                 Tile other = parent.Children[neighbourAt];

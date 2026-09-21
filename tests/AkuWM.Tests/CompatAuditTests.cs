@@ -149,8 +149,9 @@ public class CompatAuditTests
     [Fact]
     public void Focus_monitor_takes_an_index_and_lands_on_that_screen()
     {
-        _fixture.Open(1);
-        _fixture.Open(2, monitor: new MonitorHandle(2));
+        _fixture.Open(1, sync: false);
+        _fixture.Open(2, monitor: new MonitorHandle(2), sync: false);
+        _fixture.Sync();
         _fixture.Turn();
         _fixture.Desk.Focus(W(1));
 
