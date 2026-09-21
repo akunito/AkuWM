@@ -64,6 +64,18 @@ public sealed class GeneralConfig
     /// </remarks>
     public bool? ShowAllInTaskbar { get; set; }
 
+    /// <summary>
+    /// Whether the bar lists a workspace that has no windows in it.
+    /// </summary>
+    /// <remarks>
+    /// True -- the default -- lists every workspace the configuration gives a
+    /// screen, so the bar is a fixed map of the number row. False lists only
+    /// the ones with something in them, plus the one being looked at, plus any
+    /// marked <c>keep_alive</c>: that is the middle ground, ten assigned and
+    /// only the few you always want present.
+    /// </remarks>
+    public bool? ShowEmptyWorkspaces { get; set; }
+
     /// <summary>Fold stray native virtual desktops into the first one at startup.</summary>
     public bool? StartupFoldVirtualDesktops { get; set; }
 }

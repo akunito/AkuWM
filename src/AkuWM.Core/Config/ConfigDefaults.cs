@@ -27,6 +27,7 @@ public static class ConfigDefaults
         {
             ToggleWorkspaceOnRefocus = true,
             ShowAllInTaskbar = false,
+            ShowEmptyWorkspaces = true,
         },
         Gaps = new GapsConfig
         {
@@ -88,7 +89,6 @@ public static class ConfigDefaults
         ("layout.resize_step_ppt", "the step comes from the command, not the configuration"),
         ("monitors[].primary", "AkuWM resolves monitors by identity, not by which is primary"),
         ("monitors[].orientation", "written by `monitors identify`, read by nobody yet"),
-        ("workspaces[].keep_alive", "stored, and no workspace is torn down yet for it to save"),
         ("apps.catalogue", "M6, with the apps section"),
         ("tools", "M6"),
         ("nodes", "M6"),

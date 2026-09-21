@@ -42,7 +42,10 @@ public static class GlazeView
 
         foreach (Workspace workspace in monitor.Workspaces)
         {
-            children.Add((JsonNode)Workspace(desk, monitor, workspace));
+            if (Listed(desk, workspace))
+            {
+                children.Add((JsonNode)Workspace(desk, monitor, workspace));
+            }
         }
 
         return new JsonObject
@@ -78,6 +81,26 @@ public static class GlazeView
     /// </summary>
     [ThreadStatic]
     private static List<WindowHandle>? _order;
+
+    /// <summary>
+    /// Whether a workspace appears on the bar.
+    /// </summary>
+    /// <remarks>
+    /// The model always has all of them -- focusing an empty one has to work,
+    /// and that is what brings it into view. This is only what the bar is
+    /// told. The workspace being looked at is always listed even when empty,
+    /// or the bar would have nothing to highlight and the person would be
+    /// somewhere the bar says does not exist.
+    /// </remarks>
+    private static bool Listed(Desk.Desk desk, Workspace workspace)
+    {
+        if (desk.Config.General?.ShowEmptyWorkspaces != false)
+        {
+            return true;
+        }
+
+        return workspace.Displayed || workspace.KeepAlive || !workspace.IsEmpty;
+    }
 
     public static JsonObject Workspace(Desk.Desk desk, DeskMonitor monitor, Workspace workspace)
     {
