@@ -35,6 +35,7 @@ public sealed partial class Desk
         var place = new List<Placement>();
         var hide = new List<WindowHandle>();
         var show = new List<WindowHandle>();
+        var restore = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
@@ -71,6 +72,20 @@ public sealed partial class Desk
                     ? workspace.Fullscreen
                     : WindowHandle.None;
 
+                // Claimed before the loops below, not after them. A window
+                // that covers the screen is usually ALSO in the workspace's
+                // floating list (it floated before it went fullscreen), and
+                // whichever loop reached it first took it: it was placed at
+                // its floating rectangle, taken OUT of the always-on-top band
+                // by the rule meant for the windows around it, and the block
+                // that bands it was skipped for being already accounted for.
+                // Measured on the desk 2026-09-21: game-topmost=False with a
+                // chat window above it and 11% of frames direct.
+                if (!fullscreen.IsNone)
+                {
+                    accounted.Add(fullscreen);
+                }
+
                 foreach ((WindowHandle handle, Rect rect) in workspace.Tiling.Rects(monitor.TilingArea, gaps))
                 {
                     if (Live(handle) is not { } window || !accounted.Add(handle))
@@ -102,7 +117,7 @@ public sealed partial class Desk
                     WantMarked(window, false, mark);
                 }
 
-                if (!fullscreen.IsNone && Live(fullscreen) is { } covering && accounted.Add(fullscreen))
+                if (!fullscreen.IsNone && Live(fullscreen) is { } covering)
                 {
                     WantHidden(covering, false, hide, show);
                     WantPlaced(covering, monitor.FullArea, place);
@@ -147,6 +162,23 @@ public sealed partial class Desk
             {
                 WantHidden(window, false, hide, show);
                 WantMarked(window, false, mark);
+            }
+        }
+
+        // A window the model has put back into a layout while Windows still
+        // has it minimised. Asked once per window: a restore that the shell
+        // refuses must not be re-sent on every redraw for the rest of the run.
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (!window.Managed || window.State == WindowState.Minimized)
+            {
+                _asked.Remove(window.Handle);
+                continue;
+            }
+
+            if (window.Snapshot.IsMinimized && _asked.Add(window.Handle))
+            {
+                restore.Add(window.Handle);
             }
         }
 
@@ -211,6 +243,7 @@ public sealed partial class Desk
             Place = place,
             Hide = hide,
             Show = show,
+            Restore = restore,
             Band = band,
             TaskbarMark = mark,
             Decorate = decorate,
@@ -325,6 +358,9 @@ public sealed partial class Desk
     }
 
     private bool _saidItCannotHide;
+
+    /// <summary>Windows already asked to come back from the taskbar.</summary>
+    private readonly HashSet<WindowHandle> _asked = [];
 
     private void WantHidden(
         DeskWindow window, bool hidden, List<WindowHandle> hide, List<WindowHandle> show)

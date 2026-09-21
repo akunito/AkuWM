@@ -124,6 +124,13 @@ public sealed class DeskApplier
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         var refused = new HashSet<WindowHandle>();
 
+        // Before the placements: a minimised window has no frame to move, so
+        // placing it first throws the move away.
+        for (int i = 0; i < redraw.Restore.Count; i++)
+        {
+            _actions.SetMinimized(redraw.Restore[i], false);
+        }
+
         int placed = Place(redraw.Place);
         Cloak(redraw.Hide, true, refused);
         Cloak(redraw.Show, false, refused);
@@ -159,7 +166,14 @@ public sealed class DeskApplier
             if (!_taskbar.MarkFullscreen(window, fullscreen))
             {
                 (unmarked ??= []).Add(window);
+                continue;
             }
+
+            // Logged even on success, and at INF: the shell accepts this call
+            // and then decides for itself, so "did AkuWM ask?" and "did the
+            // taskbar move?" are separate questions and only the first one is
+            // answerable from inside this process.
+            Logging.Log.Info($"taskbar told {window} is {(fullscreen ? "fullscreen" : "not fullscreen")}");
         }
 
         if (!redraw.Focus.IsNone)

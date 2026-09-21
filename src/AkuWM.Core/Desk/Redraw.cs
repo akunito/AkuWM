@@ -32,6 +32,20 @@ public sealed record Redraw
     /// <summary>Windows to show: the cloak comes off.</summary>
     public IReadOnlyList<WindowHandle> Show { get; init; } = [];
 
+    /// <summary>
+    /// Windows to bring back from the taskbar: the model says they are tiled
+    /// or floating, Windows still has them minimised.
+    /// </summary>
+    /// <remarks>
+    /// A command that changes a window's state -- set-floating, set-tiling,
+    /// move-workspace -- changes the MODEL. Nothing else un-minimises, so
+    /// before this pass existed `set-floating` on a minimised window left the
+    /// model saying floating and the window still on the taskbar, invisible
+    /// and unreachable until something unrelated restored it. Measured on the
+    /// live desk 2026-09-21, on the three sticky windows a test run had parked.
+    /// </remarks>
+    public IReadOnlyList<WindowHandle> Restore { get; init; } = [];
+
     /// <summary>Windows entering or leaving the always-on-top band.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
@@ -48,14 +62,14 @@ public sealed record Redraw
     public WindowHandle Focus { get; init; } = WindowHandle.None;
 
     public bool IsNothing =>
-        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0
+        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0
         && Band.Count == 0 && TaskbarMark.Count == 0 && Decorate.Count == 0
         && TaskbarButton.Count == 0 && Focus.IsNone;
 
     public override string ToString() =>
         IsNothing
             ? "nothing to do"
-            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, "
+            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, "
               + $"{Band.Count} to reband, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
               + (Focus.IsNone ? string.Empty : $", focus {Focus}");
 }

@@ -767,6 +767,7 @@ public sealed partial class Desk
 
         Forgotten?.Invoke(handle);
         _hidden.Remove(handle);
+        _asked.Remove(handle);
 
         if (window.Workspace is { } name)
         {

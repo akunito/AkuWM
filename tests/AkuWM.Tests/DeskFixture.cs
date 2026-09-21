@@ -115,6 +115,12 @@ public sealed class DeskFixture
     {
         Redraw redraw = Desk.Compute();
 
+        // Before the placements, exactly as DeskApplier does it.
+        foreach (WindowHandle handle in redraw.Restore)
+        {
+            Platform.SetMinimized(handle, false);
+        }
+
         Platform.Place(redraw.Place);
 
         foreach (WindowHandle handle in redraw.Hide)

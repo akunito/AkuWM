@@ -374,7 +374,17 @@ public sealed partial class Desk
             SetFullscreen(window, false);
         }
 
-        if (floating == (window.State == WindowState.Floating))
+        // A minimised window is asked about the layer it will come back to,
+        // not the taskbar. Comparing against Minimized refused `set-tiling`
+        // outright and let `set-floating` through without bringing the window
+        // back, which is how three parked windows ended up reported as
+        // floating while they sat on the taskbar (live desk, 2026-09-21).
+        // Compute's restore pass brings it back; this decides the layer.
+        WindowState now = window.State == WindowState.Minimized
+            ? window.PreviousState
+            : window.State;
+
+        if (floating == (now == WindowState.Floating))
         {
             return false;
         }

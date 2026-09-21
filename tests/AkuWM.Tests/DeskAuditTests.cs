@@ -100,6 +100,117 @@ public class DeskAuditTests
         Assert.Contains(W(1), Desk.MonitorByRole("main")!.Sticky);
     }
 
+    // ---- a fullscreen window that is also a floating one ------------------
+
+    [Fact]
+    public void A_floating_window_that_goes_fullscreen_is_still_put_in_the_band()
+    {
+        // Non-resizable, so the rules float it; then it covers the screen --
+        // the order a game actually arrives in.
+        _fixture.Open(1, resizable: false, frame: new Rect(400, 400, 800, 600));
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Equal(W(1), Desk.Workspace("11")!.Fullscreen);
+        Assert.True(_fixture.Managed(1)!.Banded);
+        // And over the whole monitor, not back at its floating rectangle.
+        Assert.Equal(new Rect(0, 0, 3840, 2160), _fixture.FrameOf(1));
+    }
+
+    [Fact]
+    public void The_windows_around_a_fullscreen_one_leave_the_band_and_it_stays_in_it()
+    {
+        _fixture.Open(1, resizable: false, frame: new Rect(400, 400, 800, 600));
+        Desk.SetSticky(W(1), true);
+        _fixture.Open(2, resizable: false, frame: new Rect(100, 100, 600, 400));
+        _fixture.Turn();
+
+        Desk.SetFullscreen(W(2), true);
+        _fixture.Turn();
+
+        Assert.True(_fixture.Managed(2)!.Banded);
+        Assert.False(_fixture.Managed(1)!.Banded);
+    }
+
+    // ---- a command that changes the state of a minimised window -----------
+    //
+    // Found on the live desk 2026-09-21: a test run had parked three sticky
+    // windows with set-minimized and never put them back. Telling them to
+    // float changed the MODEL and nothing else, so `query windows` said
+    // floating while all three sat on the taskbar, invisible.
+
+    [Fact]
+    public void Floating_a_minimised_window_brings_it_back_from_the_taskbar()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        Desk.SetFloating(W(1), true);
+        _fixture.Turn();
+
+        Assert.Equal(WindowState.Floating, _fixture.Managed(1)!.State);
+        Assert.False(_fixture.Platform.Window(W(1))!.IsMinimized);
+    }
+
+    [Fact]
+    public void Tiling_a_minimised_window_brings_it_back_and_gives_it_a_tile()
+    {
+        _fixture.Open(1, resizable: false, frame: new Rect(500, 500, 400, 300));
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        Desk.SetFloating(W(1), false);
+        _fixture.Turn();
+
+        Assert.False(_fixture.Platform.Window(W(1))!.IsMinimized);
+        Assert.Contains(W(1), Desk.Workspace("11")!.Tiling.Windows);
+        // And it is where the layout put it, not where it floated.
+        Assert.NotEqual(new Rect(500, 500, 400, 300), _fixture.FrameOf(1));
+    }
+
+    [Fact]
+    public void A_window_the_person_minimised_is_left_on_the_taskbar()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+        _fixture.Turn();
+
+        Assert.True(_fixture.Platform.Window(W(1))!.IsMinimized);
+    }
+
+    [Fact]
+    public void A_restore_the_shell_refuses_is_asked_for_once_and_not_every_redraw()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        Desk.SetFloating(W(1), true);
+
+        Assert.Single(Desk.Compute().Restore);
+
+        // The window did not come back (the fixture is not told to restore it
+        // here), and the model still says floating: the next pass must not
+        // keep asking for ever.
+        Assert.Empty(Desk.Compute().Restore);
+    }
+
     // ---- fullscreen, in every place ---------------------------------------
 
     [Fact]
