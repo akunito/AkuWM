@@ -20,7 +20,7 @@ public sealed class ConfigCommands
     {
         if (tokens.Length < 2)
         {
-            return CommandResponse.Fail(line, "config needs a verb: show, path, validate, import");
+            return CommandResponse.Fail(line, "config needs a verb: show, path, validate, import, set, unset");
         }
 
         Dictionary<string, string?> options = CommandLine.Options(tokens, 2);
@@ -31,8 +31,80 @@ public sealed class ConfigCommands
             "show" => Show(line, options),
             "validate" => Validate(line),
             "import" => Import(line, tokens, options),
-            _ => CommandResponse.Fail(line, $"'{tokens[1]}' is not show, path, validate or import"),
+            "set" => Set(line, options, unset: false),
+            "unset" => Set(line, options, unset: true),
+            _ => CommandResponse.Fail(
+                line, $"'{tokens[1]}' is not show, path, validate, import, set or unset"),
         };
+    }
+
+    /// <summary>
+    /// <c>config set --path gaps.inner --value 8 [--layer common|profile]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The write surface. Everything could be read and validated and nothing
+    /// could be saved, so the GUI in M5 would have had to write the file
+    /// itself -- which means a second implementation of the schema, in the one
+    /// place where being out of step is silent.
+    /// </para>
+    /// <para>
+    /// Validated as a whole, merged, before anything is written: a layer is
+    /// only valid in combination with the one under it, and a key that is fine
+    /// on its own can still name a workspace or a monitor role that does not
+    /// exist.
+    /// </para>
+    /// <para>
+    /// <c>unset</c> removes the key rather than writing null, because those
+    /// are different: an absent key inherits from the layer below, which is
+    /// how a profile stops overriding something.
+    /// </para>
+    /// </remarks>
+    private CommandResponse Set(string line, Dictionary<string, string?> options, bool unset)
+    {
+        if (options.GetValueOrDefault("path") is not { Length: > 0 } path)
+        {
+            return CommandResponse.Fail(line, "set needs --path, e.g. --path gaps.inner");
+        }
+
+        string? value = options.GetValueOrDefault("value");
+        if (!unset && value is null)
+        {
+            return CommandResponse.Fail(line, "set needs --value (or use `config unset`)");
+        }
+
+        string layer = options.GetValueOrDefault("layer") ?? "common";
+        string file = layer switch
+        {
+            "common" => _paths.CommonFile,
+            "profile" => _paths.ProfileFile,
+            _ => string.Empty,
+        };
+
+        if (file.Length == 0)
+        {
+            return CommandResponse.Fail(line, $"'{layer}' is not common or profile");
+        }
+
+        try
+        {
+            ConfigEdit.Result edit = ConfigEdit.Apply(_paths, file, path, unset ? null : value, unset);
+
+            return edit.Error is { } error
+                ? CommandResponse.Fail(line, error)
+                : CommandResponse.Ok(line, new
+                {
+                    file,
+                    path,
+                    was = edit.Was,
+                    now = edit.Now,
+                    warnings = edit.Warnings,
+                });
+        }
+        catch (ConfigException ex)
+        {
+            return CommandResponse.Fail(line, ex.Message);
+        }
     }
 
     private CommandResponse Path(string line) => CommandResponse.Ok(line, new

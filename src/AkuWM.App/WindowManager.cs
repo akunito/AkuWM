@@ -48,6 +48,7 @@ public sealed class WindowManager : IAsyncDisposable
 
     /// <summary>What the desk looked like at the last redraw, to say what changed.</summary>
     private readonly GlazeEvents _events = new();
+    private readonly ConfigPaths? _paths;
 
     /// <param name="manage">
     /// False leaves AkuWM watching: the model is kept up to date and every
@@ -61,8 +62,10 @@ public sealed class WindowManager : IAsyncDisposable
         GeometryJournal journal,
         Watchdog watchdog,
         bool manage,
-        int compatPort = GlazeProtocol.Port)
+        int compatPort = GlazeProtocol.Port,
+        ConfigPaths? paths = null)
     {
+        _paths = paths;
         _platform = platform;
         _journal = journal;
         _applier = new DeskApplier(
@@ -82,7 +85,7 @@ public sealed class WindowManager : IAsyncDisposable
 
         _loop = new WmLoop(OnEvent, watchdog.Beat, onBatchEnd: Redraw);
 
-        _executor = new GlazeExecutor(_desk, new Win32DeskPlatform());
+        _executor = new GlazeExecutor(_desk, new Win32DeskPlatform(), Reload);
 
         // Everything the bar and the scripts say arrives here and is answered
         // on the wm thread, so a query never sees a half-applied workspace
@@ -321,6 +324,62 @@ public sealed class WindowManager : IAsyncDisposable
         // something meant clicking between two windows told the bar nothing,
         // and a watching run told it nothing at all.
         Publish();
+    }
+
+    /// <summary>
+    /// Reads the configuration files again and hands them to the desk.
+    /// </summary>
+    /// <remarks>
+    /// On the wm thread, because the executor is: nothing else may be looking
+    /// at the model while its workspaces are being reconciled. A file that
+    /// does not parse, or does not validate, leaves the running configuration
+    /// exactly where it was -- the alternative is a desk in a state neither
+    /// file describes, from a person who was only editing a colour.
+    /// </remarks>
+    private ExecResult Reload()
+    {
+        if (_paths is null)
+        {
+            return ExecResult.Fail("this window manager was started without a configuration path");
+        }
+
+        LoadedConfig loaded;
+        try
+        {
+            loaded = ConfigStore.Load(_paths);
+        }
+        catch (ConfigException ex)
+        {
+            Log.Warn($"the configuration was not reloaded: {ex.Message}");
+            return ExecResult.Fail(ex.Message);
+        }
+
+        if (!loaded.Validation.Ok)
+        {
+            string why = string.Join("; ", loaded.Validation.Errors.Select(e => e.ToString()));
+            Log.Warn($"the configuration was not reloaded: {why}");
+            return ExecResult.Fail(why);
+        }
+
+        foreach (ValidationIssue issue in loaded.Validation.Warnings)
+        {
+            Log.Warn(issue.ToString());
+        }
+
+        Desk.ReloadResult result = _desk.Reload(loaded.Effective);
+        _dirty = true;
+        Log.Info($"configuration reloaded: {result}");
+
+        return ExecResult.Ok(data: new JsonObject
+        {
+            ["workspacesAdded"] = result.Added,
+            ["workspacesRemoved"] = result.Removed,
+            ["windowsRehomed"] = result.Rehomed,
+
+            // Said out loud rather than left to be discovered: rules decide
+            // when a window is adopted.
+            ["rules"] = "applied to windows opened from now on",
+        });
     }
 
     /// <summary>Tells the bar what changed. The diff itself lives in Core, where it is tested.</summary>

@@ -75,6 +75,25 @@ public static class ConfigStore
     }
 
     /// <summary>Writes one layer, atomically, creating its directory.</summary>
+    /// <summary>
+    /// Writes text that is already a configuration layer, atomically.
+    /// </summary>
+    /// <remarks>
+    /// What <c>config set</c> uses: it edits the JSON rather than the typed
+    /// model, so that a key this build has never heard of survives the trip
+    /// instead of being dropped on read and never written back.
+    /// </remarks>
+    public static void SaveText(string file, string json)
+    {
+        string directory = Path.GetDirectoryName(Path.GetFullPath(file))
+                           ?? throw new ConfigException($"{file} has no directory");
+        Directory.CreateDirectory(directory);
+
+        string temporary = Path.Combine(directory, $".{Path.GetFileName(file)}.{Environment.ProcessId}.tmp");
+        File.WriteAllText(temporary, json + Environment.NewLine, new UTF8Encoding(false));
+        File.Move(temporary, file, overwrite: true);
+    }
+
     public static void Save(string file, AkuWmConfig layer)
     {
         string directory = Path.GetDirectoryName(Path.GetFullPath(file))

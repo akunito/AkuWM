@@ -43,11 +43,18 @@ public sealed class GlazeExecutor
 {
     private readonly Desk.Desk _desk;
     private readonly IDeskPlatform _platform;
+    private readonly Func<ExecResult>? _reload;
 
-    public GlazeExecutor(Desk.Desk desk, IDeskPlatform platform)
+    /// <param name="reload">
+    /// Reads the configuration again and applies it, returning what happened
+    /// or why it could not. Null where there is no configuration to read --
+    /// the tests, and a command run without a daemon.
+    /// </param>
+    public GlazeExecutor(Desk.Desk desk, IDeskPlatform platform, Func<ExecResult>? reload = null)
     {
         _desk = desk;
         _platform = platform;
+        _reload = reload;
     }
 
     /// <summary>Set when a command asks the window manager to stop.</summary>
@@ -204,7 +211,13 @@ public sealed class GlazeExecutor
                 return ExecResult.Ok();
 
             case "wm-reload-config":
-                return ExecResult.Ok();
+                // It used to answer Ok and read nothing, which is the worst of
+                // the three possible answers: a person edits a file, presses
+                // the chord, is told it worked, and spends the next hour
+                // wondering why the change did nothing.
+                return _reload is null
+                    ? ExecResult.Fail("there is no configuration to reload from here")
+                    : _reload();
 
             case "move-workspace":
                 // `lib-repair.ahk` moves a workspace back when it finds one on

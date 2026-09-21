@@ -199,7 +199,7 @@ public static class Program
         bool manage = !shadow && (!verdict.SafeMode || force);
 
         var manager = new WindowManager(
-            loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args));
+            loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args), paths);
 
         // `--capture <file>`: every frame the bar exchanges, written down, so
         // what Zebar asks for becomes a test instead of a memory.

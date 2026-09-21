@@ -93,6 +93,145 @@ public sealed partial class Desk
         BuildWorkspaces();
     }
 
+    /// <param name="Added">Workspaces the new configuration has and the old one did not.</param>
+    /// <param name="Removed">Workspaces that are gone.</param>
+    /// <param name="Rehomed">Windows that were on a workspace that is gone.</param>
+    public readonly record struct ReloadResult(int Added, int Removed, int Rehomed)
+    {
+        public override string ToString() =>
+            $"{Added} workspace(s) added, {Removed} removed, {Rehomed} window(s) rehomed";
+    }
+
+    /// <summary>
+    /// Takes a new configuration without losing the desk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reconciled, not rebuilt. <see cref="BuildWorkspaces"/> clears the
+    /// dictionary, and every tiling tree, floating rectangle and focus order
+    /// lives in the workspaces it would throw away -- so a reload written that
+    /// way would answer "applied" and leave the desk in a heap.
+    /// </para>
+    /// <para>
+    /// Rules are re-read, and they decide at the moment a window is adopted,
+    /// so an edited rule reaches windows opened from now on and not the ones
+    /// already on screen. That is deliberate: re-deciding a window the person
+    /// has since floated and placed would undo their work to honour a rule
+    /// they were editing for the next window. The caller says so out loud
+    /// rather than leaving it to be discovered.
+    /// </para>
+    /// <para>
+    /// The configuration must be valid before it gets here. A reload that
+    /// fails halfway is a desk in a state neither file describes.
+    /// </para>
+    /// </remarks>
+    public ReloadResult Reload(AkuWmConfig config)
+    {
+        Config = config;
+
+        List<RuleConfig> rules = [];
+        foreach (RuleConfig rule in config.Rules ?? [])
+        {
+            if (rule.Enabled != false)
+            {
+                rules.Add(rule);
+            }
+        }
+
+        _activeRules = rules;
+
+        var wanted = new Dictionary<string, WorkspaceConfig>(StringComparer.OrdinalIgnoreCase);
+        foreach (WorkspaceConfig configured in config.Workspaces ?? [])
+        {
+            if (configured.Name is { Length: > 0 } name && configured.Enabled != false)
+            {
+                wanted[name] = configured;
+            }
+        }
+
+        List<Workspace>? gone = null;
+        foreach (Workspace workspace in _workspaces.Values)
+        {
+            if (!wanted.ContainsKey(workspace.Name))
+            {
+                (gone ??= []).Add(workspace);
+            }
+        }
+
+        int rehomed = 0;
+        if (gone is not null)
+        {
+            // Somewhere that still exists, on the same screen when there is
+            // one. A window left pointing at a workspace nobody has is a
+            // window no redraw will ever account for.
+            foreach (Workspace leaving in gone)
+            {
+                Workspace? home = null;
+                foreach (WorkspaceConfig candidate in wanted.Values)
+                {
+                    if (string.Equals(candidate.Monitor, leaving.MonitorRole, StringComparison.OrdinalIgnoreCase)
+                        && candidate.Name is { } name && _workspaces.TryGetValue(name, out Workspace? found))
+                    {
+                        home = found;
+                        break;
+                    }
+                }
+
+                home ??= _workspaces.Values.FirstOrDefault(w => wanted.ContainsKey(w.Name));
+
+                if (home is not null)
+                {
+                    foreach (WindowHandle handle in leaving.Windows.ToArray())
+                    {
+                        if (Window(handle) is { } window)
+                        {
+                            Place(window, home);
+                            rehomed++;
+                        }
+                    }
+                }
+
+                _workspaces.Remove(leaving.Name);
+            }
+        }
+
+        int added = 0;
+        foreach ((string name, WorkspaceConfig configured) in wanted)
+        {
+            if (_workspaces.TryGetValue(name, out Workspace? existing))
+            {
+                // A surviving workspace keeps its tree; only what the file
+                // actually says about it is refreshed.
+                existing.DisplayName = configured.DisplayName;
+                existing.KeepAlive = configured.KeepAlive == true;
+
+                if (ParseDirection(configured.Direction) is { } direction)
+                {
+                    existing.Direction = direction;
+                }
+
+                continue;
+            }
+
+            _workspaces[name] = new Workspace(
+                name,
+                configured.Monitor ?? "main",
+                ParseDirection(configured.Direction) ?? SplitDirection.Horizontal)
+            {
+                DisplayName = configured.DisplayName,
+                KeepAlive = configured.KeepAlive == true,
+            };
+
+            added++;
+        }
+
+        // Roles may have been renamed or re-matched, and every monitor's list
+        // of workspaces is rebuilt from the dictionary above.
+        SetMonitors([.. _monitors.Select(m => m.Snapshot)]);
+
+        return new ReloadResult(added, gone?.Count ?? 0, rehomed);
+    }
+
     /// <summary>Milliseconds, for the timings the model itself has to judge.</summary>
     private long Now => _clock();
 
