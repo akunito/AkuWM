@@ -93,6 +93,29 @@ public interface ITaskbar
     /// correctly.
     /// </remarks>
     bool MarkFullscreen(WindowHandle window, bool fullscreen);
+
+    /// <summary>
+    /// Puts a window's button on the taskbar, or takes it off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Which windows the taskbar shows has two halves and only one of them is
+    /// AkuWM's. Whether each screen's bar shows the windows of that screen or
+    /// of all of them is a Windows setting (Taskbar behaviours, "show my
+    /// taskbar apps on"); AkuWM does not touch it. Whether the bar also shows
+    /// the windows of workspaces nobody is looking at is AkuWM's, because
+    /// Windows has never heard of a workspace: a cloaked window keeps its
+    /// button.
+    /// </para>
+    /// <para>
+    /// A window with no button AND no pixels is a window nobody can reach, so
+    /// only windows AkuWM has hidden lose theirs, and the recovery that
+    /// uncloaks gives the button back at the same time -- including the
+    /// recovery a second process runs after this one has died.
+    /// </para>
+    /// </remarks>
+    /// <returns>False when the shell would not take it.</returns>
+    bool ShowInTaskbar(WindowHandle window, bool shown);
 }
 
 /// <summary>

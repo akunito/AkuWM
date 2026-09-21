@@ -79,6 +79,35 @@ public sealed class Win32Taskbar : AkuWM.Core.Platform.ITaskbar, IDisposable
         }
     }
 
+    public bool ShowInTaskbar(WindowHandle window, bool shown)
+    {
+        if (Interface is not { } taskbar)
+        {
+            return false;
+        }
+
+        try
+        {
+            var hwnd = new HWND((IntPtr)window.Value);
+
+            if (shown)
+            {
+                taskbar.AddTab(hwnd);
+            }
+            else
+            {
+                taskbar.DeleteTab(hwnd);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"the taskbar refused to {(shown ? "show" : "hide")} {window}: {ex.Message}");
+            return false;
+        }
+    }
+
     public void Dispose()
     {
         if (_taskbar is not null)

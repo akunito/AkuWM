@@ -38,6 +38,7 @@ public sealed partial class Desk
         var band = new List<(WindowHandle, bool)>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
+        var button = new List<(WindowHandle, bool)>();
         var accounted = new HashSet<WindowHandle>();
 
         foreach (DeskMonitor monitor in _monitors)
@@ -156,6 +157,45 @@ public sealed partial class Desk
             decorate.Add((window.Handle, want));
         }
 
+        // The taskbar button follows the cloak, when the configuration says
+        // the bar should only show what is on screen. Never the other way
+        // round: a window with no button AND no pixels is unreachable, so the
+        // button comes back with the window, always.
+        bool showAll = Config.General?.ShowAllInTaskbar ?? false;
+
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (!window.Managed)
+            {
+                if (window.InTaskbar == false)
+                {
+                    button.Add((window.Handle, true));
+                    window.InTaskbar = null;
+                }
+
+                continue;
+            }
+
+            // What this pass is about to do, not what was true before it:
+            // Hidden is set when the redraw is applied, so reading it here
+            // takes the button off a window one pass late and puts it back one
+            // pass late too. Scanned rather than hashed -- both lists are a
+            // workspace's worth of windows and this allocates nothing.
+            bool hiding = hide.Contains(window.Handle);
+            bool showing = show.Contains(window.Handle);
+            bool shown = showAll || (showing || (!hiding && !window.Hidden));
+
+            // Null is "AkuWM has never had an opinion", and a window it has
+            // never hidden must not have its button taken away by a pass that
+            // merely noticed it.
+            if (window.InTaskbar == shown || (window.InTaskbar is null && shown))
+            {
+                continue;
+            }
+
+            button.Add((window.Handle, shown));
+        }
+
         return new Redraw
         {
             Place = place,
@@ -164,6 +204,7 @@ public sealed partial class Desk
             Band = band,
             TaskbarMark = mark,
             Decorate = decorate,
+            TaskbarButton = button,
 
             // The focus goes last, after the windows are where they belong and
             // visible. Focusing a window that is still cloaked hands the
@@ -391,6 +432,14 @@ public sealed partial class Desk
             if (Window(handle) is { } decorated)
             {
                 decorated.Decorated = how == Decoration.Untouched ? null : how;
+            }
+        }
+
+        foreach ((WindowHandle handle, bool shown) in redraw.TaskbarButton)
+        {
+            if (Window(handle) is { } buttoned)
+            {
+                buttoned.InTaskbar = shown;
             }
         }
 

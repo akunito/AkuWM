@@ -53,6 +53,15 @@ public sealed class GeneralConfig
     public string? CursorJump { get; set; }
 
     /// <summary>When false the taskbar shows only the windows of the visible workspaces.</summary>
+    /// <summary>
+    /// Whether the taskbar keeps a button for windows on workspaces nobody is
+    /// looking at.
+    /// </summary>
+    /// <remarks>
+    /// Only the workspace half. Whether each screen's bar shows that screen's
+    /// windows or every window is a Windows setting -- Taskbar behaviours,
+    /// "show my taskbar apps on" -- and AkuWM does not touch it.
+    /// </remarks>
     public bool? ShowAllInTaskbar { get; set; }
 
     /// <summary>Fold stray native virtual desktops into the first one at startup.</summary>

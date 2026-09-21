@@ -146,6 +146,14 @@ public sealed class DeskApplier
             _actions.Decorate(window, how);
         }
 
+        // Before the cloak would have been the wrong order: a button taken off
+        // a window that is still on screen looks like the window vanished from
+        // the bar for no reason. After it, the two happen together.
+        foreach ((WindowHandle window, bool shown) in redraw.TaskbarButton)
+        {
+            _taskbar.ShowInTaskbar(window, shown);
+        }
+
         foreach ((WindowHandle window, bool fullscreen) in redraw.TaskbarMark)
         {
             if (!_taskbar.MarkFullscreen(window, fullscreen))

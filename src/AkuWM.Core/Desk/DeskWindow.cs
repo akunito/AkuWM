@@ -92,6 +92,15 @@ public sealed class DeskWindow
     /// </remarks>
     public Decoration? Decorated { get; set; }
 
+    /// <summary>
+    /// Whether the taskbar is currently showing a button for it.
+    /// </summary>
+    /// <remarks>
+    /// Null until AkuWM has had an opinion, which is what stops it taking the
+    /// button off a window it has never hidden.
+    /// </remarks>
+    public bool? InTaskbar { get; set; }
+
     /// <summary>Rules that fired for it, by name, for <c>query</c> and the GUI.</summary>
     public IReadOnlyList<string> Rules { get; set; } = [];
 

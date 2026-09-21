@@ -1,4 +1,5 @@
 using AkuWM.Core.Compat;
+using AkuWM.Core.Config;
 using AkuWM.Core.Desk;
 using AkuWM.Core.Layout;
 using AkuWM.Core.Model;
@@ -127,6 +128,70 @@ public class LiveUseTests
 
         Assert.Equal("11", Desk.Window(DeskFixture.W(1))!.Workspace);
         Assert.Equal("21", Desk.Window(DeskFixture.W(2))!.Workspace);
+    }
+
+    // ---- the taskbar follows the workspace --------------------------------
+
+    private static AkuWmConfig WithTaskbar(bool showAll)
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.General!.ShowAllInTaskbar = showAll;
+        return config;
+    }
+
+    [Fact]
+    public void A_window_on_a_workspace_nobody_is_looking_at_loses_its_button()
+    {
+        var fixture = new DeskFixture(WithTaskbar(showAll: false));
+        fixture.Open(1);
+        fixture.Turn();
+
+        fixture.Desk.FocusWorkspace("12");
+        Redraw redraw = fixture.Desk.Compute();
+
+        // Windows has never heard of a workspace: a cloaked window keeps its
+        // button unless somebody takes it off.
+        Assert.Contains((DeskFixture.W(1), false), redraw.TaskbarButton);
+    }
+
+    [Fact]
+    public void It_comes_back_with_the_window()
+    {
+        var fixture = new DeskFixture(WithTaskbar(showAll: false));
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Desk.FocusWorkspace("12");
+        fixture.Turn();
+
+        fixture.Desk.FocusWorkspace("11");
+        Redraw redraw = fixture.Desk.Compute();
+
+        // A window with no pixels AND no button is one nobody can reach.
+        Assert.Contains((DeskFixture.W(1), true), redraw.TaskbarButton);
+    }
+
+    [Fact]
+    public void With_show_all_set_the_bar_keeps_every_window()
+    {
+        var fixture = new DeskFixture(WithTaskbar(showAll: true));
+        fixture.Open(1);
+        fixture.Turn();
+
+        fixture.Desk.FocusWorkspace("12");
+        Redraw redraw = fixture.Desk.Compute();
+
+        Assert.DoesNotContain(redraw.TaskbarButton, b => b.Window == DeskFixture.W(1));
+    }
+
+    [Fact]
+    public void A_window_AkuWM_never_hid_is_never_taken_off_the_bar()
+    {
+        var fixture = new DeskFixture(WithTaskbar(showAll: false));
+        fixture.Open(1);
+
+        // The very first pass must not go around removing buttons from windows
+        // that are perfectly visible.
+        Assert.Empty(fixture.Desk.Compute().TaskbarButton);
     }
 
     // ---- what the scripts send every day ----------------------------------

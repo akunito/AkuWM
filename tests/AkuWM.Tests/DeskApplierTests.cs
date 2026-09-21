@@ -18,6 +18,15 @@ internal sealed class FakeTaskbar : ITaskbar
         Marks.Add((window, fullscreen));
         return !Refuses;
     }
+
+    /// <summary>Which windows have a button on the bar, by handle.</summary>
+    public List<(WindowHandle Window, bool Shown)> Buttons { get; } = [];
+
+    public bool ShowInTaskbar(WindowHandle window, bool shown)
+    {
+        Buttons.Add((window, shown));
+        return true;
+    }
 }
 
 /// <summary>

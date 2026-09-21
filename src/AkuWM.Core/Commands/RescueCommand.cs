@@ -40,6 +40,12 @@ public sealed class RescueCommand
     private readonly ConfigPaths _paths;
     private readonly IPlatform _platform;
     private readonly IPlatformActions _actions;
+
+    /// <summary>
+    /// Null when rescue runs without a shell to ask -- the tests, and Linux.
+    /// A window still gets its pixels back; only the button waits for Explorer.
+    /// </summary>
+    private readonly ITaskbar? _taskbar;
     private readonly Func<PipeClient> _client;
     private readonly Func<int, string?> _processName;
     private readonly Action<int> _kill;
@@ -54,11 +60,13 @@ public sealed class RescueCommand
         IPlatformActions actions,
         Func<PipeClient>? client = null,
         Func<int, string?>? processName = null,
-        Action<int>? kill = null)
+        Action<int>? kill = null,
+        ITaskbar? taskbar = null)
     {
         _paths = paths;
         _platform = platform;
         _actions = actions;
+        _taskbar = taskbar;
         _client = client ?? (() => new PipeClient());
         _processName = processName ?? LiveProcessName;
         _kill = kill ?? KillProcess;
@@ -85,7 +93,7 @@ public sealed class RescueCommand
             everything = true;
         }
 
-        RecoveryResult cloaks = ledger.Recover(_platform, _actions);
+        RecoveryResult cloaks = ledger.Recover(_platform, _actions, _taskbar);
 
         var swept = new List<object>();
         if (everything)

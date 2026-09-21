@@ -148,12 +148,16 @@ public static class Program
         }
 
         var platform = new WindowsPlatform();
+
+        // The recovery paths below need it too: a window AkuWM hid may also
+        // have lost its button on the bar, and both come back together.
+        using var taskbar = new Win32Taskbar();
         var ledger = new CloakLedger(paths.CloakLedgerFile);
         var journal = new GeometryJournal(paths.GeometryJournalFile);
 
         // Before anything else touches a window: whatever went wrong in the
         // last run, the desk is whole again by the time AkuWM is listening.
-        RecoveryResult recovery = ledger.Recover(platform, platform);
+        RecoveryResult recovery = ledger.Recover(platform, platform, taskbar);
         GeometryRestoreResult restored = journal.Restore(platform, platform);
         if (recovery.Anything || restored.Anything)
         {
@@ -176,7 +180,7 @@ public static class Program
             }
 
             Log.Info($"giving the desk back ({why})");
-            ledger.Recover(platform, platform);
+            ledger.Recover(platform, platform, taskbar);
             journal.Restore(platform, platform);
         }
 
@@ -344,7 +348,9 @@ public static class Program
             new MonitorCommands(platform, paths),
             new UncloakCommand(platform, windows, ledger),
             new BenchCommand(platform, paths, windows),
-            new RescueCommand(paths, platform, windows),
+            // Its own taskbar object: rescue is the command that runs when the
+            // daemon is gone, so it cannot borrow the daemon's.
+            new RescueCommand(paths, platform, windows, taskbar: new Win32Taskbar()),
             manager is null ? null : new CompatCommand(manager.Envelope),
             new StateCommand(paths));
     }
@@ -399,6 +405,30 @@ public static class Program
                           $"(running from {AppContext.BaseDirectory})"
                         : "this build never asked for it: it was published with -p:UiAccess=false, " +
                           "which is the development manifest. Chords over a game will not work.");
+        },
+        () =>
+        {
+            // The half of "which windows the bar shows" that is not AkuWM's.
+            // A person asking why every window is listed needs to be told
+            // where the other switch lives, not just that this one is off.
+            object? mode = Microsoft.Win32.Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
+                "MMTaskbarMode",
+                null);
+
+            string reading = mode switch
+            {
+                0 => "every window, on every screen's bar",
+                1 => "this screen's windows, plus all of them on the main bar",
+                2 => "this screen's windows only",
+                _ => "not set, so Windows' own default",
+            };
+
+            return new Check(
+                "taskbar (Windows)",
+                CheckStatus.Info,
+                $"{reading} -- Settings, Taskbar behaviours. AkuWM does not touch it; "
+                + "it decides only whether workspaces nobody is looking at are listed too");
         },
         () => new Check(
             "elevation",

@@ -115,7 +115,14 @@ public sealed class CloakLedger
     /// Runs at startup, before anything else touches a window: whatever went
     /// wrong last time, the desk is whole again by the time AkuWM is listening.
     /// </remarks>
-    public RecoveryResult Recover(IPlatform platform, IPlatformActions actions)
+    /// <param name="taskbar">
+    /// Given the button back at the same time, when there is one to ask.
+    /// A window AkuWM hid may also have lost its place on the bar, and a
+    /// window with neither pixels nor a button is one nobody can reach. Asking
+    /// for a button a window already has costs a call and changes nothing, so
+    /// this does not need to know which is which.
+    /// </param>
+    public RecoveryResult Recover(IPlatform platform, IPlatformActions actions, ITaskbar? taskbar = null)
     {
         List<CloakedWindow> pending;
         lock (_gate)
@@ -152,6 +159,7 @@ public sealed class CloakLedger
 
             if (error is null && !after.HasFlag(CloakKind.Shell))
             {
+                taskbar?.ShowInTaskbar(handle, true);
                 recovered.Add(entry);
                 Log.Info($"recovered {entry.Process} \"{entry.Title}\" from a previous run");
             }
