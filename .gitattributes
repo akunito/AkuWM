@@ -1,0 +1,14 @@
+# The .editorconfig asks for `end_of_line = lf`, and Directory.Build.props turns
+# a formatting warning into a build error (TreatWarningsAsErrors +
+# EnforceCodeStyleInBuild). Without this, GitHub's Windows runner checks out
+# CRLF -- core.autocrlf=true is the default there -- and IDE0055 fails the
+# build on every line. That is why CI's windows job failed on Build for weeks
+# while linux passed: nothing to do with the code, only with how it arrived.
+# Reproduced by converting two files to CRLF locally: the same lines GitHub
+# annotated came back (2026-09-21).
+* text=auto eol=lf
+
+# cmd.exe is the exception. A batch file with LF endings can mis-parse, and
+# akuwm-rescue.cmd is what a person runs when everything else is broken.
+*.cmd text eol=crlf
+*.bat text eol=crlf
