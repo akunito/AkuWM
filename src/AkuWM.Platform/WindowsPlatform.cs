@@ -82,6 +82,9 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
     public int Place(IReadOnlyList<Placement> placements, bool activate = false) =>
         Win32Position.Place(placements, activate);
 
+    public int PlaceEach(IReadOnlyList<Placement> placements, bool activate = false) =>
+        Win32Position.PlaceEachAsync(placements, activate);
+
     public void SetMaximized(WindowHandle window, bool maximized)
     {
         if (maximized)

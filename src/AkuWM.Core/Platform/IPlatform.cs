@@ -54,6 +54,17 @@ public interface IPlatformActions
     /// <returns>How many were placed.</returns>
     int Place(IReadOnlyList<Placement> placements, bool activate = false);
 
+    /// <summary>
+    /// The same placements, one call each and asynchronously, rather than as
+    /// one batch.
+    /// </summary>
+    /// <remarks>
+    /// Here so the bench can put the two against each other on a real desk.
+    /// The batch makes the windows land together and pays for it by waiting
+    /// for each application in turn; this posts the requests and returns.
+    /// </remarks>
+    int PlaceEach(IReadOnlyList<Placement> placements, bool activate = false);
+
     /// <summary>Maximises or un-maximises.</summary>
     void SetMaximized(WindowHandle window, bool maximized);
 

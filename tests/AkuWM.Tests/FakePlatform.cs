@@ -101,6 +101,10 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         return placements.Count;
     }
 
+    /// <summary>The fake does not care which way they were sent.</summary>
+    public int PlaceEach(IReadOnlyList<Placement> placements, bool activate = false) =>
+        Place(placements, activate);
+
     public void SetMaximized(WindowHandle window, bool maximized)
     {
         Calls.Add($"maximize {window.Value} {maximized}");

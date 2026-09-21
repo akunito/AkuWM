@@ -87,6 +87,7 @@ public sealed class BenchCommand
         // whole round trip for each one.
         double placeThem = 0;
         double placeRereading = 0;
+        double placeEach = 0;
         if (_actions is not null && windows.Count > 0)
         {
             var batch = new List<Placement>(windows.Count);
@@ -109,6 +110,21 @@ public sealed class BenchCommand
             }
 
             placeRereading = Time(Math.Min(rounds, 10), () => _actions.Place(reread));
+
+            // The same windows, one call each and asynchronous, against the
+            // batch above. Careful reading this pair: both ask for rectangles
+            // the windows are ALREADY in, so Windows has nothing to do and
+            // what is measured is the CALL, not the move -- and by that
+            // measure the batch wins, 0.16 ms against 0.39 for eight windows.
+            //
+            // The expensive part, an application laying itself out again,
+            // cannot be measured from here at all: a bench that really moves
+            // windows is a bench the running window manager immediately undoes,
+            // and what comes out is the two of them arguing. Tried and removed,
+            // 2026-09-21. The applier logs its own placement time now, which
+            // answers it from real use instead.
+            placeEach = Time(Math.Min(rounds, 10), () => _actions.PlaceEach(batch));
+
         }
 
         // The bar re-reads the whole desk on every event it is sent, and there
@@ -130,6 +146,8 @@ public sealed class BenchCommand
             Measurement("decide (Compute)", compute, $"{windows.Count} windows: what has to change"),
             Measurement("move every window (Windows does the work)", placeThem,
                 $"{windows.Count} windows, already where they are asked to go"),
+            Measurement("the same, one async call each instead of a batch", placeEach,
+                "posted rather than waited for: the applications answer at the same time"),
             Measurement("the same, asking Windows for each border", placeRereading,
                 "what it cost before the model carried the border delta"),
             Measurement("serialise the desk for the bar", serialise,

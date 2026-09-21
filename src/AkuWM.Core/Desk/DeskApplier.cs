@@ -131,7 +131,15 @@ public sealed class DeskApplier
             _actions.SetMinimized(redraw.Restore[i], false);
         }
 
+        // Timed apart from the rest. The whole-redraw number could not answer
+        // the question the log kept asking: 1683 redraws on this desk had a
+        // median of 1.13 ms and a p99 of 626 ms, and the slow ones were six or
+        // seven windows placed with nothing else to do. Whether that is
+        // SetWindowPos waiting for each application, or anything of AkuWM's,
+        // is one subtraction away once the two are logged separately.
+        long placing = System.Diagnostics.Stopwatch.GetTimestamp();
         int placed = Place(redraw.Place);
+        var placeTook = System.Diagnostics.Stopwatch.GetElapsedTime(placing);
         Cloak(redraw.Hide, true, refused);
         Cloak(redraw.Show, false, refused);
 
@@ -182,7 +190,8 @@ public sealed class DeskApplier
         }
 
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
-        Log.Debug(() => $"redraw: {redraw} -> {placed} placed, {refused.Count} refused, {elapsed.TotalMilliseconds:F2} ms");
+        Log.Debug(() => $"redraw: {redraw} -> {placed} placed, {refused.Count} refused, "
+            + $"{elapsed.TotalMilliseconds:F2} ms ({placeTook.TotalMilliseconds:F2} of it moving windows)");
 
         return new ApplyResult(placed, refused, elapsed, unmarked);
     }

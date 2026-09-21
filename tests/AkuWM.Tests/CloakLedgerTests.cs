@@ -50,6 +50,9 @@ internal sealed class FakeActions : IPlatformActions
     public int Place(IReadOnlyList<Placement> placements, bool activate = false) =>
         _platform.Place(placements, activate);
 
+    public int PlaceEach(IReadOnlyList<Placement> placements, bool activate = false) =>
+        Place(placements, activate);
+
     public void SetMaximized(WindowHandle window, bool maximized) =>
         _platform.SetMaximized(window, maximized);
 
