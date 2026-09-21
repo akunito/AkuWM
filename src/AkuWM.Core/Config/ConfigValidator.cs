@@ -75,14 +75,37 @@ public static class ConfigValidator
             return;
         }
 
-        CheckColour(effects.FocusedBorder, "effects.focused_border", issues);
-        CheckColour(effects.OtherBorder, "effects.other_border", issues);
+        ValidateEffectsAt(effects, "effects", issues);
+    }
+
+    private static void ValidateEffectsAt(EffectsConfig? effects, string at, List<ValidationIssue> issues)
+    {
+        if (effects is null)
+        {
+            return;
+        }
+
+        CheckColour(effects.FocusedBorder, at + ".focused_border", issues);
+        CheckColour(effects.OtherBorder, at + ".other_border", issues);
 
         if (effects.Corners is { Length: > 0 } corners
             && corners is not ("default" or "square" or "round" or "round_small"))
         {
             issues.Add(ValidationIssue.Error(
-                "effects.corners", $"'{corners}' is not default, square, round or round_small"));
+                at + ".corners", $"'{corners}' is not default, square, round or round_small"));
+        }
+
+        if (effects.TitleBar is { Length: > 0 } bar && bar is not ("keep" or "hide"))
+        {
+            issues.Add(ValidationIssue.Error(at + ".title_bar", $"'{bar}' is not keep or hide"));
+        }
+
+        if (effects.Opacity is { } opacity && opacity is < 0.05 or > 1)
+        {
+            // Not zero: a window at zero is optimised away by the compositor
+            // and cannot be clicked, which reads as a window that vanished.
+            issues.Add(ValidationIssue.Error(
+                at + ".opacity", $"{opacity} is outside 0.05 to 1"));
         }
     }
 
@@ -238,13 +261,21 @@ public static class ConfigValidator
                 }
             }
 
-            if (rule.Actions is not { Count: > 0 })
+            ValidateEffectsAt(rule.Effects, path + ".effects", issues);
+
+            // A rule may now say only how a window should LOOK, with no verb
+            // at all: "every Zen window at 90% opacity" is a whole rule.
+            if (rule.Actions is not { Count: > 0 } actions)
             {
-                issues.Add(ValidationIssue.Error(path + ".actions", "a rule needs at least one action"));
+                if (rule.Effects is null)
+                {
+                    issues.Add(ValidationIssue.Error(
+                        path + ".actions", "a rule needs at least one action, or an effects block"));
+                }
             }
             else
             {
-                foreach (string action in rule.Actions)
+                foreach (string action in actions)
                 {
                     if (!ConfigDefaults.RuleActions.Contains(action))
                     {

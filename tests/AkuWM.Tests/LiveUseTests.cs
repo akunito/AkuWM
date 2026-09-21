@@ -130,6 +130,124 @@ public class LiveUseTests
         Assert.Equal("21", Desk.Window(DeskFixture.W(2))!.Workspace);
     }
 
+    // ---- how a window looks, per rule -------------------------------------
+
+    private static AkuWmConfig Looking(Action<AkuWmConfig> edit)
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "none" };
+        edit(config);
+        return config;
+    }
+
+    [Fact]
+    public void A_rule_can_say_only_how_a_window_should_look()
+    {
+        var fixture = new DeskFixture(Looking(c => c.Rules =
+        [
+            new RuleConfig
+            {
+                Id = "dim-the-browser",
+                Match = [new MatchCriteria { Process = "zen" }],
+                Effects = new EffectsConfig { Opacity = 0.8, TitleBar = "hide" },
+            },
+        ]));
+
+        fixture.Open(1, process: "zen");
+        fixture.Turn();
+
+        Decoration how = fixture.Platform.Decorations[DeskFixture.W(1)];
+        Assert.Equal(0.8, how.Opacity, 3);
+        Assert.False(how.TitleBar);
+    }
+
+    [Fact]
+    public void A_window_no_rule_mentions_keeps_the_global_look()
+    {
+        var fixture = new DeskFixture(Looking(c => c.Rules =
+        [
+            new RuleConfig
+            {
+                Id = "dim-the-browser",
+                Match = [new MatchCriteria { Process = "zen" }],
+                Effects = new EffectsConfig { Opacity = 0.8 },
+            },
+        ]));
+
+        fixture.Open(1, process: "alacritty");
+        fixture.Turn();
+
+        Decoration how = fixture.Platform.Decorations[DeskFixture.W(1)];
+        Assert.Equal(1, how.Opacity, 3);
+        Assert.True(how.TitleBar);
+    }
+
+    [Fact]
+    public void A_rule_that_says_nothing_about_a_field_leaves_it_to_the_global_block()
+    {
+        var fixture = new DeskFixture(Looking(c => c.Rules =
+        [
+            new RuleConfig
+            {
+                Id = "square-the-browser",
+                Match = [new MatchCriteria { Process = "zen" }],
+                Effects = new EffectsConfig { Corners = "round" },
+            },
+        ]));
+
+        fixture.Open(1, process: "zen");
+        fixture.Turn();
+        fixture.Desk.Focus(DeskFixture.W(1));
+        fixture.Turn();
+
+        // Corners from the rule, border from the global block: that is what
+        // makes "this one app, rounded" a three-line rule rather than a copy
+        // of the whole block.
+        Decoration how = fixture.Platform.Decorations[DeskFixture.W(1)];
+        Assert.Equal(Corners.Round, how.Corners);
+        Assert.Equal(Decoration.ColorRef("#c4a7e7"), how.Border);
+    }
+
+    [Fact]
+    public void The_last_rule_to_mention_a_field_is_the_one_that_decides_it()
+    {
+        var fixture = new DeskFixture(Looking(c => c.Rules =
+        [
+            new RuleConfig
+            {
+                Id = "dim-everything-of-this-app",
+                Match = [new MatchCriteria { Process = "zen" }],
+                Effects = new EffectsConfig { Opacity = 0.5 },
+            },
+            new RuleConfig
+            {
+                Id = "except-this-window",
+                Match = [new MatchCriteria { Process = "zen", Title = "keep me solid" }],
+                Effects = new EffectsConfig { Opacity = 1 },
+            },
+        ]));
+
+        fixture.Open(1, process: "zen", title: "keep me solid");
+        fixture.Open(2, process: "zen", title: "anything else");
+        fixture.Turn();
+
+        Assert.Equal(1, fixture.Platform.Decorations[DeskFixture.W(1)].Opacity, 3);
+        Assert.Equal(0.5, fixture.Platform.Decorations[DeskFixture.W(2)].Opacity, 3);
+    }
+
+    [Fact]
+    public void A_window_is_never_made_completely_invisible()
+    {
+        var fixture = new DeskFixture(Looking(c => c.Effects!.Opacity = 0));
+
+        fixture.Open(1);
+        fixture.Turn();
+
+        // Measured: a window at zero is optimised away by the compositor and
+        // stops taking clicks, which reads as a window that vanished.
+        Assert.True(fixture.Platform.Decorations[DeskFixture.W(1)].Opacity >= Decoration.MinimumOpacity);
+    }
+
     // ---- the taskbar follows the workspace --------------------------------
 
     private static AkuWmConfig WithTaskbar(bool showAll)

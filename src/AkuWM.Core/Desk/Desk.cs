@@ -550,6 +550,7 @@ public sealed partial class Desk
             PreviousState = decision.State == WindowState.Fullscreen ? WindowState.Tiling : decision.State,
             Sticky = decision.Sticky,
             Rules = decision.Rules,
+            Effects = EffectsFor(decision.Rules),
         };
 
         _windows[snapshot.Handle] = window;
@@ -816,6 +817,38 @@ public sealed partial class Desk
         }
 
         workspace.Touch(window.Handle);
+    }
+
+    /// <summary>
+    /// The look a window's rules ask for, layered over the global block.
+    /// </summary>
+    /// <remarks>
+    /// In the order the rules are written, so the last rule to mention a field
+    /// is the one that decides it -- the same way every other layer in this
+    /// configuration works. A rule that says nothing about a field leaves it
+    /// to the one underneath, which is what makes "this one app, dimmed"
+    /// a three-line rule instead of a copy of the whole block.
+    /// </remarks>
+    private Config.EffectsConfig? EffectsFor(IReadOnlyList<string> rules)
+    {
+        if (rules.Count == 0)
+        {
+            return null;
+        }
+
+        Config.EffectsConfig? resolved = null;
+
+        for (int i = 0; i < _activeRules.Count; i++)
+        {
+            Config.RuleConfig rule = _activeRules[i];
+
+            if (rule.Effects is { } effects && rule.Id is { Length: > 0 } id && rules.Contains(id))
+            {
+                resolved = ConfigMerge.MergeObject(resolved, effects);
+            }
+        }
+
+        return resolved;
     }
 
     private SplitDirection DirectionFor(Workspace workspace)

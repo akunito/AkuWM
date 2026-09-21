@@ -103,6 +103,29 @@ public sealed class EffectsConfig
     /// the corner of every gap. Windows 11 only; older builds ignore it.
     /// </remarks>
     public string? Corners { get; set; }
+
+    /// <summary>
+    /// <c>keep</c> | <c>hide</c>: whether the window has a title bar.
+    /// </summary>
+    /// <remarks>
+    /// Hiding it takes the minimise, maximise and close buttons with it --
+    /// they live in the bar -- and gives back about thirty pixels a window.
+    /// It only works on windows that use the shell's frame: an application
+    /// that draws its own chrome inside the client area, which is most modern
+    /// ones, is unaffected. AkuWM puts the bar back when it stops managing the
+    /// window, because a window with no title bar and no way to close it is
+    /// worse than one with a title bar nobody wanted.
+    /// </remarks>
+    public string? TitleBar { get; set; }
+
+    /// <summary>
+    /// How solid the window is, 0.05 to 1.
+    /// </summary>
+    /// <remarks>
+    /// Measured and written down in the plan: a window at zero is optimised
+    /// away by the compositor and cannot be clicked, so the floor is not zero.
+    /// </remarks>
+    public double? Opacity { get; set; }
 }
 
 public sealed class LayoutConfig
@@ -183,6 +206,19 @@ public sealed class RuleConfig : IConfigItem
 
     /// <summary>Where a matching window opens, symbolically: <c>{ "monitor": "main", "slot": 3 }</c>.</summary>
     public RuleTarget? Target { get; set; }
+
+    /// <summary>
+    /// How a matching window should look, overriding the global <c>effects</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the global block on purpose, so the GUI renders one
+    /// form in two places and a person reads one set of names. Actions are
+    /// verbs -- do this to the window -- and these are properties: be like
+    /// this. Folding them into the action list would have meant parsing
+    /// <c>"opacity:0.9"</c> out of a string, which is a schema a GUI cannot
+    /// render and a validator can only guess at.
+    /// </remarks>
+    public EffectsConfig? Effects { get; set; }
 
     public bool? Enabled { get; set; }
     public string? Notes { get; set; }

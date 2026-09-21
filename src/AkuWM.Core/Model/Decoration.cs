@@ -29,7 +29,15 @@ public enum Corners
 /// so it is reverted on unmanage and on the way out, and not journalled.
 /// </para>
 /// </remarks>
-public readonly record struct Decoration(uint Border, Corners Corners)
+/// <param name="Border">COLORREF, or one of the two sentinels below.</param>
+/// <param name="Corners">What Windows draws at the corners.</param>
+/// <param name="TitleBar">False strips the caption, and the buttons with it.</param>
+/// <param name="Opacity">1 is solid. Never 0: see the remarks.</param>
+public readonly record struct Decoration(
+    uint Border,
+    Corners Corners,
+    bool TitleBar = true,
+    double Opacity = 1)
 {
     /// <summary>The shell's own border, which is what a window has before AkuWM touches it.</summary>
     public const uint DefaultBorder = 0xFFFFFFFF;
@@ -38,7 +46,17 @@ public readonly record struct Decoration(uint Border, Corners Corners)
     public const uint NoBorder = 0xFFFFFFFE;
 
     /// <summary>What a window looks like when AkuWM has never touched it.</summary>
-    public static readonly Decoration Untouched = new(DefaultBorder, Corners.Default);
+    public static readonly Decoration Untouched = new(DefaultBorder, Corners.Default, true, 1);
+
+    /// <summary>
+    /// The least solid a window may be made.
+    /// </summary>
+    /// <remarks>
+    /// Measured, and in the plan: a window at zero is optimised away by the
+    /// compositor and stops taking clicks, which reads as a window that
+    /// vanished rather than one that went transparent.
+    /// </remarks>
+    public const double MinimumOpacity = 0.05;
 
     /// <summary>
     /// <c>#rrggbb</c> as the shell wants it.

@@ -349,13 +349,22 @@ public sealed partial class Desk
     /// <summary>What the shell should draw around one window, right now.</summary>
     private Decoration DecorationFor(DeskWindow window)
     {
-        Config.EffectsConfig? effects = Config.Effects;
+        Config.EffectsConfig? global = Config.Effects;
+        Config.EffectsConfig? mine = window.Effects;
 
+        // The window's own rules first, then the global block for anything
+        // they did not mention.
         string? border = Focused == window.Handle
-            ? effects?.FocusedBorder
-            : effects?.OtherBorder;
+            ? mine?.FocusedBorder ?? global?.FocusedBorder
+            : mine?.OtherBorder ?? global?.OtherBorder;
 
-        return new Decoration(Decoration.ColorRef(border), ParseCorners(effects?.Corners));
+        double opacity = mine?.Opacity ?? global?.Opacity ?? 1;
+
+        return new Decoration(
+            Decoration.ColorRef(border),
+            ParseCorners(mine?.Corners ?? global?.Corners),
+            TitleBar: (mine?.TitleBar ?? global?.TitleBar) is not "hide",
+            Opacity: Math.Clamp(opacity, Decoration.MinimumOpacity, 1));
     }
 
     private static Corners ParseCorners(string? corners) => corners?.ToLowerInvariant() switch

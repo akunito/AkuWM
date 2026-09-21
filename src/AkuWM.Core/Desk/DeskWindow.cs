@@ -117,6 +117,16 @@ public sealed class DeskWindow
     /// </remarks>
     public bool DecidedByHand { get; set; }
 
+    /// <summary>
+    /// How this window should look, from the rules that caught it.
+    /// </summary>
+    /// <remarks>
+    /// Resolved once, when the window is adopted, rather than walked on every
+    /// redraw: the rules that caught it do not change while it is open, and
+    /// the decoration pass runs over every window every time.
+    /// </remarks>
+    public Config.EffectsConfig? Effects { get; set; }
+
     public override string ToString() =>
         $"{Handle} {Snapshot.ProcessName} \"{Snapshot.Title}\" {State}"
         + (Workspace is null ? string.Empty : $" on {Workspace}")

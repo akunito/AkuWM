@@ -23,6 +23,8 @@ GetWindowTextLengthW
 GetClassNameW
 GetWindowThreadProcessId
 GetWindowLongPtrW
+SetWindowLongPtrW
+SetLayeredWindowAttributes
 GetAncestor
 GetLastActivePopup
 GetShellWindow
