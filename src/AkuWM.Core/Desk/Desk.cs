@@ -28,6 +28,15 @@ public sealed partial class Desk
     private readonly Dictionary<WindowHandle, DeskWindow> _windows = [];
     private readonly Dictionary<string, Workspace> _workspaces = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The names in the order the configuration gives them.
+    /// </summary>
+    /// <remarks>
+    /// A dictionary has no order worth relying on -- it reuses the slot a
+    /// removed key freed -- and this order is the one a person sees on the bar.
+    /// </remarks>
+    private readonly List<string> _order = [];
+
     /// <summary>The screens that are here now, in enumeration order.</summary>
     private readonly List<DeskMonitor> _monitors = [];
 
@@ -201,7 +210,12 @@ public sealed partial class Desk
             if (_workspaces.TryGetValue(name, out Workspace? existing))
             {
                 // A surviving workspace keeps its tree; only what the file
-                // actually says about it is refreshed.
+                // actually says about it is refreshed -- including which
+                // screen it is on. Renaming the workspaces of this desk moved
+                // one from the second monitor to the first, and without this
+                // it stayed where it was: the screen it had left kept it, and
+                // the one that should have had it was a workspace short.
+                existing.MonitorRole = configured.Monitor ?? existing.MonitorRole;
                 existing.DisplayName = configured.DisplayName;
                 existing.KeepAlive = configured.KeepAlive == true;
 
@@ -223,6 +237,19 @@ public sealed partial class Desk
             };
 
             added++;
+        }
+
+        // The order the file gives them, which is the order they are drawn in.
+        // Without this the list is whatever the dictionary happens to hold:
+        // removing 10 and adding 30 put 30 in the slot 10 had freed, so the
+        // bar read 30, 21, 22, ... 29, 20.
+        _order.Clear();
+        foreach (WorkspaceConfig configured in config.Workspaces ?? [])
+        {
+            if (configured.Name is { Length: > 0 } name && wanted.ContainsKey(name))
+            {
+                _order.Add(name);
+            }
         }
 
         // Roles may have been renamed or re-matched, and every monitor's list
@@ -357,6 +384,7 @@ public sealed partial class Desk
     private void BuildWorkspaces()
     {
         _workspaces.Clear();
+        _order.Clear();
 
         foreach (WorkspaceConfig configured in Config.Workspaces ?? [])
         {
@@ -373,6 +401,7 @@ public sealed partial class Desk
             };
 
             _workspaces[name] = workspace;
+            _order.Add(name);
         }
     }
 
@@ -426,9 +455,15 @@ public sealed partial class Desk
             _monitorRoles[monitor.Handle] = monitor.Role;
 
             monitor.Workspaces.Clear();
-            monitor.Workspaces.AddRange(
-                _workspaces.Values.Where(w =>
-                    string.Equals(w.MonitorRole, monitor.Role, StringComparison.OrdinalIgnoreCase)));
+
+            for (int i = 0; i < _order.Count; i++)
+            {
+                if (_workspaces.TryGetValue(_order[i], out Workspace? workspace)
+                    && string.Equals(workspace.MonitorRole, monitor.Role, StringComparison.OrdinalIgnoreCase))
+                {
+                    monitor.Workspaces.Add(workspace);
+                }
+            }
 
             if (monitor.Displayed is null && monitor.Workspaces.Count > 0)
             {

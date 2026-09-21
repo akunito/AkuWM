@@ -114,6 +114,58 @@ public class ReloadTests
     }
 
     [Fact]
+    public void A_workspace_moved_to_another_screen_arrives_there()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        Desk.Reload(Changed(c =>
+            c.Workspaces!.First(w => w.Name == "13").Monitor = "second"));
+
+        // Found on the desk: renaming this desk's workspaces moved one from
+        // the second monitor to the first, and it stayed where it was -- the
+        // screen it had left kept it, and the one that should have had it was
+        // a workspace short.
+        Assert.Equal("second", Desk.Workspace("13")!.MonitorRole);
+        Assert.Contains(Desk.MonitorByRole("second")!.Workspaces, w => w.Name == "13");
+        Assert.DoesNotContain(Desk.MonitorByRole("main")!.Workspaces, w => w.Name == "13");
+    }
+
+    [Fact]
+    public void A_workspace_that_changes_screen_keeps_its_windows()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        Desk.Reload(Changed(c =>
+            c.Workspaces!.First(w => w.Name == "12").Monitor = "second"));
+
+        // Moved, not torn down and rebuilt: the person edited a file, they did
+        // not ask to lose the layout on that workspace.
+        Assert.Equal("12", Desk.Window(DeskFixture.W(2))!.Workspace);
+    }
+
+    [Fact]
+    public void The_workspaces_of_a_screen_stay_in_the_order_the_file_gives_them()
+    {
+        Desk.Reload(Changed(c =>
+        {
+            c.Workspaces!.RemoveAll(w => w.Name == "13");
+            c.Workspaces.Insert(2, new WorkspaceConfig { Name = "99", Monitor = "main" });
+        }));
+
+        // A dictionary reuses the slot a removed key freed, so on this desk
+        // removing 10 and adding 30 put 30 at the FRONT of the second
+        // monitor's list -- and that list is the order the bar draws.
+        Assert.Equal(
+            ["11", "12", "99"],
+            Desk.MonitorByRole("main")!.Workspaces.Take(3).Select(w => w.Name));
+    }
+
+    [Fact]
     public void A_rule_added_by_the_reload_reaches_the_next_window_not_the_last_one()
     {
         _fixture.Open(1, process: "zen");

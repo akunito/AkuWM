@@ -38,7 +38,16 @@ public sealed class Workspace
     public string? DisplayName { get; set; }
 
     /// <summary>A monitor <em>role</em>, never an index.</summary>
-    public string MonitorRole { get; }
+    /// <summary>
+    /// The role of the screen it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// Settable only from inside the model, and only by a reload: the
+    /// configuration saying a workspace now belongs to another screen is a
+    /// person editing the file, and the workspace should arrive there with its
+    /// windows and its layout rather than being torn down and rebuilt.
+    /// </remarks>
+    public string MonitorRole { get; internal set; }
 
     /// <summary>Which way a new window splits the focused container.</summary>
     public SplitDirection Direction { get; set; }
