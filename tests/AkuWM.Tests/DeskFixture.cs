@@ -127,7 +127,7 @@ public sealed class DeskFixture
         {
             FrameBounds = to,
             WindowRect = to,
-            Monitor = MonitorUnder(to),
+            Monitor = Platform.MonitorUnder(to),
         };
 
         // The pointer goes with it, near the top-left, where a title bar is.
@@ -139,23 +139,6 @@ public sealed class DeskFixture
         Sync();
     }
 
-    /// <summary>Which monitor Windows would say a rectangle is on: the one under its middle.</summary>
-    private MonitorHandle MonitorUnder(Rect frame)
-    {
-        int x = frame.X + (frame.Width / 2);
-        int y = frame.Y + (frame.Height / 2);
-
-        foreach (MonitorSnapshot monitor in Platform.MonitorList)
-        {
-            Rect bounds = monitor.Bounds;
-            if (x >= bounds.Left && x < bounds.Right && y >= bounds.Top && y < bounds.Bottom)
-            {
-                return monitor.Handle;
-            }
-        }
-
-        return Platform.MonitorList[0].Handle;
-    }
 
     public void Close(long handle)
     {

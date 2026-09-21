@@ -87,6 +87,14 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
             {
                 FrameBounds = placement.Frame,
                 WindowRect = placement.Frame.Inflate(9),
+
+                // The monitor travels with the rectangle, as it does when
+                // Windows is the one answering. Leaving it stale made a window
+                // PLACED on another screen still read as being on the one it
+                // left -- and a fullscreen window moved there stopped counting
+                // as covering a screen, so the desk un-fullscreened it. The
+                // same gap `Move` had for a window the person moves.
+                Monitor = MonitorUnder(placement.Frame),
             });
         }
 
@@ -165,6 +173,24 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     }
 
     /// <summary>The main monitor of this desk: 4K at 150 %, taskbar at the bottom.</summary>
+    /// <summary>Which monitor Windows would say a rectangle is on: the one under its middle.</summary>
+    public MonitorHandle MonitorUnder(Rect frame)
+    {
+        int x = frame.X + (frame.Width / 2);
+        int y = frame.Y + (frame.Height / 2);
+
+        foreach (MonitorSnapshot monitor in MonitorList)
+        {
+            Rect bounds = monitor.Bounds;
+            if (x >= bounds.Left && x < bounds.Right && y >= bounds.Top && y < bounds.Bottom)
+            {
+                return monitor.Handle;
+            }
+        }
+
+        return MonitorList.Count > 0 ? MonitorList[0].Handle : new MonitorHandle(1);
+    }
+
     public static MonitorSnapshot MainMonitor(long handle = 1) => new()
     {
         Handle = new MonitorHandle(handle),
