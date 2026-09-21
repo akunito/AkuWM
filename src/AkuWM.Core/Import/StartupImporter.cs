@@ -93,15 +93,20 @@ public static class StartupImporter
     {
         environment ??= Environment.GetEnvironmentVariable;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        // An explicit root wins on every platform. Without that the Windows
+        // branch below ignored it and answered with the REAL user's folder, so
+        // the test that hands it a temp directory passed on Linux and failed on
+        // Windows -- which is what the windows CI job had been failing on.
+        // Production passes null and is unaffected.
+        if (windowsRoot is null && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             string folder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
             return folder.Length > 0 ? folder : null;
         }
 
-        // WSL: the Windows drive is mounted, but the Windows user name is not
-        // the Linux one. An explicit override wins, then the single real user
-        // under /mnt/c/Users.
+        // WSL, or an explicit root: the Windows drive is mounted, but the
+        // Windows user name is not the Linux one. An explicit override wins,
+        // then the single real user under <root>/Users.
         string? configured = environment("AKUWM_WINDOWS_USER");
         string usersDir = Path.Combine(windowsRoot ?? "/mnt/c", "Users");
         if (!Directory.Exists(usersDir))
