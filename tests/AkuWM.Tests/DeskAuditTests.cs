@@ -192,10 +192,11 @@ public class DeskAuditTests
     // ---- a fullscreen window that is also a floating one ------------------
 
     [Fact]
-    public void A_floating_window_that_goes_fullscreen_is_still_put_in_the_band()
+    public void A_floating_window_that_goes_fullscreen_covers_the_monitor_and_holds_the_taskbar_down()
     {
         // Non-resizable, so the rules float it; then it covers the screen --
-        // the order a game actually arrives in.
+        // the order a game actually arrives in. The floating loop used to
+        // claim it first and skip the block that does all of this.
         _fixture.Open(1, resizable: false, frame: new Rect(400, 400, 800, 600));
         _fixture.Turn();
         Desk.SetFullscreen(W(1), true);
@@ -203,13 +204,13 @@ public class DeskAuditTests
         Redraw redraw = _fixture.Turn();
 
         Assert.Equal(W(1), Desk.Workspace("11")!.Fullscreen);
-        Assert.True(_fixture.Managed(1)!.Banded);
-        // And over the whole monitor, not back at its floating rectangle.
+        Assert.Contains((W(1), true), redraw.TaskbarMark);
+        // Over the whole monitor, not back at its floating rectangle.
         Assert.Equal(new Rect(0, 0, 3840, 2160), _fixture.FrameOf(1));
     }
 
     [Fact]
-    public void The_windows_around_a_fullscreen_one_leave_the_band_and_it_stays_in_it()
+    public void The_windows_around_a_fullscreen_one_leave_the_band_and_it_never_joins_it()
     {
         _fixture.Open(1, resizable: false, frame: new Rect(400, 400, 800, 600));
         Desk.SetSticky(W(1), true);
@@ -219,8 +220,12 @@ public class DeskAuditTests
         Desk.SetFullscreen(W(2), true);
         _fixture.Turn();
 
-        Assert.True(_fixture.Managed(2)!.Banded);
+        // The sticky window comes out of the band so it cannot sit over the
+        // game; the game is NOT put in it -- forcing WS_EX_TOPMOST on a window
+        // that has just taken a flip-model swapchain is what left Age of
+        // Empires II rendering nothing.
         Assert.False(_fixture.Managed(1)!.Banded);
+        Assert.NotEqual(true, _fixture.Managed(2)!.Banded);
     }
 
     // ---- a command that changes the state of a minimised window -----------

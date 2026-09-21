@@ -533,6 +533,30 @@ public class DeskTests
     }
 
     [Fact]
+    public void Arguing_with_a_stubborn_window_ends_even_when_the_desk_keeps_redrawing()
+    {
+        // The desk does not wait three seconds and redraw once; it redraws
+        // every time the window snaps back, which is what makes the flicker.
+        // Stamping the patience clock on every re-send reset it each time, so
+        // the argument never ended (reported on Hyper+Shift+F, 2026-09-21).
+        _fixture.Open(1, frame: new Rect(0, 42, 3840, 2118));
+        _fixture.Open(2);
+        _fixture.Platform.Stubborn.Add(2);
+
+        _fixture.Turn();
+        Assert.NotEmpty(Desk.Compute().Place);
+
+        for (int i = 0; i < 40; i++)
+        {
+            _fixture.Wait(100);
+            _fixture.Turn();
+        }
+
+        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
+        Assert.True(_fixture.Managed(2)!.PlacementRefused);
+    }
+
+    [Fact]
     public void When_a_hidden_window_cannot_be_brought_back_nothing_is_hidden()
     {
         // Measured on this machine: one spelling of the call that hides a

@@ -121,7 +121,19 @@ public sealed partial class Desk
                 {
                     WantHidden(covering, false, hide, show);
                     WantPlaced(covering, monitor.FullArea, place);
-                    WantBanded(covering, true, band);
+
+                    // NOT into the always-on-top band. A window that covers
+                    // the screen owns it by being the foreground window and by
+                    // the taskbar mark below; forcing WS_EX_TOPMOST on top of
+                    // that is a SetWindowPos from another process against a
+                    // game that has just taken a flip-model swapchain, and
+                    // Age of Empires II came up black -- menus invisible,
+                    // music playing -- with the band as the only thing AkuWM
+                    // had done to it (traces, live desk 2026-09-21: the
+                    // redraw was "0 to place, 1 to reband, 1 to mark"). The
+                    // windows AROUND it still leave the band, which is what
+                    // kept a chat window off a game in the first place.
+                    WantBanded(covering, false, band);
 
                     // The taskbar drops behind it, and is told again when it
                     // stops being fullscreen.
@@ -463,11 +475,25 @@ public sealed partial class Desk
 
         foreach (Placement placement in redraw.Place)
         {
-            if (Window(placement.Window) is { } window)
+            if (Window(placement.Window) is not { } window)
             {
-                window.Placed = placement.Frame;
+                continue;
+            }
+
+            // The clock starts when the rectangle being ASKED FOR changes, not
+            // on every re-send. Stamping it here unconditionally reset the
+            // patience on AkuWM's own retry, so `Now - PlacedAt` never reached
+            // PlacementPatienceMs and the argument never ended: a window with a
+            // size of its own snapped back, that raised an event, the next
+            // redraw asked again, and the window flickered between the two
+            // rectangles for as long as it took the window to give in.
+            // Reported from the desk as a loop on Hyper+Shift+F (2026-09-21).
+            if (window.Placed != placement.Frame)
+            {
                 window.PlacedAt = Now;
             }
+
+            window.Placed = placement.Frame;
         }
 
         foreach (WindowHandle handle in redraw.Hide)
