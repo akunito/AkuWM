@@ -31,23 +31,40 @@ public static class GlazeProtocol
     {
         ["messageType"] = "client_response",
         ["clientMessage"] = request,
-        ["data"] = result.Data?.DeepClone(),
+        // Taken, not copied. A JsonNode cannot have two parents, and the data
+        // of a reply is built fresh for that reply and used once -- so the
+        // clone was a second full copy of a tree that for this desk is
+        // thousands of nodes, on every query, and the bar sends one per event
+        // per widget. Cloned only if it already belongs to somebody.
+        ["data"] = result.Data is { Parent: not null } shared ? shared.DeepClone() : result.Data,
         ["error"] = result.Error,
         ["success"] = result.Success,
     };
 
+    /// <summary>
+    /// One event frame. The caller owns <paramref name="payload"/> afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Built once per event, not once per subscriber: the only thing that
+    /// differs between subscribers is the id, and <see cref="Subscription"/>
+    /// changes it in place. Building it per target meant cloning and
+    /// re-serialising the whole payload for every widget on the bar.
+    /// </remarks>
     public static JsonObject Event(Guid subscription, string eventType, JsonObject payload)
     {
-        JsonObject data = payload.DeepClone().AsObject();
-        data["eventType"] = eventType;
+        payload["eventType"] = eventType;
 
         return new JsonObject
         {
             ["messageType"] = "event_subscription",
-            ["data"] = data,
+            ["data"] = payload,
             ["error"] = null,
             ["subscriptionId"] = subscription.ToString(),
             ["success"] = true,
         };
     }
+
+    /// <summary>Re-aims a frame at another subscription.</summary>
+    public static void Subscription(JsonObject frame, Guid subscription) =>
+        frame["subscriptionId"] = subscription.ToString();
 }

@@ -32,7 +32,30 @@ public sealed class DeskMonitor
     public List<Workspace> Workspaces { get; } = [];
 
     /// <summary>The one on screen.</summary>
-    public Workspace? Displayed => Workspaces.FirstOrDefault(w => w.Displayed);
+    /// <summary>
+    /// The workspace this screen is showing.
+    /// </summary>
+    /// <remarks>
+    /// An indexed loop, not <c>FirstOrDefault</c>: this is a property getter
+    /// read about twenty times per `query monitors`, and the bar sends one of
+    /// those on every event, per widget. The LINQ version allocated a closure,
+    /// a delegate and a boxed enumerator every time.
+    /// </remarks>
+    public Workspace? Displayed
+    {
+        get
+        {
+            for (int i = 0; i < Workspaces.Count; i++)
+            {
+                if (Workspaces[i].Displayed)
+                {
+                    return Workspaces[i];
+                }
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>The one before it, for a workspace key pressed twice.</summary>
     public string? Previous { get; set; }

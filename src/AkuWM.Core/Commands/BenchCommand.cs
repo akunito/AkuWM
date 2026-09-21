@@ -81,7 +81,15 @@ public sealed class BenchCommand
 
         // The bar re-reads the whole desk on every event it is sent, and there
         // are two widgets, so this is paid twice per event.
-        double serialise = Time(rounds, () => Compat.GlazeView.Monitors(desk).ToJsonString());
+        // The whole reply, not just the view: the envelope is where the data
+        // used to be deep-cloned, so measuring the view alone missed the
+        // largest thing on this path. What goes on the wire is what counts.
+        double serialise = Time(rounds, () => Compat.GlazeProtocol.Reply(
+            "query monitors",
+            Compat.ExecResult.Ok(data: new System.Text.Json.Nodes.JsonObject
+            {
+                ["monitors"] = Compat.GlazeView.Monitors(desk),
+            })).ToJsonString(Compat.GlazeProtocol.Compact));
 
         var results = new List<object>
         {
@@ -159,18 +167,43 @@ public sealed class BenchCommand
         note,
     };
 
+    /// <summary>
+    /// Times one thing, warmed and with the worst run thrown away.
+    /// </summary>
+    /// <remarks>
+    /// One warm-up pass was not enough. Measured on the desk: the same work,
+    /// three runs, came out 0.205, 0.099 and 0.104 ms -- so anything under
+    /// about a factor of two was the machine, not the code, and an
+    /// optimisation could be "measured" either way depending on when it ran.
+    /// Tiered JIT needs a few dozen calls before it settles, and a scheduler
+    /// hiccup in a run of twenty moves the mean by half.
+    ///
+    /// So: warm properly, then take the best of three batches. The best is the
+    /// run least interrupted by everything else on a desktop, which is the
+    /// honest answer to "what does this cost" -- a mean over a busy machine
+    /// measures the machine.
+    /// </remarks>
     private static double Time(int rounds, Action work)
     {
-        // One pass first, so the measurement is not the cost of the first call.
-        work();
-
-        var watch = Stopwatch.StartNew();
-        for (int i = 0; i < rounds; i++)
+        for (int i = 0; i < Math.Max(rounds, 50); i++)
         {
             work();
         }
 
-        return watch.Elapsed.TotalMilliseconds / rounds;
+        double best = double.MaxValue;
+
+        for (int batch = 0; batch < 3; batch++)
+        {
+            var watch = Stopwatch.StartNew();
+            for (int i = 0; i < rounds; i++)
+            {
+                work();
+            }
+
+            best = Math.Min(best, watch.Elapsed.TotalMilliseconds / rounds);
+        }
+
+        return best;
     }
 
     private static int Rounds(Dictionary<string, string?> options) =>

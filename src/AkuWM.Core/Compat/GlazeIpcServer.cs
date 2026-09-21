@@ -420,11 +420,17 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             return;
         }
 
+        // One frame, re-aimed. Only the subscription id differs between
+        // subscribers, and building it per target cloned and re-serialised the
+        // whole payload once per widget on the bar.
+        JsonObject frame = GlazeProtocol.Event(targets[0].Id, eventType, payload);
+
         foreach ((Subscriber subscriber, Guid id) in targets)
         {
-            string frame = GlazeProtocol.Event(id, eventType, payload).ToJsonString(GlazeProtocol.Compact);
-            Traffic?.Invoke(true, frame);
-            await Send(subscriber, frame).ConfigureAwait(false);
+            GlazeProtocol.Subscription(frame, id);
+            string text = frame.ToJsonString(GlazeProtocol.Compact);
+            Traffic?.Invoke(true, text);
+            await Send(subscriber, text).ConfigureAwait(false);
         }
     }
 

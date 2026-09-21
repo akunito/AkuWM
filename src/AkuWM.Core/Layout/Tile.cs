@@ -129,9 +129,35 @@ public sealed class Tile
         }
     }
 
-    /// <summary>The leaf holding a window, anywhere under this node.</summary>
-    public Tile? Find(WindowHandle window) =>
-        Leaves().FirstOrDefault(leaf => leaf.Window == window);
+    /// <summary>
+    /// The leaf holding a window, anywhere under this node.
+    /// </summary>
+    /// <remarks>
+    /// Walked, not enumerated. `Leaves()` is a recursive iterator, so every
+    /// leaf is yielded up through one state machine per level, and the
+    /// predicate allocated a closure and a delegate per call. That was
+    /// affordable when only the tree's own mutators called this; the query
+    /// path calls it once per window while building the JSON, which made
+    /// serialising one workspace quadratic in its windows -- and the bar asks
+    /// for that on every event, per widget.
+    /// </remarks>
+    public Tile? Find(WindowHandle window)
+    {
+        if (IsLeaf)
+        {
+            return Window == window ? this : null;
+        }
+
+        for (int i = 0; i < _children.Count; i++)
+        {
+            if (_children[i].Find(window) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 
     public int IndexInParent => Parent?._children.IndexOf(this) ?? -1;
 

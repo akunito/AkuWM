@@ -71,12 +71,23 @@ public static class GlazeView
         };
     }
 
+    /// <summary>
+    /// Scratch for <see cref="Ordered"/>, so a query that walks twenty
+    /// workspaces allocates one list instead of twenty. Every caller is on the
+    /// wm thread, which is the only thread that reads the model.
+    /// </summary>
+    [ThreadStatic]
+    private static List<WindowHandle>? _order;
+
     public static JsonObject Workspace(Desk.Desk desk, DeskMonitor monitor, Workspace workspace)
     {
         var children = new JsonArray();
+        List<WindowHandle> order = _order ??= [];
+        Ordered(workspace, monitor, order);
 
-        foreach (WindowHandle handle in Ordered(workspace, monitor))
+        for (int i = 0; i < order.Count; i++)
         {
+            WindowHandle handle = order[i];
             if (desk.Window(handle) is { Managed: true } window)
             {
                 children.Add((JsonNode)Window(desk, workspace, window));
@@ -163,9 +174,12 @@ public static class GlazeView
         {
             foreach (Workspace workspace in monitor.Workspaces)
             {
-                foreach (WindowHandle handle in Ordered(workspace, monitor))
+                List<WindowHandle> order = _order ??= [];
+                Ordered(workspace, monitor, order);
+
+                for (int i = 0; i < order.Count; i++)
                 {
-                    if (desk.Window(handle) is { Managed: true } window && seen.Add(handle))
+                    if (desk.Window(order[i]) is { Managed: true } window && seen.Add(order[i]))
                     {
                         windows.Add((JsonNode)Window(desk, workspace, window));
                     }
@@ -222,12 +236,52 @@ public static class GlazeView
     /// Sticky windows come with the monitor, not the workspace, so they are
     /// added by the caller that knows which monitor is being described.
     /// </remarks>
-    private static IEnumerable<WindowHandle> Ordered(Workspace workspace, DeskMonitor monitor) =>
-        workspace.Tiling.Windows
-            .Concat(workspace.Floating)
-            .Concat(workspace.Fullscreen.IsNone ? [] : new[] { workspace.Fullscreen })
-            .Concat(ReferenceEquals(workspace, monitor.Displayed) ? monitor.Sticky : [])
-            .Distinct();
+    /// <summary>
+    /// Every window of a workspace, tiled first, each one once.
+    /// </summary>
+    /// <remarks>
+    /// Written out rather than chained: this ran once per workspace per query
+    /// -- twenty times for `query monitors` -- and each call allocated a
+    /// Select iterator, three Concat iterators, a one-element array and the
+    /// HashSet behind Distinct. The list is filled by the caller and reused
+    /// across workspaces.
+    /// </remarks>
+    private static void Ordered(Workspace workspace, DeskMonitor monitor, List<WindowHandle> into)
+    {
+        into.Clear();
+
+        foreach (WindowHandle handle in workspace.Tiling.Windows)
+        {
+            if (!into.Contains(handle))
+            {
+                into.Add(handle);
+            }
+        }
+
+        for (int i = 0; i < workspace.Floating.Count; i++)
+        {
+            if (!into.Contains(workspace.Floating[i]))
+            {
+                into.Add(workspace.Floating[i]);
+            }
+        }
+
+        if (!workspace.Fullscreen.IsNone && !into.Contains(workspace.Fullscreen))
+        {
+            into.Add(workspace.Fullscreen);
+        }
+
+        if (ReferenceEquals(workspace, monitor.Displayed))
+        {
+            foreach (WindowHandle handle in monitor.Sticky)
+            {
+                if (!into.Contains(handle))
+                {
+                    into.Add(handle);
+                }
+            }
+        }
+    }
 
     private static JsonObject Rect(Rect rect) => new()
     {
