@@ -79,6 +79,38 @@ public sealed class BenchCommand
                 }
             });
 
+        // Moving real windows, which is the one thing here that is not AkuWM's
+        // own work: SetWindowPos sends WM_WINDOWPOSCHANGING and WM_SIZE to the
+        // application and waits for it to lay itself out again. Measured by
+        // asking for the rectangles the windows are ALREADY in, so the desk
+        // does not visibly jump while the bench runs -- Windows still does the
+        // whole round trip for each one.
+        double placeThem = 0;
+        double placeRereading = 0;
+        if (_actions is not null && windows.Count > 0)
+        {
+            var batch = new List<Placement>(windows.Count);
+            foreach (WindowSnapshot window in windows)
+            {
+                batch.Add(new Placement(window.Handle, window.FrameBounds, window.BorderDelta));
+            }
+
+            placeThem = Time(Math.Min(rounds, 10), () => _actions.Place(batch));
+
+            // The same work with the border left for the platform to look up,
+            // which is what it did before the model started carrying it: a
+            // GetWindowRect and a DWM round trip per window, inside the batch.
+            // Both paths in one process, so the comparison is not two runs of
+            // a busy machine.
+            var reread = new List<Placement>(windows.Count);
+            foreach (WindowSnapshot window in windows)
+            {
+                reread.Add(new Placement(window.Handle, window.FrameBounds));
+            }
+
+            placeRereading = Time(Math.Min(rounds, 10), () => _actions.Place(reread));
+        }
+
         // The bar re-reads the whole desk on every event it is sent, and there
         // are two widgets, so this is paid twice per event.
         // The whole reply, not just the view: the envelope is where the data
@@ -96,6 +128,10 @@ public sealed class BenchCommand
             Measurement("read one window", readOne, "an event becoming a fact"),
             Measurement("observe one window", observeOne, "the read, and the model taking it in"),
             Measurement("decide (Compute)", compute, $"{windows.Count} windows: what has to change"),
+            Measurement("move every window (Windows does the work)", placeThem,
+                $"{windows.Count} windows, already where they are asked to go"),
+            Measurement("the same, asking Windows for each border", placeRereading,
+                "what it cost before the model carried the border delta"),
             Measurement("serialise the desk for the bar", serialise,
                 "what `query monitors` costs; the bar asks on EVERY event, per widget"),
             Measurement("build the model", buildModel,

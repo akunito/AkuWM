@@ -66,7 +66,7 @@ public static class Win32Position
         foreach (Placement placement in placements)
         {
             var hwnd = new HWND((IntPtr)placement.Window.Value);
-            Rect target = WithBorder(hwnd, placement.Frame);
+            Rect target = WithBorder(hwnd, placement);
 
             batch = PInvoke.DeferWindowPos(
                 batch, hwnd, HWND.Null, target.X, target.Y, target.Width, target.Height, flags);
@@ -111,7 +111,7 @@ public static class Win32Position
         foreach (Placement placement in placements)
         {
             var hwnd = new HWND((IntPtr)placement.Window.Value);
-            Rect target = WithBorder(hwnd, placement.Frame);
+            Rect target = WithBorder(hwnd, placement);
 
             // Asynchronous here, where it is allowed: a window whose
             // application has stopped answering must not stop the desk.
@@ -175,28 +175,38 @@ public static class Win32Position
     /// Turns a visible-frame rectangle into the outer rectangle
     /// <c>SetWindowPos</c> expects.
     /// </summary>
-    private static Rect WithBorder(HWND hwnd, Rect frame)
+    private static Rect WithBorder(HWND hwnd, Placement placement)
     {
+        // What the model already knows. It read both rectangles when the
+        // window last changed; asking Windows again costs a GetWindowRect and
+        // a DWM round trip, per window, inside the batch.
+        if (placement.Border is { } known)
+        {
+            return Grown(placement.Frame, known.Top, known.Right, known.Bottom, known.Left);
+        }
+
         if (!PInvoke.GetWindowRect(hwnd, out RECT outer))
         {
-            return frame;
+            return placement.Frame;
         }
 
         Rect? visible = Win32Windows.FrameBoundsOf(hwnd);
         if (visible is not { } bounds || bounds.IsEmpty)
         {
-            return frame;
+            return placement.Frame;
         }
 
-        int left = bounds.Left - outer.left;
-        int top = bounds.Top - outer.top;
-        int right = outer.right - bounds.Right;
-        int bottom = outer.bottom - bounds.Bottom;
-
-        return new Rect(
-            frame.X - left,
-            frame.Y - top,
-            frame.Width + left + right,
-            frame.Height + top + bottom);
+        return Grown(
+            placement.Frame,
+            bounds.Top - outer.top,
+            outer.right - bounds.Right,
+            outer.bottom - bounds.Bottom,
+            bounds.Left - outer.left);
     }
+
+    private static Rect Grown(Rect frame, int top, int right, int bottom, int left) => new(
+        frame.X - left,
+        frame.Y - top,
+        frame.Width + left + right,
+        frame.Height + top + bottom);
 }

@@ -307,7 +307,11 @@ public sealed partial class Desk
             return;
         }
 
-        into.Add(new Placement(window.Handle, frame));
+        // The border travels with it: the model read both rectangles when the
+        // window last changed, and the platform would otherwise ask Windows
+        // for them again -- a GetWindowRect and a DWM round trip per window,
+        // inside the batch, on every redraw.
+        into.Add(new Placement(window.Handle, frame, window.Snapshot.BorderDelta));
     }
 
     private bool _saidItCannotHide;
