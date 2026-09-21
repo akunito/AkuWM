@@ -86,7 +86,38 @@ public sealed class GlazeIpcServer : IAsyncDisposable
     /// <summary>Why the port could not be taken, when it could not.</summary>
     public string? Unavailable { get; private set; }
 
+    /// <summary>How long a taken port is waited out before giving up on it.</summary>
+    /// <remarks>
+    /// The sockets of a window manager that DIED do not go away when its
+    /// process does: its half-closed connections keep the endpoint reserved,
+    /// and on this desk that outlived the process by minutes. Trying once and
+    /// giving up left the bar with no live updates until somebody noticed and
+    /// restarted the daemon by hand (2026-09-21). Waiting is free -- the
+    /// window manager is already arranging the desk without it.
+    /// </remarks>
+    public const int WaitForThePortMs = 120_000;
+    private const int RetryEveryMs = 3_000;
+
     public bool Start()
+    {
+        if (Bind())
+        {
+            return true;
+        }
+
+        // Taken, not broken: wait it out in the background. Anything else is
+        // a real failure and retrying it would only repeat the same message.
+        if (_lastError == SocketError.AddressAlreadyInUse)
+        {
+            _ = Task.Run(WaitForThePort);
+        }
+
+        return false;
+    }
+
+    private SocketError _lastError;
+
+    private bool Bind()
     {
         try
         {
@@ -97,15 +128,42 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         {
             // Almost always the old window manager still running. Saying which
             // is more use than the number.
+            _lastError = ex.SocketErrorCode;
             Unavailable = $"port {_port} is taken ({ex.SocketErrorCode})";
             Log.Warn($"the compatibility server could not start: {Unavailable}");
             _listener = null;
             return false;
         }
 
+        Unavailable = null;
         _accepting = Task.Run(AcceptLoop);
         Log.Info($"compatibility server listening on 127.0.0.1:{_port}");
         return true;
+    }
+
+    private async Task WaitForThePort()
+    {
+        DateTime deadline = DateTime.UtcNow.AddMilliseconds(WaitForThePortMs);
+
+        while (!_stopping.IsCancellationRequested && DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                await Task.Delay(RetryEveryMs, _stopping.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (Bind())
+            {
+                Log.Info($"port {_port} came free; the bar and the scripts can reach AkuWM again");
+                return;
+            }
+        }
+
+        Log.Warn($"port {_port} was still taken after {WaitForThePortMs / 1000} s; giving up on it");
     }
 
     private async Task AcceptLoop()

@@ -24,6 +24,38 @@ public class GlazeIpcServerTests
         return port;
     }
 
+    [Fact]
+    public async Task A_port_that_is_taken_is_waited_out_rather_than_given_up_on()
+    {
+        int port = FreePort();
+
+        // Somebody else has it: the sockets of a window manager that died keep
+        // the endpoint reserved for minutes after its process is gone.
+        var squatter = new TcpListener(IPAddress.Loopback, port);
+        squatter.Start();
+
+        await using var server = new GlazeIpcServer(
+            port, _ => ExecResult.Ok(data: new JsonObject { ["ran"] = true }));
+
+        Assert.False(server.Start());
+        Assert.NotNull(server.Unavailable);
+
+        squatter.Stop();
+
+        // It comes up by itself. Without the wait the bar had no live updates
+        // until somebody restarted the daemon by hand.
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (server.Unavailable is not null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(250);
+        }
+
+        Assert.Null(server.Unavailable);
+
+        using ClientWebSocket client = await Connect(port);
+        Assert.Contains("\"ran\":true", await Ask(client, "command focus --direction left"));
+    }
+
     private static async Task<string> Ask(ClientWebSocket client, string request)
     {
         await client.SendAsync(
