@@ -1,5 +1,5 @@
-using AkuWM.Core.Desk;
 using AkuWM.Core.Compat;
+using AkuWM.Core.Desk;
 using AkuWM.Core.Layout;
 using AkuWM.Core.Model;
 using Xunit;
