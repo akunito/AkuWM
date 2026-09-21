@@ -138,6 +138,57 @@ public class DeskAuditTests
         Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
     }
 
+    // ---- decoration and the screen ----------------------------------------
+
+    /// <summary>A desk whose windows actually get a border, like Diego's.</summary>
+    private static DeskFixture Decorated()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig
+        {
+            FocusedBorder = "#8b5cf6",
+            OtherBorder = "#3f3f46",
+            Corners = "round",
+        };
+
+        return new DeskFixture(config);
+    }
+
+    [Fact]
+    public void A_fullscreen_window_has_its_border_taken_off()
+    {
+        DeskFixture desk = Decorated();
+        desk.Open(1);
+        desk.Turn();
+        Assert.NotNull(desk.Managed(1)!.Decorated);
+
+        desk.Desk.SetFullscreen(W(1), true);
+        Redraw redraw = desk.Turn();
+
+        // A DWM border colour or corner preference makes the shell COMPOSE and
+        // clip the window, and a game presenting straight to the screen stops:
+        // Age of Empires II went black with its music still playing, the
+        // purple border drawn around it (live desk 2026-09-21).
+        Assert.Contains((W(1), Decoration.Untouched), redraw.Decorate);
+        // Null is the model's "put back", written when Untouched is applied.
+        Assert.Null(desk.Managed(1)!.Decorated);
+    }
+
+    [Fact]
+    public void A_window_that_stops_being_fullscreen_gets_its_border_back()
+    {
+        DeskFixture desk = Decorated();
+        desk.Open(1);
+        desk.Turn();
+        desk.Desk.SetFullscreen(W(1), true);
+        desk.Turn();
+
+        desk.Desk.SetFullscreen(W(1), false);
+        desk.Turn();
+
+        Assert.NotNull(desk.Managed(1)!.Decorated);
+    }
+
     // ---- a fullscreen window that is also a floating one ------------------
 
     [Fact]

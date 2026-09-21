@@ -187,7 +187,17 @@ public sealed partial class Desk
         // focus is not a property of any one workspace.
         foreach (DeskWindow window in _windows.Values)
         {
-            Decoration want = window.Managed ? DecorationFor(window) : Decoration.Untouched;
+            // A window that covers the screen is never decorated. A DWM
+            // border colour or a corner preference makes the shell COMPOSE
+            // and clip the window, and a game that was presenting straight to
+            // the screen stops: Age of Empires II went black with its music
+            // still playing, and froze again when it was maximised, with the
+            // purple border drawn around it both times (live desk 2026-09-21).
+            // There is nothing to see either way -- a fullscreen window has no
+            // visible edge to put a border on.
+            Decoration want = window.Managed && window.State != WindowState.Fullscreen
+                ? DecorationFor(window)
+                : Decoration.Untouched;
 
             // Null means AkuWM has never touched it, and Untouched means put it
             // back: a window that was never decorated needs neither.
