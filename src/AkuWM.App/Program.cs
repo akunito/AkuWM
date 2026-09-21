@@ -272,6 +272,19 @@ public static class Program
 
         Log.Info("stopping");
 
+        // Said before anything is torn down, and waited for: the bar polls
+        // nothing, so without it a bar left holding a dead socket shows the
+        // last workspace AkuWM ever had until somebody restarts it.
+        try
+        {
+            await manager.Compat.Publish("application_exiting", [])
+                .WaitAsync(TimeSpan.FromMilliseconds(500));
+        }
+        catch (Exception ex) when (ex is TimeoutException or ObjectDisposedException)
+        {
+            Log.Debug(() => "the bar was not told we are exiting: " + ex.Message);
+        }
+
         // The window manager goes first. Restoring the desk while its loop is
         // still running means the loop puts everything back the way it wants
         // it, one pass after the restore.

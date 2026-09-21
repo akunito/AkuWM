@@ -47,9 +47,7 @@ public sealed class WindowManager : IAsyncDisposable
     private bool _resync;
 
     /// <summary>What the desk looked like at the last redraw, to say what changed.</summary>
-    private WindowHandle _wasFocused = WindowHandle.None;
-    private Dictionary<string, string> _wasDisplayed = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<WindowHandle> _wasManaged = [];
+    private readonly GlazeEvents _events = new();
 
     /// <param name="manage">
     /// False leaves AkuWM watching: the model is kept up to date and every
@@ -144,23 +142,25 @@ public sealed class WindowManager : IAsyncDisposable
         string verb = request.Split(' ', 2)[0].ToLowerInvariant();
         string rest = request.Length > verb.Length ? request[(verb.Length + 1)..] : string.Empty;
 
-        return verb switch
+        // A command is the only one with anything to do afterwards: the desk
+        // has changed and the loop has to redraw it.
+        if (verb != "command")
         {
-            "query" => _loop.Post(request, () => _executor.Query(rest)),
-            "command" => _loop.Post(request, () =>
+            return _loop.Post(request, () => _executor.Ask(request));
+        }
+
+        return _loop.Post(request, () =>
+        {
+            ExecResult result = _executor.Command(rest);
+            _dirty = true;
+
+            if (_executor.ExitRequested)
             {
-                ExecResult result = _executor.Command(rest);
-                _dirty = true;
+                ExitRequested?.Invoke();
+            }
 
-                if (_executor.ExitRequested)
-                {
-                    ExitRequested?.Invoke();
-                }
-
-                return result;
-            }),
-            _ => Task.FromResult(ExecResult.Fail($"unrecognized subcommand '{verb}'")),
-        };
+            return result;
+        });
     }
 
     /// <summary>The same, wrapped in the envelope the callers expect.</summary>
@@ -316,89 +316,8 @@ public sealed class WindowManager : IAsyncDisposable
         Publish();
     }
 
-    /// <summary>
-    /// Tells the bar what changed, by comparing the desk with what it was.
-    /// </summary>
-    /// <remarks>
-    /// Worked out by difference rather than raised at each call site, so a
-    /// gesture that moves three windows and switches a workspace produces the
-    /// events that describe the result, not a running commentary on how it was
-    /// reached.
-    /// </remarks>
-    private void Publish()
-    {
-        if (_server.Connections == 0)
-        {
-            return;
-        }
-
-        foreach (DeskMonitor monitor in _desk.Monitors)
-        {
-            string? now = monitor.Displayed?.Name;
-            _wasDisplayed.TryGetValue(monitor.Role, out string? before);
-
-            if (now is null || string.Equals(now, before, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (before is not null && _desk.Workspace(before) is { } left)
-            {
-                Fire("workspace_deactivated", new JsonObject
-                {
-                    ["deactivatedWorkspace"] = GlazeView.Workspace(_desk, monitor, left),
-                });
-            }
-
-            Fire("workspace_activated", new JsonObject
-            {
-                ["activatedWorkspace"] = GlazeView.Workspace(_desk, monitor, monitor.Displayed!),
-            });
-
-            _wasDisplayed[monitor.Role] = now;
-        }
-
-        HashSet<WindowHandle> managed = _desk.Windows
-            .Where(w => w.Managed)
-            .Select(w => w.Handle)
-            .ToHashSet();
-
-        foreach (WindowHandle handle in managed.Except(_wasManaged))
-        {
-            if (_desk.Window(handle) is { } window)
-            {
-                Fire("window_managed", new JsonObject
-                {
-                    ["managedWindow"] = GlazeView.Window(
-                        _desk, _desk.Workspace(window.Workspace ?? string.Empty), window),
-                });
-            }
-        }
-
-        foreach (WindowHandle handle in _wasManaged.Except(managed))
-        {
-            Fire("window_unmanaged", new JsonObject
-            {
-                ["unmanagedHandle"] = handle.Value,
-            });
-        }
-
-        _wasManaged = managed;
-
-        if (_desk.Focused != _wasFocused)
-        {
-            _wasFocused = _desk.Focused;
-
-            if (_desk.Window(_wasFocused) is { Managed: true } focused)
-            {
-                Fire("focus_changed", new JsonObject
-                {
-                    ["focusedContainer"] = GlazeView.Window(
-                        _desk, _desk.Workspace(focused.Workspace ?? string.Empty), focused),
-                });
-            }
-        }
-    }
+    /// <summary>Tells the bar what changed. The diff itself lives in Core, where it is tested.</summary>
+    private void Publish() => _events.Since(_desk, _server.Connections > 0, Fire);
 
     /// <summary>
     /// Sends an event without waiting for it.

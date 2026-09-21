@@ -13,6 +13,9 @@ public static class Fixture
 
     /// <summary>The raise-or-launch table out of hyper-desktops.ahk.</summary>
     public const string AhkToggles = "hyper-desktops-excerpt.ahk";
+
+    /// <summary>Every distinct request Zebar made, captured off the socket.</summary>
+    public const string ZebarRequests = "zebar-requests.txt";
 }
 
 /// <summary>A directory that cleans itself up, for the tests that write files.</summary>

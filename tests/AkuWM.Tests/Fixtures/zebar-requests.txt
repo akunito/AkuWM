@@ -1,0 +1,12 @@
+# Every distinct request Zebar 3.3.1 made, in the order it made them,
+# captured on DESK_W11 2026-09-21 with tools/zebar-capture.ps1. Nothing
+# was read from Zebar's source; this is what came down the socket.
+# It answers every event by asking for monitors and windows again, so
+# these six queries and the subscription are the whole of its surface.
+query focused
+query binding-modes
+query tiling-direction
+query paused
+query monitors
+query windows
+sub --events all

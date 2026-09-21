@@ -56,6 +56,27 @@ public sealed class GlazeExecutor
     /// <summary>Set when the desk was told to leave everything where it is.</summary>
     public bool Paused => _desk.Paused;
 
+    /// <summary>
+    /// One request as the callers write it: <c>query workspaces</c>,
+    /// <c>command focus --workspace 11</c>.
+    /// </summary>
+    /// <remarks>
+    /// The split lives here rather than at each caller so the shim, the socket
+    /// and the tests all reach the model through the same two words.
+    /// </remarks>
+    public ExecResult Ask(string request)
+    {
+        string verb = request.Split(' ', 2)[0].ToLowerInvariant();
+        string rest = request.Length > verb.Length ? request[(verb.Length + 1)..] : string.Empty;
+
+        return verb switch
+        {
+            "query" => Query(rest),
+            "command" => Command(rest),
+            _ => ExecResult.Fail($"unrecognized subcommand '{verb}'"),
+        };
+    }
+
     public ExecResult Query(string line)
     {
         ParsedCommand parsed = GlazeCommandLine.Parse(line);

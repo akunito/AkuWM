@@ -130,6 +130,36 @@ public class TrafficCaptureTests : IDisposable
     }
 
     [Fact]
+    public async Task A_subscriber_hears_an_event_with_no_payload_at_all()
+    {
+        // `application_exiting` is the one: the bar polls nothing, so a bar
+        // left holding a dead socket would show the last workspace AkuWM ever
+        // had until somebody restarted it.
+        int port = FreePort();
+        await using var server = new GlazeIpcServer(port, _ => ExecResult.Ok());
+        Assert.True(server.Start());
+
+        using var client = new ClientWebSocket();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), deadline.Token);
+
+        var buffer = new byte[64 * 1024];
+        await client.SendAsync(
+            Encoding.UTF8.GetBytes("sub --events all"),
+            WebSocketMessageType.Text, true, deadline.Token);
+        await client.ReceiveAsync(buffer, deadline.Token);
+
+        await server.Publish("application_exiting", []);
+        WebSocketReceiveResult result = await client.ReceiveAsync(buffer, deadline.Token);
+
+        JsonObject frame = (JsonObject)JsonNode.Parse(
+            Encoding.UTF8.GetString(buffer, 0, result.Count))!;
+
+        Assert.Equal("event_subscription", (string?)frame["messageType"]);
+        Assert.Equal("application_exiting", (string?)frame["data"]!["eventType"]);
+    }
+
+    [Fact]
     public void Every_line_is_valid_json_on_its_own_so_the_replay_can_read_it_lazily()
     {
         string file = File("lazy.jsonl");
