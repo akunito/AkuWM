@@ -686,6 +686,14 @@ public sealed partial class Desk
             window.PreviousState = window.State;
             window.State = WindowState.Minimized;
 
+            // The shell lets the taskbar back up the moment a window it was
+            // told is fullscreen goes to the taskbar, and it does not ask
+            // again. Keeping Marked=true across that meant the mark was never
+            // re-sent when the window came back -- the game was fullscreen
+            // again with the bar on top of it, composed, 0% of frames direct
+            // (tests/fullscreen 8-gamelike step 2, measured 2026-09-21).
+            window.Marked = false;
+
             if (Workspace(window.Workspace ?? string.Empty) is { } leaving)
             {
                 // Out of the tree, and out of the fullscreen slot: a workspace
@@ -714,7 +722,14 @@ public sealed partial class Desk
         // fullscreen -- as opposed to one AkuWM put exactly where it is.
         MonitorSnapshot? monitor = MonitorByHandle(snapshot.Monitor)?.Snapshot;
         bool coversTheScreen = ShadowModel.IsFullscreen(snapshot, monitor);
-        bool weMovedItThere = window.Placed == snapshot.FrameBounds;
+        // A MAXIMISED window is never "where AkuWM put it": AkuWM tiles by
+        // moving and never maximises (the only SetMaximized calls are the
+        // geometry journal's, on the way out). The rectangles can be identical
+        // -- a lone tiled window fills the work area and so does a maximised
+        // one -- so the rectangle comparison alone called it ours, and a window
+        // un-maximised and maximised again (what Alt+drag does) stayed tiling
+        // for the rest of the run. tests/fullscreen 8-startmax steps 3-5.
+        bool weMovedItThere = !snapshot.IsMaximized && window.Placed == snapshot.FrameBounds;
 
         // A floating window keeps where the person put it. Without this the
         // next redraw asked for the rectangle AkuWM still remembered and

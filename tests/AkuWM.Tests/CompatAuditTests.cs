@@ -32,6 +32,27 @@ public class CompatAuditTests
     // ---- the shapes --------------------------------------------------------
 
     [Fact]
+    public void A_minimised_window_is_still_listed()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        JsonArray windows = Query("windows")["windows"]!.AsArray();
+
+        // Out of the tiling tree so the layout stops reserving space for it,
+        // and still on the desk: a window nothing lists is a window nothing
+        // can bring back.
+        Assert.Equal(2, windows.Count);
+        Assert.Contains(windows, w => w!["handle"]!.GetValue<long>() == 1
+                                      && w["state"]!["type"]!.GetValue<string>() == "minimized");
+    }
+
+    [Fact]
     public void A_sticky_window_is_listed_once_not_twice()
     {
         _fixture.Open(1, resizable: false, frame: new Rect(3000, 1500, 600, 400));

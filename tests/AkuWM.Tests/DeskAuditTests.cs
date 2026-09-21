@@ -100,6 +100,44 @@ public class DeskAuditTests
         Assert.Contains(W(1), Desk.MonitorByRole("main")!.Sticky);
     }
 
+    [Fact]
+    public void A_fullscreen_window_that_comes_back_from_the_taskbar_is_marked_again()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+        _fixture.Turn();
+        Assert.True(_fixture.Managed(1)!.Marked);
+
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        _fixture.Platform.SetMinimized(W(1), false);
+        _fixture.Sync();
+        Redraw back = _fixture.Turn();
+
+        Assert.Contains((W(1), true), back.TaskbarMark);
+    }
+
+    // ---- maximised, at exactly the rectangle AkuWM had tiled it to --------
+
+    [Fact]
+    public void A_lone_tiled_window_that_is_maximised_becomes_fullscreen()
+    {
+        // The rectangles are identical: one tiled window fills the work area,
+        // and so does a maximised one. Only IsMaximized tells them apart.
+        _fixture.Open(1);
+        _fixture.Turn();
+        Assert.Equal(WindowState.Tiling, _fixture.Managed(1)!.State);
+
+        _fixture.Platform.SetMaximized(W(1), true);
+        _fixture.Sync();
+        _fixture.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
+    }
+
     // ---- a fullscreen window that is also a floating one ------------------
 
     [Fact]

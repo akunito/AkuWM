@@ -106,7 +106,7 @@ public static class GlazeView
     {
         var children = new JsonArray();
         List<WindowHandle> order = _order ??= [];
-        Ordered(workspace, monitor, order);
+        Ordered(desk, workspace, monitor, order);
 
         for (int i = 0; i < order.Count; i++)
         {
@@ -198,7 +198,7 @@ public static class GlazeView
             foreach (Workspace workspace in monitor.Workspaces)
             {
                 List<WindowHandle> order = _order ??= [];
-                Ordered(workspace, monitor, order);
+                Ordered(desk, workspace, monitor, order);
 
                 for (int i = 0; i < order.Count; i++)
                 {
@@ -269,7 +269,7 @@ public static class GlazeView
     /// HashSet behind Distinct. The list is filled by the caller and reused
     /// across workspaces.
     /// </remarks>
-    private static void Ordered(Workspace workspace, DeskMonitor monitor, List<WindowHandle> into)
+    private static void Ordered(Desk.Desk desk, Workspace workspace, DeskMonitor monitor, List<WindowHandle> into)
     {
         into.Clear();
 
@@ -302,6 +302,24 @@ public static class GlazeView
                 {
                     into.Add(handle);
                 }
+            }
+        }
+
+        // A minimised window is in none of the three containers above: it is
+        // taken out of the tree and out of the fullscreen slot so the layout
+        // stops reserving space for it. It stayed in the focus order, and
+        // nowhere else, so it vanished from `query windows` altogether --
+        // the bar could not show it, `sticky-park.ps1` could not find it to
+        // put it back, and three windows were lost that way (2026-09-21).
+        for (int i = 0; i < workspace.FocusOrder.Count; i++)
+        {
+            WindowHandle handle = workspace.FocusOrder[i];
+
+            if (desk.Window(handle) is { State: WindowState.Minimized } window
+                && window.Workspace == workspace.Name
+                && !into.Contains(handle))
+            {
+                into.Add(handle);
             }
         }
     }
