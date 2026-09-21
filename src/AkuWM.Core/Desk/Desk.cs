@@ -466,6 +466,7 @@ public sealed partial class Desk
     {
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
         _monitors.Clear();
+        List<(DeskMonitor Monitor, Rect Was)>? moved = null;
 
         foreach (MonitorSnapshot snapshot in monitors)
         {
@@ -481,6 +482,13 @@ public sealed partial class Desk
             {
                 monitor = new DeskMonitor(snapshot, role);
                 _byRole[role] = monitor;
+            }
+            else if (monitor.Snapshot.WorkArea != snapshot.WorkArea)
+            {
+                // Noted here and acted on at the end: the workspaces have not
+                // been handed to their monitors yet, and that is how a window
+                // is found to belong to this screen.
+                (moved ??= []).Add((monitor, monitor.Snapshot.WorkArea));
             }
 
             monitor.Snapshot = snapshot;
@@ -515,7 +523,66 @@ public sealed partial class Desk
         // A workspace whose monitor is away keeps its displayed flag: the
         // screen coming back should find the desk as it left it, and nothing
         // draws a workspace whose monitor is not in the list anyway.
+        if (moved is not null)
+        {
+            foreach ((DeskMonitor monitor, Rect was) in moved)
+            {
+                FollowTheScreen(monitor, was);
+            }
+        }
     }
+
+    /// <summary>
+    /// A screen moved or changed size: its windows keep their place ON IT.
+    /// </summary>
+    /// <remarks>
+    /// A tiled window gets this for free, because the layout is recomputed
+    /// from the work area. A floating one does not -- its rectangle is
+    /// absolute, so a screen moved 312 px up in the display settings leaves
+    /// every floating window on it 312 px below where it was, which after a
+    /// big enough move is another screen or nowhere at all.
+    ///
+    /// The place is kept as a FRACTION of the work area, so the one formula
+    /// covers both things that can happen to a screen: when only the origin
+    /// moved the ratio is exactly one and this is a plain translation, to the
+    /// pixel; when the resolution changed as well, a window a third of the way
+    /// across is still a third of the way across. Its size is left alone --
+    /// that is the person's choice, and Windows rescales it itself when the
+    /// DPI is what changed.
+    ///
+    /// Only the remembered rectangle is touched. Whether the window still fits
+    /// is the redraw's business, and it already pulls back anything that ends
+    /// up mostly off its screen.
+    /// </remarks>
+    private void FollowTheScreen(DeskMonitor monitor, Rect was)
+    {
+        Rect now = monitor.Snapshot.WorkArea;
+        if (was.Width <= 0 || was.Height <= 0)
+        {
+            return;
+        }
+
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (window.FloatingRect is not { } rect || !BelongsTo(window, monitor))
+            {
+                continue;
+            }
+
+            window.FloatingRect = rect with
+            {
+                X = now.X + (int)Math.Round((rect.X - was.X) * (double)now.Width / was.Width),
+                Y = now.Y + (int)Math.Round((rect.Y - was.Y) * (double)now.Height / was.Height),
+            };
+        }
+    }
+
+    private bool BelongsTo(DeskWindow window, DeskMonitor monitor) =>
+        window.Sticky
+            ? monitor.Sticky.Contains(window.Handle)
+            : window.Workspace is { } name
+              && Workspace(name) is { } workspace
+              && ReferenceEquals(MonitorOf(workspace), monitor);
 
     // ---- windows coming and going ----------------------------------------
 

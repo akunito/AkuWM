@@ -190,7 +190,9 @@ public sealed class WindowManager : IAsyncDisposable
         // so nothing can be looking at a half-built desk.
         _loop.Post("adopting the desk", () =>
         {
-            _desk.SetMonitors(_platform.Monitors());
+            IReadOnlyList<MonitorSnapshot> screens = _platform.Monitors();
+            _desk.SetMonitors(screens);
+            _screens.Prime(screens);
             _desk.Sync(_platform.Windows());
             _desk.Focus(_platform.Foreground());
 

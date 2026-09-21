@@ -41,6 +41,21 @@ public class ScreenWatchTests
     }
 
     [Fact]
+    public void Unless_it_was_primed_with_them()
+    {
+        // The desk is built from a list the caller read itself; the watch is
+        // told what that was, so the first pass does not report a change that
+        // never happened.
+        ScreenWatch watch = Watch();
+        IReadOnlyList<MonitorSnapshot> screens = [Screen(1, new Rect(0, 0, 1920, 1080))];
+
+        watch.Prime(screens);
+        _now += ScreenWatch.EveryMs;
+
+        Assert.False(watch.Changed(() => screens));
+    }
+
+    [Fact]
     public void The_same_screens_are_not()
     {
         ScreenWatch watch = Watch();

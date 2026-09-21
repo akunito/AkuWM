@@ -68,6 +68,21 @@ public sealed class ScreenWatch
     /// <summary>What the screens were the last time this looked.</summary>
     public IReadOnlyList<MonitorSnapshot> Last => _last;
 
+    /// <summary>
+    /// The screens as they are now, without calling that a change.
+    /// </summary>
+    /// <remarks>
+    /// For the caller that has just read the list for itself -- the desk is
+    /// built from it at startup. Without this the first pass reported a change
+    /// that had not happened and said so in the log, which is exactly the line
+    /// somebody will read while looking for a real one.
+    /// </remarks>
+    public void Prime(IReadOnlyList<MonitorSnapshot> screens)
+    {
+        _last = [.. screens];
+        _readAt = _clock();
+    }
+
     private bool Same(IReadOnlyList<MonitorSnapshot> screens)
     {
         if (screens.Count != _last.Length)
