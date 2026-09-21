@@ -153,6 +153,18 @@ public sealed class LayoutConfig
 
     /// <summary>A window that refuses to be resized is floated instead of fighting the layout.</summary>
     public bool? FloatUnresizable { get; set; }
+
+    /// <summary>
+    /// Where a window goes the first time it floats.
+    /// </summary>
+    /// <remarks>
+    /// True puts it in the middle of the screen at two thirds the size, which
+    /// is what a window that filled half the screen needs -- it looks broken
+    /// floating at tiling size. False leaves it exactly where it was, which is
+    /// what somebody popping a window out of the layout to nudge it wants. A
+    /// window that has floated before goes back where it was either way.
+    /// </remarks>
+    public bool? FloatCentered { get; set; }
 }
 
 public sealed class MonitorConfig : IConfigItem

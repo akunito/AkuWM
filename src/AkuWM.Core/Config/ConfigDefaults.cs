@@ -45,6 +45,7 @@ public static class ConfigDefaults
         {
             DefaultDirection = "auto",
             FloatUnresizable = true,
+            FloatCentered = true,
         },
         Monitors = [],
         Workspaces = [],

@@ -135,10 +135,11 @@ public sealed class GlazeExecutor
                 return Toggle(subject, w => _desk.SetFullscreen(w.Handle, true));
 
             case "toggle-floating":
-                return Toggle(subject, w => _desk.SetFloating(w.Handle, w.State != WindowState.Floating));
+                return Toggle(subject, w => _desk.SetFloating(
+                    w.Handle, w.State != WindowState.Floating, Centred(parsed)));
 
             case "set-floating":
-                return Toggle(subject, w => _desk.SetFloating(w.Handle, true));
+                return Toggle(subject, w => _desk.SetFloating(w.Handle, true, Centred(parsed)));
 
             case "toggle-tiling":
             case "set-tiling":
@@ -433,6 +434,19 @@ public sealed class GlazeExecutor
             ? ExecResult.Ok(subject.Id)
             : ExecResult.Fail("the window could not be sized");
     }
+
+    /// <summary>
+    /// <c>--centered=false</c>, which the scripts send on every float toggle.
+    /// </summary>
+    /// <remarks>
+    /// It was parsed and thrown away, so a window popped out of the layout
+    /// jumped to the middle of the screen instead of staying under the
+    /// pointer that was about to drag it. Absent, the configuration decides.
+    /// </remarks>
+    private bool Centred(ParsedCommand parsed) =>
+        parsed.Value("centered") is { Length: > 0 } written
+            ? !string.Equals(written, "false", StringComparison.OrdinalIgnoreCase)
+            : _desk.Config.Layout?.FloatCentered != false;
 
     private bool Change(DeskWindow subject, Direction direction, int by, bool pixels) =>
         pixels

@@ -159,6 +159,70 @@ public class LiveUseTests
         Assert.False(Desk.Window(DeskFixture.W(1))!.DecidedByHand);
     }
 
+    [Fact]
+    public void A_window_popped_out_of_the_layout_stays_where_it_was_when_asked_to()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Layout!.FloatCentered = false;
+
+        var fixture = new DeskFixture(config);
+        fixture.Open(1);
+        fixture.Turn();
+
+        Rect tiled = fixture.Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds;
+
+        var executor = new GlazeExecutor(fixture.Desk, new FakeDeskPlatform());
+        fixture.Desk.Focus(DeskFixture.W(1));
+        Assert.True(executor.Command("toggle-floating --centered=false").Success);
+        fixture.Turn();
+
+        // "keep the position the app asked for". It used to jump to the middle
+        // of the screen, away from the pointer that was about to drag it.
+        Assert.Equal(tiled, fixture.Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds);
+    }
+
+    [Fact]
+    public void And_goes_to_the_middle_when_that_is_what_is_asked_for()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+
+        Rect tiled = Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds;
+
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        Desk.Focus(DeskFixture.W(1));
+        Assert.True(executor.Command("toggle-floating --centered=true").Success);
+        _fixture.Turn();
+
+        // A window that filled half the screen looks broken floating at
+        // tiling size.
+        Assert.NotEqual(tiled, Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds);
+    }
+
+    [Fact]
+    public void A_window_that_has_floated_before_goes_back_where_it_was()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Layout!.FloatCentered = true;
+
+        var fixture = new DeskFixture(config);
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Desk.SetFloating(DeskFixture.W(1), true);
+        fixture.Turn();
+        fixture.Move(1, new Rect(500, 400, 700, 500));
+        fixture.Turn();
+
+        fixture.Desk.SetFloating(DeskFixture.W(1), false);
+        fixture.Turn();
+        fixture.Desk.SetFloating(DeskFixture.W(1), true);
+        fixture.Turn();
+
+        // Centred decides where a window goes the FIRST time it floats, not
+        // every time: it must not forget a position the person chose.
+        Assert.Equal(new Rect(500, 400, 700, 500), fixture.Desk.Window(DeskFixture.W(1))!.Snapshot.FrameBounds);
+    }
+
     // ---- how a window looks, per rule -------------------------------------
 
     private static AkuWmConfig Looking(Action<AkuWmConfig> edit)

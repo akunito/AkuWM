@@ -330,7 +330,15 @@ public sealed partial class Desk
     }
 
     /// <summary>Floats a tiled window, or tiles a floating one.</summary>
-    public bool SetFloating(WindowHandle handle, bool floating)
+    public bool SetFloating(WindowHandle handle, bool floating) =>
+        SetFloating(handle, floating, Config.Layout?.FloatCentered != false);
+
+    /// <param name="centred">
+    /// Where a window goes the FIRST time it floats: the middle of the screen,
+    /// or exactly where it already is. One that has floated before goes back
+    /// where it was either way.
+    /// </param>
+    public bool SetFloating(WindowHandle handle, bool floating, bool centred)
     {
         if (Window(handle) is not { Managed: true } window)
         {
@@ -367,7 +375,9 @@ public sealed partial class Desk
             // Somewhere sensible rather than wherever the tiling left it: a
             // window that fills its half of the screen looks broken as a
             // floating window.
-            window.FloatingRect ??= Centred(workspace, window);
+            window.FloatingRect ??= centred
+                ? Centred(workspace, window)
+                : window.Snapshot.FrameBounds;
             if (!workspace.Floating.Contains(handle))
             {
                 workspace.Floating.Add(handle);

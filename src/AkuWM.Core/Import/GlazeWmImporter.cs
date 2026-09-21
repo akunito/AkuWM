@@ -54,7 +54,15 @@ public static class GlazeWmImporter
             General = ImportGeneral(parsed, summary),
             Gaps = ImportGaps(parsed.Gaps),
             Effects = ImportEffects(parsed.WindowEffects),
-            Layout = new LayoutConfig { DefaultDirection = "auto" },
+            Layout = new LayoutConfig
+            {
+                DefaultDirection = "auto",
+
+                // "keep the position the app asked for": a window popped out
+                // of the layout stays under the pointer that is about to drag
+                // it, instead of jumping to the middle of the screen.
+                FloatCentered = parsed.WindowBehavior?.StateDefaults?.Floating?.Centered,
+            },
             Workspaces = ImportWorkspaces(parsed.Workspaces, summary),
             Rules = ImportRules(parsed.WindowRules, now, summary),
         };
@@ -331,10 +339,26 @@ public static class GlazeWmImporter
     private sealed class GlazeConfig
     {
         public GlazeGeneral? General { get; set; }
+        public GlazeWindowBehaviour? WindowBehavior { get; set; }
         public GlazeGaps? Gaps { get; set; }
         public GlazeEffects? WindowEffects { get; set; }
         public List<GlazeWorkspace>? Workspaces { get; set; }
         public List<GlazeRule>? WindowRules { get; set; }
+    }
+
+    private sealed class GlazeWindowBehaviour
+    {
+        public GlazeStateDefaults? StateDefaults { get; set; }
+    }
+
+    private sealed class GlazeStateDefaults
+    {
+        public GlazeFloatingDefaults? Floating { get; set; }
+    }
+
+    private sealed class GlazeFloatingDefaults
+    {
+        public bool? Centered { get; set; }
     }
 
     private sealed class GlazeGeneral
