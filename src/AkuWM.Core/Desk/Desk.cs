@@ -797,6 +797,7 @@ public sealed partial class Desk
             && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
         {
             window.FloatingRect = snapshot.FrameBounds;
+            Rehome(window, snapshot);
         }
 
         if (coversTheScreen && window.State != WindowState.Fullscreen && !weMovedItThere)
@@ -945,6 +946,55 @@ public sealed partial class Desk
     }
 
     /// <summary>Puts a window into a workspace, in the layer its state says.</summary>
+    /// <summary>
+    /// A window the person dragged onto another monitor joins the workspace
+    /// shown there.
+    /// </summary>
+    /// <remarks>
+    /// Without this the drag cannot work at all, and not because anything
+    /// fights it: the window keeps the rectangle it was given, but its
+    /// workspace still belongs to the monitor it left, and a placement is
+    /// clamped into the work area of the workspace's monitor. So the window
+    /// was dragged back to the edge of the screen it had just come from --
+    /// 3082 asked for, 3832 arrived at, that monitor's left edge less the
+    /// border (measured from the desk, 2026-09-21).
+    ///
+    /// The monitor comes from the snapshot, which is what Windows itself says
+    /// about the window, rather than from comparing rectangles: a window
+    /// straddling the boundary belongs to whichever screen Windows will send
+    /// its DPI changes for, and second-guessing that is how the two sides stop
+    /// agreeing.
+    ///
+    /// Only for a move the PERSON made -- the caller has already established
+    /// that -- so the desk moving a window to a workspace of the other monitor
+    /// does not read as a drag and send it round again.
+    /// </remarks>
+    private void Rehome(DeskWindow window, WindowSnapshot snapshot)
+    {
+        if (window.Sticky)
+        {
+            // It follows its monitor by being sticky; changing that here would
+            // silently un-stick it.
+            return;
+        }
+
+        if (window.Workspace is not { } name || Workspace(name) is not { } workspace)
+        {
+            return;
+        }
+
+        DeskMonitor? landed = MonitorByHandle(snapshot.Monitor);
+        if (landed is null || ReferenceEquals(landed, MonitorOf(workspace)))
+        {
+            return;
+        }
+
+        if (landed.Displayed is { } destination)
+        {
+            Place(window, destination);
+        }
+    }
+
     private void Place(DeskWindow window, Workspace workspace)
     {
         if (window.Workspace is { } previous && !string.Equals(previous, workspace.Name, StringComparison.OrdinalIgnoreCase))

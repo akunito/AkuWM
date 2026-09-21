@@ -19,12 +19,30 @@ public sealed class DeskFixture
     private long _now;
 
     public DeskFixture(AkuWmConfig? config = null)
+        : this(config ?? Configuration(), FakePlatform.MainMonitor(), FakePlatform.SecondMonitor())
+    {
+    }
+
+    /// <summary>
+    /// A desk with the screens named here instead of this machine's two.
+    /// </summary>
+    /// <remarks>
+    /// The arrangement of the monitors is the one thing the driven suite on
+    /// the real desk can never vary: it has the screens it has. Every geometry
+    /// rule -- tiles filling the work area, a window staying on the monitor it
+    /// was dropped on, gaps that scale with the DPI -- has to hold for a
+    /// portrait screen, for one to the LEFT of the main one, above it, at
+    /// another scale, and for three of them.
+    /// </remarks>
+    public DeskFixture(AkuWmConfig config, params MonitorSnapshot[] monitors)
     {
         Platform = new FakePlatform();
-        Platform.MonitorList.Add(FakePlatform.MainMonitor());
-        Platform.MonitorList.Add(FakePlatform.SecondMonitor());
+        foreach (MonitorSnapshot monitor in monitors)
+        {
+            Platform.MonitorList.Add(monitor);
+        }
 
-        Desk = new Desk(config ?? Configuration(), clock: () => _now);
+        Desk = new Desk(config, clock: () => _now);
         Desk.ChecksHandlesWith(h => Platform.Window(h) is not null);
         Desk.ReadsTheCursorWith(() => Platform.Cursor);
         Desk.SetMonitors(Platform.Monitors());
@@ -94,11 +112,42 @@ public sealed class DeskFixture
     }
 
     /// <summary>The person moves or resizes a window; Windows says where it went.</summary>
+    /// <remarks>
+    /// The monitor travels with the rectangle, because on a real desk it does:
+    /// the platform reads it with MonitorFromWindow every time it looks. This
+    /// used to keep the old one, so a window dragged to the other screen was
+    /// still reported as being on the one it left -- and the desk could not
+    /// have noticed the difference no matter what it did.
+    /// </remarks>
     public void Move(long handle, Rect to)
     {
         int at = Platform.WindowList.FindIndex(w => w.Handle.Value == handle);
-        Platform.WindowList[at] = Platform.WindowList[at] with { FrameBounds = to, WindowRect = to };
+        Platform.WindowList[at] = Platform.WindowList[at] with
+        {
+            FrameBounds = to,
+            WindowRect = to,
+            Monitor = MonitorUnder(to),
+        };
+
         Sync();
+    }
+
+    /// <summary>Which monitor Windows would say a rectangle is on: the one under its middle.</summary>
+    private MonitorHandle MonitorUnder(Rect frame)
+    {
+        int x = frame.X + (frame.Width / 2);
+        int y = frame.Y + (frame.Height / 2);
+
+        foreach (MonitorSnapshot monitor in Platform.MonitorList)
+        {
+            Rect bounds = monitor.Bounds;
+            if (x >= bounds.Left && x < bounds.Right && y >= bounds.Top && y < bounds.Bottom)
+            {
+                return monitor.Handle;
+            }
+        }
+
+        return Platform.MonitorList[0].Handle;
     }
 
     public void Close(long handle)
