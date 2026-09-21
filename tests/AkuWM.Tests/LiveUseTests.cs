@@ -130,6 +130,35 @@ public class LiveUseTests
         Assert.Equal("21", Desk.Window(DeskFixture.W(2))!.Workspace);
     }
 
+    [Fact]
+    public void A_chord_that_changes_a_window_records_that_the_person_decided_it()
+    {
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.Focus(DeskFixture.W(1));
+
+        Assert.False(Desk.Window(DeskFixture.W(1))!.DecidedByHand);
+
+        Assert.True(executor.Command("toggle-floating").Success);
+
+        // The configuration that would have tiled it must not win it back the
+        // next time anything re-decides windows.
+        Assert.True(Desk.Window(DeskFixture.W(1))!.DecidedByHand);
+    }
+
+    [Fact]
+    public void A_command_that_changes_nothing_is_not_a_decision()
+    {
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.Focus(DeskFixture.W(1));
+
+        Assert.False(executor.Command("set-tiling").Success);
+        Assert.False(Desk.Window(DeskFixture.W(1))!.DecidedByHand);
+    }
+
     // ---- how a window looks, per rule -------------------------------------
 
     private static AkuWmConfig Looking(Action<AkuWmConfig> edit)

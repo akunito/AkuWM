@@ -56,17 +56,65 @@ public static class ConfigValidator
             return;
         }
 
-        if (gaps.Inner is < 0)
+        ValidateGapsAt(gaps, "gaps", issues);
+    }
+
+    private static void ValidateGapsAt(GapsConfig? gaps, string at, List<ValidationIssue> issues)
+    {
+        if (gaps is null)
         {
-            issues.Add(ValidationIssue.Error("gaps.inner", "cannot be negative"));
+            return;
         }
 
-        if (gaps.Outer is { Length: not 4 } outer)
+        if (gaps.Inner is < 0)
+        {
+            issues.Add(ValidationIssue.Error(at + ".inner", "cannot be negative"));
+        }
+
+        if (gaps.Inner is > MaximumGap)
+        {
+            issues.Add(ValidationIssue.Warning(
+                at + ".inner", $"{gaps.Inner} px between windows leaves very little window"));
+        }
+
+        if (gaps.Outer is not { } outer)
+        {
+            return;
+        }
+
+        // One number is expanded to four when it is read, so anything else
+        // here is a hand-written array of the wrong length. The engine used to
+        // tolerate a short one while this refused it, which is the worst
+        // possible split: valid to run, invalid to save.
+        if (outer.Length != 4)
         {
             issues.Add(ValidationIssue.Error(
-                "gaps.outer", $"needs four values (top, right, bottom, left), got {outer.Length}"));
+                at + ".outer",
+                $"is one number, or four (top, right, bottom, left); got {outer.Length}"));
+            return;
+        }
+
+        for (int i = 0; i < outer.Length; i++)
+        {
+            if (outer[i] < 0)
+            {
+                // A negative outer gap pushes windows off the screen, which
+                // looks exactly like a window manager that has lost them.
+                issues.Add(ValidationIssue.Error(
+                    at + ".outer", $"cannot be negative ({outer[i]} at {Sides[i]})"));
+            }
+            else if (outer[i] > MaximumGap)
+            {
+                issues.Add(ValidationIssue.Warning(
+                    at + ".outer", $"{outer[i]} px at {Sides[i]} leaves very little screen"));
+            }
         }
     }
+
+    /// <summary>Past this a gap stops being a gap and starts being a margin nobody wanted.</summary>
+    private const int MaximumGap = 200;
+
+    private static readonly string[] Sides = ["top", "right", "bottom", "left"];
 
     private static void ValidateEffects(EffectsConfig? effects, List<ValidationIssue> issues)
     {
@@ -150,6 +198,8 @@ public static class ConfigValidator
         {
             MonitorConfig monitor = monitors[i];
             string path = $"monitors[{i}]";
+
+            ValidateGapsAt(monitor.Gaps, path + ".gaps", issues);
 
             if (string.IsNullOrWhiteSpace(monitor.Id))
             {

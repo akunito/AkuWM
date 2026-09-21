@@ -868,7 +868,22 @@ public sealed partial class Desk
 
     public Gaps GapsFor(DeskMonitor monitor)
     {
+        // This screen's own numbers over the global ones, field by field, so
+        // "just the vertical monitor, wider" does not mean restating the rest.
         GapsConfig? gaps = Config.Gaps;
+
+        for (int i = 0; i < (Config.Monitors?.Count ?? 0); i++)
+        {
+            MonitorConfig configured = Config.Monitors![i];
+
+            if (configured.Gaps is { } mine
+                && string.Equals(configured.Id, monitor.Role, StringComparison.OrdinalIgnoreCase))
+            {
+                gaps = ConfigMerge.MergeObject(gaps, mine);
+                break;
+            }
+        }
+
         int[] outer = gaps?.Outer ?? [0, 0, 0, 0];
         var written = new Gaps(
             gaps?.Inner ?? 0,

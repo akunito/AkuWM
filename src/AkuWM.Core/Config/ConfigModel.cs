@@ -73,6 +73,10 @@ public sealed class GapsConfig
     public int? Inner { get; set; }
 
     /// <summary>top, right, bottom, left.</summary>
+    /// <summary>
+    /// One number for every side, or four: top, right, bottom, left.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(OuterGapsConverter))]
     public int[]? Outer { get; set; }
 
     public bool? ScaleWithDpi { get; set; }
@@ -141,6 +145,16 @@ public sealed class LayoutConfig
 
 public sealed class MonitorConfig : IConfigItem
 {
+    /// <summary>
+    /// Gaps for this screen only, over the top of the global block.
+    /// </summary>
+    /// <remarks>
+    /// A portrait monitor and a 4K one do not want the same numbers, and the
+    /// taskbar is on one of them. A field left out here is taken from
+    /// <c>gaps</c>, so "just the vertical one, wider" is two lines.
+    /// </remarks>
+    public GapsConfig? Gaps { get; set; }
+
     /// <summary>The role: <c>main</c>, <c>second</c>, <c>tv</c>, <c>left</c>.</summary>
     public string? Id { get; set; }
 
