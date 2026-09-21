@@ -49,6 +49,23 @@ function Check($name, $condition, $detail) {
     if ($condition) { Pass "$name" } else { Fail "$name -- $detail" }
 }
 
+# Bounded, because a wedged GlazeWM accepts the connection and never answers,
+# and an unbounded call here would hang the run with the desk left paused.
+# (Measured 2026-09-21: GlazeWM started from a WSL-interop shell comes up that
+# way. Start it through explorer and the Startup shortcut instead.)
+function Glaze([string[]]$arguments, [int]$ms = 6000) {
+    $out = Join-Path $env:TEMP 'akuwm-smoke-glaze.txt'
+    Remove-Item $out -ErrorAction SilentlyContinue
+    $p = Start-Process -FilePath $glazewm -ArgumentList $arguments `
+        -RedirectStandardOutput $out -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit($ms)) {
+        $p.Kill()
+        Fail "GlazeWM did not answer '$($arguments -join ' ')' in $ms ms"
+        return ''
+    }
+    if (Test-Path $out) { Get-Content $out -Raw } else { '' }
+}
+
 function Akuwm([string]$arguments) {
     $out = Join-Path $env:TEMP 'akuwm-smoke-out.txt'
     Remove-Item $out -ErrorAction SilentlyContinue
@@ -121,15 +138,15 @@ $paused = $false
 
 if (Test-Path $glazewm) {
     Step 'Asking the running window manager to let go and stand still'
-    $running = & $glazewm query windows | ConvertFrom-Json
+    $running = Glaze @('query', 'windows') | ConvertFrom-Json
     foreach ($window in $running.data.windows) {
         if ($titles -contains $window.title.Trim()) {
-            & $glazewm command ignore --id $window.id | Out-Null
+            Glaze @('command', 'ignore', '--id', $window.id) | Out-Null
             Note "ignored $($window.title.Trim())"
         }
     }
 
-    & $glazewm command wm-toggle-pause | Out-Null
+    Glaze @('command', 'wm-toggle-pause') | Out-Null
     $paused = $true
     Note 'paused'
     Start-Sleep -Milliseconds 800
@@ -252,7 +269,7 @@ public class SmokeClose {
 
     if ($paused) {
         Step 'Letting the other window manager move again'
-        & $glazewm command wm-toggle-pause | Out-Null
+        Glaze @('command', 'wm-toggle-pause') | Out-Null
         Note 'unpaused'
     }
 }

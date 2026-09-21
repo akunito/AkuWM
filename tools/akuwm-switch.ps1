@@ -45,7 +45,11 @@ $ErrorActionPreference = 'Stop'
 $akuwm   = Join-Path $env:ProgramFiles 'AkuWM\akuwm.exe'
 $shim    = Join-Path $env:ProgramFiles 'AkuWM\glazewm.exe'
 $glazewm = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\glazewm.exe'
+$glazeCli = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
 $zebar   = Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe'
+$startup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+$glazeLink = Join-Path $startup 'GlazeWM.lnk'
+$zebarLink = Join-Path $startup 'Zebar.lnk'
 $ahkExe  = Join-Path $env:ProgramFiles 'AutoHotkey\v2\AutoHotkey64_UIA.exe'
 $ahk     = Join-Path $env:USERPROFILE '.dotfiles\templates\windows\DESK_W11\hyper-desktops.ahk'
 
@@ -64,11 +68,47 @@ function Stop-Them([string]$name) {
     return $true
 }
 
+# Started through explorer, with the Startup shortcut when there is one, so the
+# shell is the parent. Launched any other way from a shell that came through
+# WSL interop, GlazeWM comes up WEDGED: the process runs, takes port 6123,
+# accepts connections and answers none of them, and its own startup commands
+# never run. Measured 2026-09-21, and it cost this desk its window manager for
+# eight hours -- the restore had checked that a process existed, which it did.
+function Start-Shell-App([string]$exe, [string]$shortcut, [string[]]$arguments) {
+    if (Test-Path $shortcut) {
+        Start-Process explorer.exe -ArgumentList $shortcut
+        return
+    }
+
+    if ($arguments) {
+        Start-Process -FilePath $exe -ArgumentList $arguments -WindowStyle Hidden
+    } else {
+        Start-Process -FilePath $exe -WindowStyle Hidden
+    }
+}
+
+# Whether it ANSWERS, not whether it is running. A wedged GlazeWM is a running
+# GlazeWM, and every hotkey on this desk goes through that socket.
+function Wait-For-Wm([string]$cli, [int]$seconds) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    $out = Join-Path $env:TEMP 'akuwm-switch-probe.txt'
+
+    while ((Get-Date) -lt $deadline) {
+        Remove-Item $out -ErrorAction SilentlyContinue
+        $probe = Start-Process -FilePath $cli -ArgumentList 'query', 'paused' `
+            -RedirectStandardOutput $out -PassThru -WindowStyle Hidden
+        if ($probe.WaitForExit(4000)) { return $true }
+        $probe.Kill()
+    }
+
+    return $false
+}
+
 function Restart-Zebar {
     if (-not (Test-Path $zebar)) { return }
     Stop-Them 'zebar' | Out-Null
     Start-Sleep -Milliseconds 300
-    Start-Process -FilePath $zebar -WindowStyle Hidden
+    Start-Shell-App $zebar $zebarLink @()
     Say '  Zebar restarted'
 }
 
@@ -111,9 +151,19 @@ if ($To -eq 'glazewm') {
         if (Get-Process -Name glazewm -ErrorAction SilentlyContinue) {
             Say '  GlazeWM is already running'
         } else {
-            Start-Process -FilePath $glazewm -ArgumentList 'start' -WindowStyle Hidden
-            Start-Sleep -Seconds 2
+            Start-Shell-App $glazewm $glazeLink @('start')
             Say '  GlazeWM started'
+        }
+
+        # This is the way back. It has to be proven, not assumed.
+        if (Wait-For-Wm $glazeCli 20) {
+            Say '  GlazeWM is answering on 6123'
+        } else {
+            Say ''
+            Say 'GlazeWM is running but NOT answering on 6123, so the hotkeys are dead.'
+            Say 'Stop it and start it from the Start menu shortcut:'
+            Say "  $glazeLink"
+            exit 1
         }
     } else {
         Say "  GlazeWM is not installed at $glazewm"

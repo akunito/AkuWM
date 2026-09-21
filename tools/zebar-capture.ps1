@@ -37,10 +37,40 @@ $glazeDir = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM'
 $glazeCli = Join-Path $glazeDir 'cli\glazewm.exe'
 $glazeExe = Join-Path $glazeDir 'glazewm.exe'
 $zebarExe = Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe'
+$startup  = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+$glazeLnk = Join-Path $startup 'GlazeWM.lnk'
+$zebarLnk = Join-Path $startup 'Zebar.lnk'
 
 function Step($text) { Write-Host "==> $text" -ForegroundColor Cyan }
 function Note($text) { Write-Host "    $text" -ForegroundColor DarkGray }
 function Warn($text) { Write-Host "    $text" -ForegroundColor Yellow }
+
+# Through explorer, with the Startup shortcut, so the shell is the parent.
+# Started any other way from a shell that came through WSL interop, GlazeWM
+# comes up WEDGED: the process runs, takes 6123, accepts connections and
+# answers none of them, and its startup commands never run. Measured
+# 2026-09-21 -- this script's own restore did it, and checked only that a
+# process existed, so the desk had no working window manager for eight hours.
+function StartByShell([string]$exe, [string]$shortcut) {
+    if (Test-Path $shortcut) { Start-Process explorer.exe -ArgumentList $shortcut }
+    else { Start-Process -FilePath $exe -WindowStyle Hidden }
+}
+
+# Whether it ANSWERS, not whether it runs.
+function WmAnswers([string]$cli, [int]$seconds) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    $out = Join-Path $env:TEMP 'akuwm-capture-probe.txt'
+
+    while ((Get-Date) -lt $deadline) {
+        Remove-Item $out -ErrorAction SilentlyContinue
+        $probe = Start-Process -FilePath $cli -ArgumentList 'query', 'paused' `
+            -RedirectStandardOutput $out -PassThru -WindowStyle Hidden
+        if ($probe.WaitForExit(4000)) { return $true }
+        $probe.Kill()
+    }
+
+    return $false
+}
 
 function PortOpen([int]$port) {
     $probe = New-Object System.Net.Sockets.TcpClient
@@ -65,9 +95,15 @@ $stoppedGlaze = $false
 try {
     if ($glazeWasRunning) {
         Step 'Stopping the old window manager so the port is free'
-        # Its own shutdown command kills Zebar with it, which is what we want:
-        # the bar has to connect fresh to be worth recording.
-        & $glazeCli command wm-exit | Out-Null
+        # Bounded: a wedged GlazeWM never answers wm-exit, and waiting on it
+        # forever is how this script hung the first time it was run.
+        $exit = Start-Process -FilePath $glazeCli -ArgumentList 'command', 'wm-exit' `
+            -PassThru -WindowStyle Hidden
+        if (-not $exit.WaitForExit(6000)) {
+            $exit.Kill()
+            Warn 'GlazeWM did not answer wm-exit; stopping it the hard way'
+            Get-Process glazewm-watcher, glazewm -ErrorAction SilentlyContinue | Stop-Process -Force
+        }
         $stoppedGlaze = $true
         [void](WaitFor { -not (Get-Process glazewm -ErrorAction SilentlyContinue) } 8000 'GlazeWM to stop')
         [void](WaitFor { -not (PortOpen 6123) } 8000 'port 6123 to be released')
@@ -85,7 +121,7 @@ try {
     }
 
     Step 'Starting the bar'
-    Start-Process -FilePath $zebarExe -WindowStyle Hidden
+    StartByShell $zebarExe $zebarLnk
     [void](WaitFor { (Get-Content $Out -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0 } `
         15000 'the bar to say something')
 
@@ -110,9 +146,18 @@ finally {
     }
 
     if ($stoppedGlaze) {
-        Start-Process -FilePath $glazeExe -ArgumentList 'start' -WindowStyle Hidden
-        [void](WaitFor { Get-Process glazewm -ErrorAction SilentlyContinue } 15000 'GlazeWM to come back')
-        Note 'GlazeWM is running again (it starts Zebar itself)'
+        StartByShell $glazeExe $glazeLnk
+        if (WmAnswers $glazeCli 25) {
+            Note 'GlazeWM is answering on 6123 again'
+        } else {
+            Warn 'GlazeWM is NOT answering on 6123 -- the hotkeys are dead.'
+            Warn "Stop it and start it from $glazeLnk"
+        }
+
+        if (-not (Get-Process zebar -ErrorAction SilentlyContinue)) {
+            StartByShell $zebarExe $zebarLnk
+        }
+        Note 'the bar is back'
     }
 }
 
