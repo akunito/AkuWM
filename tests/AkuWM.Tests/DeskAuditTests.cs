@@ -138,6 +138,177 @@ public class DeskAuditTests
         Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
     }
 
+    // ---- the focus follows the mouse, not windows moving under it ----------
+
+    [Fact]
+    public void A_window_sliding_under_a_still_pointer_does_not_take_the_focus()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.Focus(W(1));
+        _fixture.Platform.Cursor = (500, 500);
+
+        // A second window arrives and the layout re-tiles: window 2 is placed
+        // where the pointer happens to be resting.
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        Assert.False(Desk.Focus(W(2)));
+        Assert.Equal(W(1), Desk.Focused);
+    }
+
+    [Fact]
+    public void And_the_focus_is_put_back_where_it_was()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.Focus(W(1));
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        Desk.Focus(W(2));
+        Redraw redraw = Desk.Compute();
+
+        Assert.Equal(W(1), redraw.Focus);
+    }
+
+    [Fact]
+    public void Moving_the_pointer_and_then_focusing_is_the_person_and_is_taken()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.Focus(W(1));
+
+        _fixture.Platform.Cursor = (2000, 1200);
+
+        Assert.True(Desk.Focus(W(2)));
+        Assert.Equal(W(2), Desk.Focused);
+    }
+
+    [Fact]
+    public void Long_after_the_layout_settled_the_pointer_no_longer_matters()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.Focus(W(1));
+
+        // Nothing has moved for a while: a focus change now is the person,
+        // whatever the pointer is doing.
+        _fixture.Wait(Desk.FocusHoldMs + 50);
+
+        Assert.True(Desk.Focus(W(2)));
+        Assert.Equal(W(2), Desk.Focused);
+    }
+
+    [Fact]
+    public void A_window_that_did_not_move_can_always_take_the_focus()
+    {
+        _fixture.Open(1, resizable: false, frame: new Rect(300, 300, 500, 400));
+        _fixture.Turn();
+        Desk.Focus(W(1));
+
+        // 2 arrives and is tiled; 1 floats and was not touched by that pass,
+        // so clicking back onto it is never mistaken for the layout.
+        _fixture.Open(2);
+        _fixture.Turn();
+        Desk.Focus(W(2));
+
+        Assert.True(Desk.Focus(W(1)));
+        Assert.Equal(W(1), Desk.Focused);
+    }
+
+    // ---- dragging a tiled window to the top edge ---------------------------
+    //
+    // Three answers, all of them a setting the GUI will offer. What separates
+    // them is whether the window keeps its place in the layout.
+
+    private static DeskFixture DraggingTo(string how)
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Layout!.DragToTop = how;
+        return new DeskFixture(config);
+    }
+
+    [Fact]
+    public void Dragged_to_the_top_it_covers_the_screen_and_keeps_its_place()
+    {
+        DeskFixture desk = DraggingTo("fullscreen");
+        desk.Open(1);
+        desk.Open(2);
+        desk.Turn();
+
+        Assert.True(desk.Desk.DragToTop(W(1)));
+        desk.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, desk.Managed(1)!.State);
+        Assert.Equal(new Rect(0, 0, 3840, 2160), desk.FrameOf(1));
+
+        // The point of this one: it never left the layout, so it drops back
+        // into it rather than leaving the tiles closed over the gap.
+        desk.Desk.SetFullscreen(W(1), false);
+        desk.Turn();
+        Assert.Contains(W(1), desk.Desk.Workspace("11")!.Tiling.Windows);
+    }
+
+    [Fact]
+    public void Dragged_to_the_top_as_float_maximized_it_stops_at_the_work_area()
+    {
+        DeskFixture desk = DraggingTo("float_maximized");
+        desk.Open(1);
+        desk.Open(2);
+        desk.Turn();
+
+        Assert.True(desk.Desk.DragToTop(W(1)));
+        desk.Turn();
+
+        Assert.Equal(WindowState.Floating, desk.Managed(1)!.State);
+        // The work area, not the monitor: the taskbar stays visible, and a
+        // window that does not cover the whole screen is not read as
+        // fullscreen -- which is what keeps this distinct from the next one.
+        Assert.Equal(new Rect(0, 42, 3840, 2118), desk.FrameOf(1));
+        Assert.DoesNotContain(W(1), desk.Desk.Workspace("11")!.Tiling.Windows);
+    }
+
+    [Fact]
+    public void Dragged_to_the_top_as_float_fullscreen_it_covers_the_monitor_and_leaves_the_layout()
+    {
+        DeskFixture desk = DraggingTo("float_fullscreen");
+        desk.Open(1);
+        desk.Open(2);
+        desk.Turn();
+
+        Assert.True(desk.Desk.DragToTop(W(1)));
+        desk.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, desk.Managed(1)!.State);
+        Assert.Equal(new Rect(0, 0, 3840, 2160), desk.FrameOf(1));
+
+        // It left the layout on the way in, so leaving fullscreen gives back a
+        // floating window and the tiles stay as they are.
+        desk.Desk.SetFullscreen(W(1), false);
+        desk.Turn();
+        Assert.Equal(WindowState.Floating, desk.Managed(1)!.State);
+        Assert.DoesNotContain(W(1), desk.Desk.Workspace("11")!.Tiling.Windows);
+    }
+
+    [Fact]
+    public void Dragged_to_the_top_with_none_nothing_happens()
+    {
+        DeskFixture desk = DraggingTo("none");
+        desk.Open(1);
+        desk.Open(2);
+        desk.Turn();
+        Rect was = desk.FrameOf(1);
+
+        Assert.False(desk.Desk.DragToTop(W(1)));
+        desk.Turn();
+
+        Assert.Equal(WindowState.Tiling, desk.Managed(1)!.State);
+        Assert.Equal(was, desk.FrameOf(1));
+    }
+
     // ---- decoration and the screen ----------------------------------------
 
     /// <summary>A desk whose windows actually get a border, like Diego's.</summary>

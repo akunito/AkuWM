@@ -145,6 +145,12 @@ public sealed class GlazeExecutor
             case "set-tiling":
                 return Toggle(subject, w => _desk.SetFloating(w.Handle, false));
 
+            // Not a GlazeWM verb: AkuWM's own, so the gesture script does not
+            // have to know what the setting says. The POLICY stays here, which
+            // is what lets the GUI change it without touching the hotkeys.
+            case "drag-to-top":
+                return Toggle(subject, w => _desk.DragToTop(w.Handle));
+
             case "toggle-sticky":
                 return Toggle(subject, w => _desk.SetSticky(w.Handle, !w.Sticky));
 

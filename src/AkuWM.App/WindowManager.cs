@@ -82,6 +82,7 @@ public sealed class WindowManager : IAsyncDisposable
         // A window that has closed is not one AkuWM has to put back.
         _desk.Forgotten += journal.Forget;
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
+        _desk.ReadsTheCursorWith(() => _platform.CursorPosition());
 
         _loop = new WmLoop(OnEvent, watchdog.Beat, onBatchEnd: Redraw);
 

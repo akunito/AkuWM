@@ -22,8 +22,39 @@ public sealed partial class Desk
     /// following it would leave the keyboard pointing at a window nobody can
     /// see. The caller is told to put the focus back.
     /// </remarks>
-    public bool Focus(WindowHandle handle)
+    public bool Focus(WindowHandle handle) => Focus(handle, fromTheDesk: false);
+
+    /// <param name="fromTheDesk">
+    /// True when AkuWM asked for this focus itself, so the guard below -- which
+    /// exists to refuse focus the LAYOUT caused -- does not refuse it.
+    /// </param>
+    internal bool Focus(WindowHandle handle, bool fromTheDesk)
     {
+        // The focus follows the mouse, not windows moving under it. Windows'
+        // own active-window tracking hands the focus to whatever ends up under
+        // the pointer, so AkuWM's layout change slides window after window
+        // past a pointer nobody moved and each one takes the focus in turn.
+        // Measured on the desk: four flips in one second after a window was
+        // tiled, and what a person SEES is the content of both windows
+        // repainting -- applications redraw on activate and deactivate -- for
+        // two or three seconds (2026-09-21).
+        // Narrow on purpose: only a window AkuWM ITSELF just moved is refused.
+        // A click or an Alt+Tab onto a window that did not move is the person
+        // choosing, and is taken. PlacedAt is stamped only when the rectangle
+        // asked for CHANGES, so a window being re-asked for the place it is
+        // already in does not keep the guard alive.
+        if (!fromTheDesk
+            && handle != Focused
+            && !Focused.IsNone
+            && Window(handle) is { } arriving
+            && Now - arriving.PlacedAt <= FocusHoldMs
+            && WindowsMovedUnderAStillPointer()
+            && Window(Focused) is { Managed: true, Hidden: false })
+        {
+            _wantFocus = Focused;
+            return false;
+        }
+
         DeskWindow? window = Window(handle);
         if (window is null || !window.Managed)
         {
@@ -427,6 +458,56 @@ public sealed partial class Desk
             area.Y + ((area.Height - height) / 2),
             width,
             height);
+    }
+
+    /// <summary>A TILED window dragged to the top edge of its monitor.</summary>
+    /// <remarks>
+    /// A floating window is snapped by Windows itself and never reaches this;
+    /// a tiled one is put straight back in its tile, so the gesture did
+    /// nothing at all until now.
+    ///
+    /// What separates the three is whether the window KEEPS ITS PLACE. The
+    /// default covers the screen from inside the layout, so PreviousState is
+    /// Tiling and leaving fullscreen drops it back where it was. The two
+    /// float_* answers take it out first, so the tiles close over the gap and
+    /// it is a floating window afterwards. float_maximized stops at the work
+    /// area -- the taskbar stays visible and, because it does not cover the
+    /// whole monitor, AkuWM does not read it as fullscreen.
+    /// </remarks>
+    public bool DragToTop(WindowHandle handle)
+    {
+        if (Window(handle) is not { Managed: true } window)
+        {
+            return false;
+        }
+
+        switch ((Config.Layout?.DragToTop ?? "fullscreen").ToLowerInvariant())
+        {
+            case "none":
+                return false;
+
+            case "float_maximized" or "float-maximized":
+                if (window.State != WindowState.Floating && !SetFloating(handle, true, centred: false))
+                {
+                    return false;
+                }
+
+                return window.Workspace is { } name
+                       && Workspace(name) is { } on
+                       && MonitorOf(on) is { } screen
+                       && SetFloatingRect(handle, screen.TilingArea);
+
+            case "float_fullscreen" or "float-fullscreen":
+                if (window.State != WindowState.Floating && !SetFloating(handle, true, centred: false))
+                {
+                    return false;
+                }
+
+                return SetFullscreen(handle, true);
+
+            default:
+                return SetFullscreen(handle, true);
+        }
     }
 
     public bool SetFullscreen(WindowHandle handle, bool fullscreen)

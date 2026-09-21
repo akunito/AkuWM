@@ -165,6 +165,20 @@ public sealed class LayoutConfig
     /// window that has floated before goes back where it was either way.
     /// </remarks>
     public bool? FloatCentered { get; set; }
+
+    /// <summary>
+    /// What dragging a TILED window to the top edge does.
+    /// </summary>
+    /// <remarks>
+    /// <c>fullscreen</c> (the default) covers the screen without leaving the
+    /// layout: the window keeps its place and drops back into it when it stops
+    /// being fullscreen. <c>float_maximized</c> and <c>float_fullscreen</c>
+    /// take it out of the layout first, so the tiles close over the gap and it
+    /// has to be put back by hand. <c>none</c> ignores the gesture.
+    ///
+    /// A floating window is snapped by Windows itself and never reaches this.
+    /// </remarks>
+    public string? DragToTop { get; set; }
 }
 
 public sealed class MonitorConfig : IConfigItem

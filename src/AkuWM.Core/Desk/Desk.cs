@@ -57,6 +57,44 @@ public sealed partial class Desk
 
     /// <summary>Is that handle still a window? Null means believe the enumeration.</summary>
     private Func<WindowHandle, bool>? _stillAWindow;
+    private Func<(int X, int Y)>? _cursor;
+
+    /// <summary>Where the pointer was when AkuWM last moved anything, and when.</summary>
+    private (int X, int Y)? _cursorWhenPlaced;
+    private long _placedAnythingAt;
+
+    /// <summary>
+    /// How long after a move a focus change is treated as the layout's doing
+    /// rather than the person's, and how far the pointer may drift and still
+    /// count as still.
+    /// </summary>
+    /// Short on purpose. The settle bursts that cause this are a tenth of a
+    /// second apart, and the longer this is the likelier it swallows a click
+    /// the person meant.
+    internal const int FocusHoldMs = 250;
+    internal const int PointerSlack = 4;
+
+    /// <summary>
+    /// True while the pointer is exactly where it was when AkuWM last moved
+    /// windows, and that was a moment ago.
+    /// </summary>
+    internal bool WindowsMovedUnderAStillPointer()
+    {
+        if (_cursorWhenPlaced is not { } was || _cursor is null)
+        {
+            return false;
+        }
+
+        if (Now - _placedAnythingAt > FocusHoldMs)
+        {
+            return false;
+        }
+
+        (int X, int Y) now = _cursor();
+        return Math.Abs(now.X - was.X) <= PointerSlack && Math.Abs(now.Y - was.Y) <= PointerSlack;
+    }
+
+    internal void MovedWindowsAt(long when) => (_placedAnythingAt, _cursorWhenPlaced) = (when, _cursor?.Invoke());
 
     /// <summary>
     /// Lets the desk check a handle before forgetting a window it has hidden.
@@ -69,6 +107,9 @@ public sealed partial class Desk
     /// and out of Alt+Tab, with nothing left that would ever take it off.
     /// </remarks>
     public void ChecksHandlesWith(Func<WindowHandle, bool> stillAWindow) => _stillAWindow = stillAWindow;
+
+    /// <summary>Where the pointer is, so the focus can follow it and not the windows.</summary>
+    public void ReadsTheCursorWith(Func<(int X, int Y)> cursor) => _cursor = cursor;
 
     /// <param name="clock">
     /// Milliseconds from somewhere monotonic. Injected so a test can let two

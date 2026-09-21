@@ -473,6 +473,11 @@ public sealed partial class Desk
         IReadOnlySet<WindowHandle>? unmarked = null)
     {
 
+        if (redraw.Place.Count > 0)
+        {
+            MovedWindowsAt(Now);
+        }
+
         foreach (Placement placement in redraw.Place)
         {
             if (Window(placement.Window) is not { } window)
@@ -559,7 +564,7 @@ public sealed partial class Desk
                 _wantFocus = WindowHandle.None;
             }
 
-            Focus(redraw.Focus);
+            Focus(redraw.Focus, fromTheDesk: true);
         }
     }
 }

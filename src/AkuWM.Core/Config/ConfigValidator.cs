@@ -263,6 +263,15 @@ public static class ConfigValidator
         {
             issues.Add(ValidationIssue.Error("layout.resize_step_ppt", "must be between 1 and 50"));
         }
+
+        if (layout.DragToTop is { Length: > 0 } drag
+            && drag.ToLowerInvariant() is not ("fullscreen" or "float_maximized" or "float-maximized"
+                or "float_fullscreen" or "float-fullscreen" or "none"))
+        {
+            issues.Add(ValidationIssue.Error(
+                "layout.drag_to_top",
+                $"'{drag}' is not fullscreen, float_maximized, float_fullscreen or none"));
+        }
     }
 
     private static void ValidateMonitors(AkuWmConfig config, List<ValidationIssue> issues)

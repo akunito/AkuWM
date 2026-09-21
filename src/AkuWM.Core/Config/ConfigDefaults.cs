@@ -46,6 +46,7 @@ public static class ConfigDefaults
             DefaultDirection = "auto",
             FloatUnresizable = true,
             FloatCentered = true,
+            DragToTop = "fullscreen",
         },
         Monitors = [],
         Workspaces = [],

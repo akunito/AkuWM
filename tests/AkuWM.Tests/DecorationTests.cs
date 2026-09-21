@@ -86,6 +86,10 @@ public class DecorationTests
         fixture.Desk.Focus(DeskFixture.W(1));
         fixture.Turn();
 
+        // The person goes to the other window: the pointer moves, so this is
+        // not the layout sliding a window under a still cursor, which the
+        // focus guard refuses.
+        fixture.Platform.Cursor = (1200, 900);
         fixture.Desk.Focus(DeskFixture.W(2));
         fixture.Turn();
 
