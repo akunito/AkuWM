@@ -70,6 +70,7 @@ $ahk     = Join-Path $env:USERPROFILE '.dotfiles\templates\windows\DESK_W11\hype
 $marker  = Join-Path $env:LOCALAPPDATA 'akuwm\wm-cli.txt'
 
 function Say([string]$text) { Write-Host $text }
+function Warn([string]$text) { Write-Host $text -ForegroundColor Yellow }
 
 function Stop-Them([string]$name) {
     $running = Get-Process -Name $name -ErrorAction SilentlyContinue
@@ -214,8 +215,24 @@ if (-not $Yes) {
 # does not fail -- it manages the desk alongside the first, and every gesture
 # is carried out twice. Found by doing it, 2026-09-21: switching twice left two
 # daemons and a doctor that reported the older one's state.
-if (Stop-Them 'akuwm') {
-    Say '  a running AkuWM was stopped first'
+if (Get-Process -Name akuwm -ErrorAction SilentlyContinue) {
+    # ASKED, not killed. A killed daemon is an unclean run, two of those in a
+    # row is safe mode, and safe mode looks exactly like a window manager that
+    # has stopped working: it arranges nothing and says nothing on screen.
+    # Switching twice in a row used to be enough to cause it.
+    & $akuwm exit --out (Join-Path $env:TEMP 'akuwm-switch-exit.txt') 2>$null | Out-Null
+
+    $deadline = (Get-Date).AddSeconds(8)
+    while ((Get-Date) -lt $deadline -and (Get-Process -Name akuwm -ErrorAction SilentlyContinue)) {
+        Start-Sleep -Milliseconds 200
+    }
+
+    if (Stop-Them 'akuwm') {
+        Warn '  a running AkuWM would not stop and was killed; the next start may be in safe mode'
+    } else {
+        Say '  a running AkuWM was asked to stand down first'
+    }
+
     Start-Sleep -Milliseconds 400
 }
 
