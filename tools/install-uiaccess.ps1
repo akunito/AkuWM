@@ -171,6 +171,37 @@ if (Test-Path $Shim) {
     Note "no glazewm.exe at $Shim; the hotkeys will not reach AkuWM until it is built"
 }
 
+# --- 3a. reachable by name --------------------------------------------------
+# On the USER's PATH, not the machine's: a per-user tool, and it needs no
+# elevation to change. The variable is read raw so an expanded %SystemRoot% is
+# not written back as a literal, which is how a PATH gets corrupted by a script
+# that only meant to add one entry.
+Step 'Putting AkuWM on the PATH'
+
+$key = 'HKCU:\Environment'
+$current = (Get-ItemProperty -Path $key -Name Path -ErrorAction SilentlyContinue).Path
+$entries = @($current -split ';' | Where-Object { $_ })
+
+if ($entries -contains $Destination) {
+    Note "$Destination is already on the PATH"
+} else {
+    $kind = (Get-Item $key).GetValueKind('Path')
+    if (-not $kind) { $kind = 'ExpandString' }
+    Set-ItemProperty -Path $key -Name Path -Value (($entries + $Destination) -join ';') -Type $kind
+    Good "added $Destination to your PATH"
+    Note 'open a new terminal for it to take effect'
+
+    # Tell the shell, so anything started from now on sees it without a logout.
+    $signature = @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+    $native = Add-Type -MemberDefinition $signature -Name 'AkuWmEnv' -Namespace 'AkuWM' -PassThru
+    [UIntPtr]$unused = [UIntPtr]::Zero
+    [void]$native::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 3000, [ref]$unused)
+}
+
 # --- 3b. the way out --------------------------------------------------------
 # A window manager that can hide windows has to ship the button that gives them
 # back, and that button has to be reachable when the window manager itself is
