@@ -723,3 +723,106 @@ public class FloatingResizeByPixelsTests
         Assert.Equal(new Rect(3848, -155, 1124, 1797), fixture.FrameOf(1));
     }
 }
+
+/// <summary>How a hidden Zen window with 178 tabs got the keyboard, and Hyper+Escape (2026-09-22 11:47).</summary>
+public class FocusNeverLeavesTheScreenTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void The_focus_is_never_handed_to_a_window_on_a_workspace_that_is_put_away()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        fixture.Desk.FocusWorkspace("21");
+        fixture.Open(2, monitor: new MonitorHandle(2));
+        fixture.Turn();
+        fixture.Foreground(2);
+
+        // Moved to a workspace of the other monitor that is not on screen,
+        // the other monitor's workspace switched, then something raises a
+        // hidden window and AkuWM looks for something visible to focus.
+        fixture.Desk.MoveToWorkspace(W(2), "12");
+        fixture.Turn();
+        fixture.Desk.WantFocus(fixture.Desk.FocusWorkspace("13"));
+        fixture.Turn();
+        Assert.True(fixture.IsHidden(2));
+
+        fixture.Desk.WantFocus(W(2)); // whatever asked for it: it is hidden
+        Redraw redraw = fixture.Turn();
+
+        Assert.NotEqual(W(2), redraw.Focus);
+        Assert.DoesNotContain("focus 2", fixture.Platform.Calls);
+        Assert.NotEqual(W(2), fixture.Desk.Focused);
+    }
+
+    [Fact]
+    public void A_window_being_shown_in_the_same_pass_may_be_focused()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Desk.WantFocus(fixture.Desk.FocusWorkspace("12"));
+        fixture.Turn();
+
+        fixture.Desk.WantFocus(fixture.Desk.FocusWorkspace("11"));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Equal(W(1), redraw.Focus);
+        Assert.Equal(W(1), fixture.Desk.Focused);
+    }
+}
+
+/// <summary>A floating window in the person's hand is left alone (2026-09-22 12:59).</summary>
+public class WindowInMotionTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_floating_window_that_is_still_moving_is_not_placed_until_it_rests()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(100, 100, 1908, 1244), resizable: false, perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+        Assert.Equal(WindowState.Floating, fixture.Managed(1)!.State);
+
+        // Dragged right at mouse rate; at the seam Windows blows it up.
+        for (int x = 200; x <= 1800; x += 200)
+        {
+            fixture.Wait(16);
+            fixture.Move(1, new Rect(x, 100, 1908, 1244));
+            Assert.Empty(fixture.Turn().Place);
+        }
+
+        fixture.Wait(16);
+        fixture.Move(1, new Rect(1998, 183, 3843, 1495));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Empty(redraw.Place);
+        Assert.True(fixture.Desk.Unsettled);
+
+        // At rest: one placement, inside the screen.
+        fixture.Wait(Desk.SettleMs + 1);
+        Redraw settled = fixture.Turn();
+        Placement placement = Assert.Single(settled.Place, p => p.Window == W(1));
+        Assert.True(placement.Frame.Right <= 3840, $"{placement.Frame}");
+        Assert.False(fixture.Desk.Unsettled);
+    }
+
+    [Fact]
+    public void A_window_dragged_against_the_top_edge_is_moved_down_not_cut()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(768, -72, 2200, 1623), resizable: false, perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Wait(Desk.SettleMs + 1);
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Assert.Equal(1623, placement.Frame.Height);
+        Assert.Equal(9, placement.Frame.Top); // the fake's border is 9 px, kept on this screen
+    }
+}

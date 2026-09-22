@@ -1079,6 +1079,17 @@ public sealed partial class Desk
             return;
         }
 
+        // Said out loud: a window closing while AkuWM had it hidden is a
+        // window the person may not know is gone.
+        if (window.Managed && window.Hidden)
+        {
+            Log.Info($"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" closed while hidden on workspace {window.Workspace}");
+        }
+        else if (window.Managed)
+        {
+            Log.Debug(() => $"  closed {handle} {window.Snapshot.ProcessName} (workspace {window.Workspace ?? "sticky"})");
+        }
+
         Forgotten?.Invoke(handle);
         _hidden.Remove(handle);
         _asked.Remove(handle);

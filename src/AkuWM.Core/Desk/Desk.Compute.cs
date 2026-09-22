@@ -27,6 +27,8 @@ public sealed partial class Desk
     /// </remarks>
     public Redraw Compute()
     {
+        Unsettled = false;
+
         if (Paused)
         {
             return Redraw.Nothing;
@@ -302,6 +304,18 @@ public sealed partial class Desk
             button.Add((window.Handle, shown));
         }
 
+        // Never the keyboard to a window that will not be on screen after
+        // this pass. The focus asked for can be a window on a workspace that
+        // has since been put away: SetForegroundWindow takes it anyway, the
+        // person sees nothing focused, and the next chord lands on the
+        // invisible window -- Hyper+Escape closed Diego's Zen window with 178
+        // tabs that way, 2026-09-22 11:47:37.
+        if (!_wantFocus.IsNone && !WillBeOnScreen(_wantFocus, hide, show))
+        {
+            Logging.Log.Info($"not focusing {_wantFocus}: it will not be on screen");
+            _wantFocus = WindowHandle.None;
+        }
+
         return new Redraw
         {
             Place = place,
@@ -326,15 +340,32 @@ public sealed partial class Desk
         };
     }
 
-    /// <summary>The frame, pulled in so that frame plus border stays within the screen.</summary>
+    /// <summary>
+    /// The frame, moved so that frame plus border stays within the screen,
+    /// and only shrunk when it does not fit.
+    /// </summary>
+    /// <remarks>
+    /// Cutting first shrank a window on every pass while the person dragged
+    /// it up against the top edge: 1551, 1293, 1032, 645 px tall in four
+    /// rounds (Notepad++, 2026-09-22 12:59:52).
+    /// </remarks>
     private static Rect InsideTheScreen(Rect frame, (int Top, int Right, int Bottom, int Left) border, Rect screen)
     {
-        int left = Math.Max(frame.Left, screen.Left + border.Left);
-        int top = Math.Max(frame.Top, screen.Top + border.Top);
-        int right = Math.Min(frame.Right, screen.Right - border.Right);
-        int bottom = Math.Min(frame.Bottom, screen.Bottom - border.Bottom);
+        int minLeft = screen.Left + border.Left;
+        int minTop = screen.Top + border.Top;
+        int maxRight = screen.Right - border.Right;
+        int maxBottom = screen.Bottom - border.Bottom;
 
-        return right > left && bottom > top ? Rect.FromEdges(left, top, right, bottom) : frame;
+        int width = Math.Min(frame.Width, maxRight - minLeft);
+        int height = Math.Min(frame.Height, maxBottom - minTop);
+        if (width <= 0 || height <= 0)
+        {
+            return frame;
+        }
+
+        int left = Math.Clamp(frame.Left, minLeft, maxRight - width);
+        int top = Math.Clamp(frame.Top, minTop, maxBottom - height);
+        return new Rect(left, top, width, height);
     }
 
     /// <summary>
@@ -384,6 +415,33 @@ public sealed partial class Desk
             window.DecorationRefused = null;
         }
     }
+
+    /// <summary>Whether a window is going to be visible once this pass is applied.</summary>
+    private bool WillBeOnScreen(WindowHandle handle, List<WindowHandle> hide, List<WindowHandle> show)
+    {
+        if (Live(handle) is not { } window || hide.Contains(handle))
+        {
+            return false;
+        }
+
+        if (window.Hidden && !show.Contains(handle))
+        {
+            return false;
+        }
+
+        if (window.Sticky)
+        {
+            return MonitorByRole(window.StickyMonitor ?? string.Empty) is not null;
+        }
+
+        return window.Workspace is { } name && Workspace(name) is { Displayed: true } workspace && MonitorOf(workspace) is not null;
+    }
+
+    /// <summary>
+    /// True when a placement was held back because the window is still
+    /// moving; the caller looks again after <see cref="SettleMs"/>.
+    /// </summary>
+    public bool Unsettled { get; private set; }
 
     /// <summary>A window AkuWM manages, is still there, and is not on the taskbar.</summary>
     private DeskWindow? Live(WindowHandle handle) =>
@@ -486,6 +544,21 @@ public sealed partial class Desk
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;
+            return;
+        }
+
+        // A floating window that is still moving is in the person's hand.
+        // Placing it now is placing it against the drag: Windows blew a
+        // system-DPI window up as it crossed the seam, AkuWM trimmed it, the
+        // drag put it back across, Windows blew it up again -- five rounds
+        // in 120 ms (2026-09-22 12:59:49). It is left alone until it rests,
+        // and the desk asks to be looked at again then.
+        if (window.State != WindowState.Tiling
+            && window.MovedAt != 0
+            && Now - window.MovedAt < SettleMs
+            && window.Placed?.CloseTo(window.Snapshot.FrameBounds, PlacementSlack) != true)
+        {
+            Unsettled = true;
             return;
         }
 

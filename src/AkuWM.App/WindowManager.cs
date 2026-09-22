@@ -381,6 +381,7 @@ public sealed class WindowManager : IAsyncDisposable
     }
 
     private Timer? _reassert;
+    private Timer? _settle;
     private bool _sessionEnding;
 
     /// <summary>Once per burst: look if anything appeared, decide, apply.</summary>
@@ -416,7 +417,23 @@ public sealed class WindowManager : IAsyncDisposable
             {
                 Redraws++;
                 Last = _applier.Apply(redraw);
-                _desk.Applied(redraw, Last.Refused, Last.Unmarked);
+                _desk.Applied(redraw, Last.Refused, Last.Unmarked, Last.Undecorated, Last.FocusRefused);
+
+                // A floating window still in the person's hand is left alone
+                // until it rests; the desk asks to be looked at again then.
+                if (_desk.Unsettled)
+                {
+                    _settle ??= new Timer(
+                        _ => _loop.Post("a window has come to rest", () =>
+                        {
+                            _dirty = true;
+                            Redraw();
+                        }),
+                        null,
+                        Timeout.Infinite,
+                        Timeout.Infinite);
+                    _settle.Change(Desk.SettleMs + 20, Timeout.Infinite);
+                }
 
                 // The platform proves, once, that a window it hides can be
                 // brought back. If it cannot, the model stops asking.
@@ -514,6 +531,7 @@ public sealed class WindowManager : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _reassert?.Dispose();
+        _settle?.Dispose();
         _hooks.Dispose();
         await _server.DisposeAsync().ConfigureAwait(false);
         await _loop.DisposeAsync().ConfigureAwait(false);

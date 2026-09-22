@@ -408,6 +408,8 @@ public static class Program
     /// Null for a second process answering `doctor` on its own: it can report
     /// what Windows allows, but not what the running window manager is doing.
     /// </param>
+    private static string Shorten(string title) => title.Length <= 30 ? title : title[..27] + "...";
+
     private static List<Func<Check>> PlatformChecks(WindowsPlatform platform, WindowManager? manager = null) =>
     [
         () => manager is null
@@ -427,6 +429,21 @@ public static class Program
                     ? "a hidden window comes back, proven on the first hide of this run"
                     : "a hidden window does NOT come back on this machine, so nothing is hidden "
                       + "and every workspace shows all of its windows"),
+        () =>
+        {
+            if (manager is null)
+            {
+                return new Check("hidden windows", CheckStatus.Info, "not running in this process");
+            }
+
+            string hidden = manager.Read("hidden windows", desk => string.Join(", ", desk.Windows
+                .Where(w => w.Managed && w.Hidden)
+                .Select(w => $"{w.Snapshot.ProcessName} \"{Shorten(w.Snapshot.Title)}\" on {w.Workspace ?? "?"}")))
+                .GetAwaiter().GetResult();
+
+            return new Check("hidden windows", CheckStatus.Info,
+                hidden.Length == 0 ? "none: every managed window is on screen" : hidden);
+        },
         () => manager is null
             ? new Check("bar and scripts", CheckStatus.Info, "not running in this process")
             : new Check(

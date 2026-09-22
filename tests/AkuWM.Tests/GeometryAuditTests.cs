@@ -156,6 +156,10 @@ public class GeometryAuditTests
         fixture.Sync();
         fixture.Turn();
 
+        // Once the window has rested: a window still changing is left alone.
+        fixture.Wait(Desk.SettleMs + 1);
+        fixture.Turn();
+
         Assert.Equal(landed.Width, fixture.FrameOf(1).Width);
         Assert.Equal(landed.Height, fixture.FrameOf(1).Height);
     }
