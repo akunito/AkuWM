@@ -1139,7 +1139,11 @@ public sealed partial class Desk
 
             if (undecorated?.Contains(handle) == true)
             {
+                // The re-ask is spent too: left set, a refused window was
+                // asked again on every redraw, two refused DWM calls per pass
+                // for the elevated console (live desk 2026-09-22 20:31).
                 decorated.DecorationRefused = how;
+                decorated.RedecorateAsked = false;
                 continue;
             }
 

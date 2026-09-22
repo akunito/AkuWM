@@ -250,6 +250,12 @@ $line = if (Test-Path $report) {
 
 if ($line -match 'granted:') {
     Good $line.Trim()
+
+    # Startup names this directory from now on: a copy elsewhere would lose
+    # what was just verified. The dev loop (akuwm-autostart.ps1 -Build <temp>)
+    # points it back at a user copy, which is the way to run an unsigned build.
+    Step 'Pointing Startup at the signed copy'
+    & (Join-Path $PSScriptRoot 'akuwm-autostart.ps1') -Build $Destination -Shim $Destination -InPlace | Select-Object -First 3
     Write-Host ''
     Write-Host "AkuWM is installed at $target and has uiAccess." -ForegroundColor Green
     Write-Host "Its keyboard hook will see keys typed into a game." -ForegroundColor Green

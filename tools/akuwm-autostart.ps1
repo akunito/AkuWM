@@ -29,11 +29,18 @@
 
 .PARAMETER Shim
     The published glazewm.exe (the drop-in CLI) directory.
+
+.PARAMETER InPlace
+    Point Startup at -Build itself instead of copying it to Programs\AkuWM.
+    For the signed copy in Program Files: a copy of it in a user-writable
+    directory is a binary Windows will not grant uiAccess to, so the
+    shortcut has to name the secure directory. install-uiaccess.ps1 uses it.
 #>
 param(
     [ValidateSet('on', 'off')] [string] $Mode = 'on',
     [string] $Build,
-    [string] $Shim
+    [string] $Shim,
+    [switch] $InPlace
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,9 +70,13 @@ if (-not (Test-Path $src)) { throw "no akuwm.exe in $Build" }
 # Permanent, because %TEMP% is not. A Startup shortcut into a temp directory is
 # a window manager that disappears the first time anything cleans up.
 New-Item -ItemType Directory -Force -Path $home_ | Out-Null
-Copy-Item $src (Join-Path $home_ 'akuwm.exe') -Force
+if (-not $InPlace) { Copy-Item $src (Join-Path $home_ 'akuwm.exe') -Force }
 $bootSrc = Join-Path $PSScriptRoot 'akuwm-boot.ps1'
 Copy-Item $bootSrc (Join-Path $home_ 'akuwm-boot.ps1') -Force
+# Where boot looks. No arguments means its defaults, the copy made above;
+# in place, the shortcut names the directory, because the defaults must not.
+$bootArgs = ''
+if ($InPlace) { $bootArgs = " -Build `"$Build`"" + $(if ($Shim) { " -Shim `"$Shim`"" } else { '' }) }
 
 # Debug tracing on, by Diego's decision (2026-09-21): when something goes wrong
 # on this desk the traces are what turns a guess into an answer, and every real
@@ -76,7 +87,7 @@ $state = Join-Path $env:LOCALAPPDATA 'akuwm'
 New-Item -ItemType Directory -Force -Path $state | Out-Null
 New-Item -ItemType File -Force -Path (Join-Path $state 'debug') | Out-Null
 
-if ($Shim) {
+if ($Shim -and -not $InPlace) {
     $shimSrc = Join-Path $Shim 'glazewm.exe'
     if (Test-Path $shimSrc) {
         New-Item -ItemType Directory -Force -Path (Join-Path $home_ 'shim') | Out-Null
@@ -94,7 +105,7 @@ if (-not (Test-Path $pwsh)) { $pwsh = Join-Path $env:SystemRoot 'System32\Window
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($lnk)
 $s.TargetPath = $pwsh
-$s.Arguments  = "-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $home_ 'akuwm-boot.ps1')`""
+$s.Arguments  = "-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $home_ 'akuwm-boot.ps1')`"$bootArgs"
 $s.WorkingDirectory = $home_
 $s.WindowStyle = 7            # minimised: no console in the face at logon
 $s.Description = 'AkuWM (falls back to GlazeWM if it does not answer)'
@@ -104,7 +115,7 @@ if ((Test-Path $glazeLnk) -and -not (Test-Path $parked)) { Rename-Item $glazeLnk
 
 "autostart on:"
 "  AkuWM.lnk      -> $pwsh ... akuwm-boot.ps1"
-"  build          -> $home_"
+"  build          -> $(if ($InPlace) { $Build } else { $home_ })"
 "  GlazeWM.lnk    -> parked as GlazeWM.lnk.off"
 ""
 "The way back, from any shell:  akuwm-autostart.ps1 -Mode off"

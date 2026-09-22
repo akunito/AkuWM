@@ -237,6 +237,25 @@ public class OutlineSurvivesRedecorationTests
         Assert.True(f.Platform.Outlines.ContainsKey(1));
         Assert.NotNull(f.Managed(1)!.DecorationRefused);
     }
+
+    [Fact]
+    public void A_refused_redecoration_is_asked_once_not_on_every_redraw()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "#444444" };
+        var f = new DeskFixture(config);
+        f.Platform.RefusesDecoration = true;
+        f.Open(1, elevated: true);
+        f.Turn();
+        f.Turn();
+
+        f.Desk.Redecorate(W(1));
+        Assert.Contains(f.Turn().Decorate, d => d.Item1 == W(1));
+
+        Assert.DoesNotContain(f.Turn().Decorate, d => d.Item1 == W(1));
+        Assert.DoesNotContain(f.Turn().Decorate, d => d.Item1 == W(1));
+        Assert.NotNull(f.Managed(1)!.DecorationRefused);
+    }
 }
 
 public class EffectsConfigValidationTests
