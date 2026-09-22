@@ -164,6 +164,13 @@ public static class Win32Focus
     }
 
     /// <summary>Waits only as long as it takes, up to <see cref="SettleMs"/>.</summary>
+    /// <remarks>
+    /// Bounded by the clock, not by counting sleeps: Thread.Sleep(2) sleeps
+    /// for the timer period, 15.6 ms on this machine, so twenty of them were
+    /// 312 ms per route and a refused focus cost 620 ms on the wm thread
+    /// (measured in the trace, 2026-09-22: four times in eight seconds while
+    /// a game on a hidden workspace kept taking the foreground).
+    /// </remarks>
     private static bool Settled(HWND hwnd)
     {
         if (PInvoke.GetForegroundWindow() == hwnd)
@@ -171,7 +178,8 @@ public static class Win32Focus
             return true;
         }
 
-        for (int waited = 0; waited < SettleMs; waited += PollMs)
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds < SettleMs)
         {
             Thread.Sleep(PollMs);
 

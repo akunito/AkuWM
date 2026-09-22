@@ -546,7 +546,7 @@ public class DeskAuditTests
         Desk.SetSticky(W(1), true);
         Assert.Contains((W(1), true), _fixture.Turn().Band);
 
-        _fixture.Open(2);
+        _fixture.Open(2, elevated: true); // a game: elevated, as they are
         _fixture.Turn();
         Desk.SetFullscreen(W(2), true);
 
@@ -564,7 +564,7 @@ public class DeskAuditTests
         _fixture.Open(1);
         _fixture.Turn();
         Desk.SetSticky(W(1), true);
-        _fixture.Open(2);
+        _fixture.Open(2, elevated: true);
         _fixture.Turn();
         Desk.SetFullscreen(W(2), true);
         _fixture.Turn();

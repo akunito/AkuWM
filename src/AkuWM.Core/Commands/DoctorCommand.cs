@@ -282,7 +282,8 @@ public sealed class DoctorCommand
     /// </remarks>
     private void CheckSafetyNet(List<Check> checks)
     {
-        Session? last = new SessionMarker(_paths.SessionFile).Previous;
+        var marker = new SessionMarker(_paths.SessionFile);
+        Session? last = marker.Previous;
 
         if (last is null)
         {
@@ -292,14 +293,22 @@ public sealed class DoctorCommand
         {
             checks.Add(new("last run", CheckStatus.Ok, "ended cleanly"));
         }
+        else if (last.Pid == Environment.ProcessId || IsAlive(last.Pid))
+        {
+            checks.Add(new("last run", CheckStatus.Ok,
+                $"this one, still running (pid {last.Pid}); {last.UncleanInARow} bad ending(s) before it"));
+        }
         else
         {
-            bool safeMode = last.UncleanInARow + 1 >= SessionMarker.SafeModeAfter;
+            int unclean = marker.UncleanBefore(last);
+            bool safeMode = unclean >= SessionMarker.SafeModeAfter;
             checks.Add(new("last run", safeMode ? CheckStatus.Warn : CheckStatus.Info,
-                $"did not shut down ({last.UncleanInARow + 1} in a row)"
-                + (safeMode
-                    ? ". The next start manages nothing unless it is `akuwm daemon --force`"
-                    : string.Empty)));
+                unclean == 0
+                    ? "ended with the machine (a reboot or a logoff), which is not held against the next start"
+                    : $"did not shut down ({unclean} in a row)"
+                      + (safeMode
+                          ? ". The next start manages nothing unless it is `akuwm daemon --force`"
+                          : string.Empty)));
         }
 
         int moved = new GeometryJournal(_paths.GeometryJournalFile).Entries.Count;
@@ -309,8 +318,21 @@ public sealed class DoctorCommand
                 : "empty: no window is out of place because of AkuWM"));
 
         checks.Add(new("the way out", CheckStatus.Info,
-            "`akuwm rescue` stops AkuWM and gives every window back. Nothing of AkuWM is in the "
-            + "Startup folder, so restarting the machine comes up on the old stack"));
+            "`akuwm rescue --forgive` stops AkuWM and gives every window back; at logon, akuwm-boot.ps1 "
+            + "runs it by itself if the daemon's pipe never answers"));
+    }
+
+    private static bool IsAlive(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static void CheckOtherProcesses(List<Check> checks)
@@ -352,7 +374,7 @@ public sealed class DoctorCommand
 
             checks.Add(new($"port {port}", CheckStatus.Info,
                 listening
-                    ? "something is listening (GlazeWM today, AkuWM from M2)"
+                    ? "something is listening; the owner is named below when this runs on Windows"
                     : "nothing is listening here"));
         }
         catch (Exception ex)

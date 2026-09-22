@@ -800,6 +800,16 @@ public sealed partial class Desk
         WindowSnapshot was = window.Snapshot;
         window.Snapshot = snapshot;
 
+        // An application that puts ITSELF in the always-on-top band (NordVPN
+        // does, on every activation) is not where the model thinks it is: a
+        // tiled window up there sits over every floating one, and the model,
+        // believing it had un-banded it, never asked again. The band is what
+        // Windows says it is; Compute then re-asserts the wanted one.
+        if (was.IsTopmost != snapshot.IsTopmost && window.Banded == was.IsTopmost)
+        {
+            window.Banded = snapshot.IsTopmost;
+        }
+
         if (was.FrameBounds != snapshot.FrameBounds)
         {
             window.MovedAt = Now;

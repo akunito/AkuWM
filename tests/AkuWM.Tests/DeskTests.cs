@@ -254,7 +254,7 @@ public class DeskTests
     public void A_fullscreen_window_takes_the_others_out_of_the_top_band()
     {
         _fixture.Open(1, resizable: false, frame: new Rect(500, 500, 400, 300));
-        _fixture.Open(2);
+        _fixture.Open(2, elevated: true); // a game: elevated, as they are
         _fixture.Turn();
         Assert.True(_fixture.Platform.Window(DeskFixture.W(1))!.IsTopmost);
 

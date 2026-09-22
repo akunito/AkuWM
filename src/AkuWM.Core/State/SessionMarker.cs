@@ -46,11 +46,14 @@ public sealed class SessionMarker
 
     public Session? Previous => AtomicJson.Read<Session>(_file, "the session marker");
 
-    /// <summary>Opens a run, and says whether the two before it ended badly.</summary>
-    public SessionVerdict Begin()
+    /// <summary>
+    /// How many bad endings a run starting now would be the latest of. The
+    /// one rule, read by <see cref="Begin"/> and by <c>doctor</c> -- which
+    /// used to re-derive it without the boot check and said "safe mode next"
+    /// about a daemon that was managing the desk.
+    /// </summary>
+    public int UncleanBefore(Session? previous)
     {
-        Session? previous = Previous;
-
         // A run that started before this boot was ended by the machine going
         // down, not by anything of its own: a reboot or a logoff kills the
         // daemon before its exit path can write the marker, and two of those
@@ -58,7 +61,14 @@ public sealed class SessionMarker
         // nothing. Windows does not run the exit handlers of a hidden console
         // application at shutdown reliably enough to count on.
         bool endedByTheMachine = previous is not null && previous.StartedAt < _bootedAt();
-        int unclean = previous is null || previous.CleanExit || endedByTheMachine ? 0 : previous.UncleanInARow + 1;
+        return previous is null || previous.CleanExit || endedByTheMachine ? 0 : previous.UncleanInARow + 1;
+    }
+
+    /// <summary>Opens a run, and says whether the two before it ended badly.</summary>
+    public SessionVerdict Begin()
+    {
+        Session? previous = Previous;
+        int unclean = UncleanBefore(previous);
 
         AtomicJson.Write(
             _file,

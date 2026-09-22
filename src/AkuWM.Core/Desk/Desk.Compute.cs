@@ -69,6 +69,16 @@ public sealed partial class Desk
                     continue;
                 }
 
+                // Only a GAME takes its neighbours out of the always-on-top
+                // band: what the shield protects is a flip-model swapchain,
+                // and a maximised browser has none. A maximised window that
+                // covers a monitor with no taskbar counted the same, and every
+                // floating window on that screen went behind it on its next
+                // click, lost (Diego, 2026-09-22).
+                WindowHandle shielding = Live(workspace.Fullscreen) is { } fs && LooksLikeAGame(fs)
+                    ? workspace.Fullscreen
+                    : WindowHandle.None;
+
                 WindowHandle fullscreen = Live(workspace.Fullscreen) is not null
                     ? workspace.Fullscreen
                     : WindowHandle.None;
@@ -97,7 +107,7 @@ public sealed partial class Desk
                     WantHidden(window, false, hide, show);
                     WantPlaced(window, rect, monitor, place);
                     WantBanded(window, false, band);
-                    WantBehind(window, fullscreen, behind);
+                    WantBehind(window, shielding, behind);
                     WantMarked(window, false, mark);
                 }
 
@@ -116,8 +126,8 @@ public sealed partial class Desk
                     // there cannot simply be put behind a normal one, it has
                     // to leave the band first -- and then be put behind it,
                     // because leaving the band lands it on top.
-                    WantBanded(window, fullscreen.IsNone, band);
-                    WantBehind(window, fullscreen, behind);
+                    WantBanded(window, shielding.IsNone, band);
+                    WantBehind(window, shielding, behind);
                     WantMarked(window, false, mark);
                 }
 
@@ -154,7 +164,7 @@ public sealed partial class Desk
             // composes the frame instead, measured at 45 fps and +60 ms on
             // Aion 2. That is the whole reason this window manager exists, and
             // it was true of every sticky window on the desk.
-            bool covered = displayed is not null && Live(displayed.Fullscreen) is not null;
+            bool covered = displayed is not null && Live(displayed.Fullscreen) is { } game && LooksLikeAGame(game);
 
             foreach (WindowHandle handle in monitor.Sticky)
             {
@@ -295,6 +305,23 @@ public sealed partial class Desk
             Unfocus = _wantFocus.IsNone && !Focused.IsNone && hide.Contains(Focused),
         };
     }
+
+    /// <summary>
+    /// Whether a window covering its screen is the kind that must not have
+    /// an always-on-top window over it: a game.
+    /// </summary>
+    /// <remarks>
+    /// By the frame, since nothing else is knowable from outside: a game
+    /// covers the screen with a borderless popup (no resize border) or runs
+    /// elevated; an application that covers it is maximised and keeps its
+    /// resize border. `layout.floating_above_maximized: false` makes every
+    /// covering window a game, which is what the desk did before.
+    /// </remarks>
+    public bool LooksLikeAGame(DeskWindow window) =>
+        window.State == WindowState.Fullscreen
+        && (Config.Layout?.FloatingAboveMaximized == false
+            || !window.Snapshot.IsResizable
+            || window.Snapshot.IsElevated);
 
     /// <summary>
     /// Asks for a window to be put behind the fullscreen one, once per pair.

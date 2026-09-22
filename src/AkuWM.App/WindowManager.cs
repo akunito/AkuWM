@@ -83,7 +83,9 @@ public sealed class WindowManager : IAsyncDisposable
         // injection while the foreground is a window covering its screen.
         // Read on the wm thread, which is where the applier calls Focus from.
         // It was declared and never assigned, so the F24 route ran regardless.
-        Win32Focus.GameInFront = () => _desk.Window(_platform.Foreground()) is { State: WindowState.Fullscreen };
+        Win32Focus.GameInFront = () =>
+            _desk.Window(_platform.Foreground()) is { } front
+            && (_desk.LooksLikeAGame(front) || front.Marked || front.Snapshot.IsElevated);
 
         // A window that has closed is not one AkuWM has to put back -- and
         // not one to keep a cloak record for: Windows reuses the handle, and
@@ -102,7 +104,14 @@ public sealed class WindowManager : IAsyncDisposable
         // on the wm thread, so a query never sees a half-applied workspace
         // switch.
         _server = new GlazeIpcServer(compatPort, request => Ask(request).GetAwaiter().GetResult());
-        _server.Traffic += (outbound, text) => Log.Debug(() => (outbound ? "compat > " : "compat < ") + text);
+        // The verb and the size, never the frame: the bar asks for every
+        // window on every event, and logging each reply in full rolled the
+        // 4 MB log every fifteen minutes on this desk (6.7 MB of replies in
+        // twenty, 2026-09-22), taking the trace of anything that mattered
+        // with it. `akuwm daemon --capture <file>` is where whole frames go.
+        _server.Traffic += (outbound, text) => Log.Debug(() => outbound
+            ? $"compat > {text.Length} chars"
+            : $"compat < {(text.Length > 80 ? text[..80] : text)}");
     }
 
     /// <summary>Whether the bar and the scripts can reach AkuWM.</summary>

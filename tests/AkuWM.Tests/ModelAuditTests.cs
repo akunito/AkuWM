@@ -267,7 +267,7 @@ public class ModelAuditTests
     [Fact]
     public void Windows_leaving_the_band_for_a_game_are_put_behind_it()
     {
-        _fixture.Open(1);
+        _fixture.Open(1, elevated: true); // a game: elevated, as they are
         _fixture.Open(2, resizable: false);
         _fixture.Turn();
         Desk.SetSticky(W(2), true);
@@ -402,5 +402,79 @@ public class ModelAuditTests
         _fixture.Open(2);
 
         Assert.Equal("21", _fixture.Managed(2)!.Workspace);
+    }
+}
+
+/// <summary>Floating windows and the windows that cover a screen (2026-09-22).</summary>
+public class FloatingAboveTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_maximised_application_does_not_take_floating_windows_out_of_the_band()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1, resizable: false);
+        fixture.Turn();
+        Assert.True(fixture.Managed(1)!.Banded);
+
+        // A browser maximised on a monitor with no taskbar: it covers the
+        // screen, it keeps its resize border, and it is not a game.
+        fixture.Platform.WindowList.Add(FakePlatform.Window(2, "zen", frame: new Rect(0, 0, 3840, 2160), maximized: true));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, fixture.Managed(2)!.State);
+        Assert.DoesNotContain(redraw.Band, b => b.Window == W(1));
+        Assert.Empty(redraw.Behind);
+        Assert.True(fixture.Managed(1)!.Banded);
+    }
+
+    [Fact]
+    public void A_borderless_window_covering_the_screen_still_shields_itself()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1, resizable: false);
+        fixture.Turn();
+
+        fixture.Platform.WindowList.Add(FakePlatform.Window(2, "game", frame: new Rect(0, 0, 3840, 2160), resizable: false));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains((W(1), false), redraw.Band);
+        Assert.Contains((W(1), W(2)), redraw.Behind);
+    }
+
+    [Fact]
+    public void The_old_behaviour_is_one_setting_away()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Layout!.FloatingAboveMaximized = false;
+        var fixture = new DeskFixture(config);
+        fixture.Open(1, resizable: false);
+        fixture.Turn();
+
+        fixture.Platform.WindowList.Add(FakePlatform.Window(2, "zen", frame: new Rect(0, 0, 3840, 2160), maximized: true));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains((W(1), false), redraw.Band);
+    }
+
+    [Fact]
+    public void A_tiled_window_that_bands_itself_is_taken_out_again()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        fixture.Turn();
+        Assert.False(fixture.Managed(1)!.Banded);
+
+        // NordVPN puts itself in the always-on-top band on activation.
+        fixture.Platform.SetTopmost(W(1), true);
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains((W(1), false), redraw.Band);
+        Assert.False(fixture.Platform.Window(W(1))!.IsTopmost);
     }
 }

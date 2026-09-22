@@ -178,6 +178,21 @@ public sealed class LayoutConfig
     public bool? FloatCentered { get; set; }
 
     /// <summary>
+    /// Whether floating windows stay above a MAXIMISED application window
+    /// that happens to cover its monitor (true), or leave the always-on-top
+    /// band for it as they do for a game (false). Live on reload.
+    /// </summary>
+    /// <remarks>
+    /// On a monitor with no taskbar a maximised browser covers the whole
+    /// screen and counted as fullscreen: every floating window left the
+    /// band for it, and the next click on the browser put them behind it,
+    /// lost. A game is told apart by its frame -- a borderless popup with no
+    /// resize border, or an elevated one -- and still gets the shield that
+    /// keeps its direct path to the screen.
+    /// </remarks>
+    public bool? FloatingAboveMaximized { get; set; }
+
+    /// <summary>
     /// What dragging a TILED window to the top edge does.
     /// </summary>
     /// <remarks>
