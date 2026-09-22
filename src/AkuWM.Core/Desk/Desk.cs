@@ -1028,6 +1028,31 @@ public sealed partial class Desk
 
         if (!snapshot.IsMinimized && window.State == WindowState.Minimized)
         {
+            // Back from the taskbar as something SMALLER than the screen: not
+            // fullscreen any more, whatever it was when it went. Windows parks
+            // every window of a monitor that is disabled and hands a maximised
+            // one back un-maximised, 16 x 44 px short of the bounds (Brave,
+            // 2026-09-22); taken as still fullscreen it was placed over the
+            // bounds, marked to the taskbar, and could not be moved or
+            // floated for the rest of the run. Near what AkuWM itself asked
+            // for still counts: a console comes back a character cell short.
+            // Only a placement that itself covered the screen vouches for
+            // it: the tile rectangle from before it was maximised is within
+            // the slack of the parked size, and is no evidence at all.
+            MonitorSnapshot? on = MonitorByHandle(snapshot.Monitor)?.Snapshot;
+            bool putOverTheScreen = on is not null
+                && window.Placed is { } put
+                && put.Contains(on.Bounds)
+                && put.CloseTo(snapshot.FrameBounds, PlacementSlack);
+            if (window.WasFullscreen && !ShadowModel.IsFullscreen(snapshot, on) && !putOverTheScreen)
+            {
+                window.WasFullscreen = false;
+            }
+
+            // Where Windows restored it is not where AkuWM put it, however
+            // close: a tile handed back 26 px into the bar was within the
+            // placement slack of its old rectangle and was left there.
+            window.Placed = null;
             Restore(window);
             return;
         }

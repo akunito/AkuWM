@@ -92,11 +92,17 @@ public sealed partial class Desk
             return false;
         }
 
-        foreach (DeskMonitor other in _monitors.ToList())
+        // Every screen the desk knows, PRESENT OR AWAY: a monitor that is
+        // gone is still in _byRole, and its windows are the ones the chord is
+        // for. Over _monitors alone the chord did nothing exactly when the
+        // vertical screen was disabled (2026-09-22). Woken as well: Windows
+        // minimises every window of a monitor it loses, and a borrowed window
+        // left in the taskbar is not fetched.
+        foreach (DeskMonitor other in _byRole.Values.ToList())
         {
             if (!ReferenceEquals(other, host))
             {
-                Lend(other.Role, "move_windows");
+                Lend(other.Role, "move_windows", wake: true);
             }
         }
 
@@ -105,7 +111,7 @@ public sealed partial class Desk
 
     private void Lend(string role) => Lend(role, LeavesPolicy);
 
-    private void Lend(string role, string policy)
+    private void Lend(string role, string policy, bool wake = false)
     {
         if (policy == "leave" || _loans.ContainsKey(role) || !_byRole.TryGetValue(role, out DeskMonitor? away))
         {
@@ -133,11 +139,26 @@ public sealed partial class Desk
                 continue;
             }
 
+            // By the window's own workspace name, not workspace.Windows: a
+            // minimised window is in no layer of its workspace, and that is
+            // every window of a monitor Windows has just lost.
             var windows = new Dictionary<WindowHandle, (Rect?, WindowState, WindowState)>();
-            foreach (WindowHandle handle in workspace.Windows)
+            foreach (DeskWindow window in _windows.Values)
             {
-                if (Window(handle) is { } window)
+                if (window.Managed && string.Equals(window.Workspace, workspace.Name, StringComparison.OrdinalIgnoreCase))
                 {
+                    WindowHandle handle = window.Handle;
+                    if (wake && window.State == WindowState.Minimized)
+                    {
+                        // Recorded woken, so the return puts back a window
+                        // that is on screen, not one the model thinks is in
+                        // the taskbar. Compute asks the shell to restore it.
+                        window.State = window.WasFullscreen || window.PreviousState == WindowState.Minimized
+                            ? WindowState.Tiling
+                            : window.PreviousState;
+                        window.WasFullscreen = false;
+                    }
+
                     windows[handle] = (window.FloatingRect, window.State, window.PreviousState);
                 }
             }
