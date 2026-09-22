@@ -478,3 +478,38 @@ public class FloatingAboveTests
         Assert.False(fixture.Platform.Window(W(1))!.IsTopmost);
     }
 }
+
+/// <summary>A maximised application is left where Windows keeps it (2026-09-22).</summary>
+public class MaximisedApplicationTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_maximised_application_under_a_bar_is_neither_moved_nor_marked_fullscreen()
+    {
+        var fixture = new DeskFixture();
+
+        // Zen maximised on the vertical monitor: Windows keeps it in the work
+        // area, 35 px under the bar, and it ignores a move.
+        Rect workArea = FakePlatform.SecondMonitor().WorkArea;
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "zen", frame: workArea, monitor: new MonitorHandle(2), maximized: true));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, fixture.Managed(1)!.State);
+        Assert.DoesNotContain(redraw.Place, p => p.Window == W(1));
+        Assert.DoesNotContain(redraw.TaskbarMark, m => m.Window == W(1));
+    }
+
+    [Fact]
+    public void A_maximised_window_that_covers_the_whole_monitor_still_drops_the_taskbar()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "game", frame: new Rect(0, 0, 3840, 2160), maximized: true, resizable: false));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains((W(1), true), redraw.TaskbarMark);
+        Assert.DoesNotContain(redraw.Place, p => p.Window == W(1));
+    }
+}

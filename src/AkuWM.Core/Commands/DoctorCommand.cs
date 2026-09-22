@@ -250,10 +250,14 @@ public sealed class DoctorCommand
         {
             ledger.Reload();
             int ours = ledger.Entries.Count;
-            checks.Add(new("cloak ledger", ours > 0 ? CheckStatus.Warn : CheckStatus.Ok,
+            bool daemonUp = _daemonRunning();
+            checks.Add(new("cloak ledger", ours > 0 && !daemonUp ? CheckStatus.Warn : CheckStatus.Ok,
                 ours > 0
-                    ? $"{ours} window(s) AkuWM hid and has not given back; they are recovered on the next start, " +
-                      "or now with `akuwm uncloak-all`"
+                    ? daemonUp
+                        ? $"{ours} window(s) hidden by AkuWM: on workspaces nobody is looking at. If AkuWM dies, " +
+                          "the next start gives them back, or `akuwm uncloak-all` does now"
+                        : $"{ours} window(s) AkuWM hid and has not given back; they are recovered on the next start, " +
+                          "or now with `akuwm uncloak-all`"
                     : "empty: AkuWM is not holding any window hidden"));
         }
 

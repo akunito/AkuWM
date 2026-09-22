@@ -134,7 +134,16 @@ public sealed partial class Desk
                 if (!fullscreen.IsNone && Live(fullscreen) is { } covering)
                 {
                     WantHidden(covering, false, hide, show);
-                    WantPlaced(covering, monitor.FullArea, monitor, place);
+
+                    // A MAXIMISED window is where Windows keeps it -- the work
+                    // area, under the bar -- and ignores a move; asking it to
+                    // cover the monitor's bounds was refused on every desk
+                    // with a bar (Zen on the vertical monitor, 35 px short,
+                    // "will not go to", 2026-09-22).
+                    if (!covering.Snapshot.IsMaximized)
+                    {
+                        WantPlaced(covering, monitor.FullArea, monitor, place);
+                    }
 
                     // The band is NOT touched, either way. A window that
                     // covers the screen owns it by being the foreground window
@@ -151,8 +160,11 @@ public sealed partial class Desk
                     // is what keeps a chat window off a game.
 
                     // The taskbar drops behind it, and is told again when it
-                    // stops being fullscreen.
-                    WantMarked(covering, true, mark);
+                    // stops being fullscreen. Not for a maximised application
+                    // that stops at the bar: telling the shell that one is
+                    // fullscreen hides the bar under a browser.
+                    bool coversTheBounds = covering.Snapshot.FrameBounds.Contains(monitor.FullArea);
+                    WantMarked(covering, coversTheBounds || LooksLikeAGame(covering), mark);
                 }
             }
 
