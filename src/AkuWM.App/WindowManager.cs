@@ -419,25 +419,28 @@ public sealed class WindowManager : IAsyncDisposable
                 Last = _applier.Apply(redraw);
                 _desk.Applied(redraw, Last.Refused, Last.Unmarked, Last.Undecorated, Last.FocusRefused);
 
-                // A floating window still in the person's hand is left alone
-                // until it rests; the desk asks to be looked at again then.
-                if (_desk.Unsettled)
-                {
-                    _settle ??= new Timer(
-                        _ => _loop.Post("a window has come to rest", () =>
-                        {
-                            _dirty = true;
-                            Redraw();
-                        }),
-                        null,
-                        Timeout.Infinite,
-                        Timeout.Infinite);
-                    _settle.Change(Desk.SettleMs + 20, Timeout.Infinite);
-                }
-
                 // The platform proves, once, that a window it hides can be
                 // brought back. If it cannot, the model stops asking.
                 _desk.CanHide = _applier.CanHide;
+            }
+
+            // A floating window still in the person's hand is left alone
+            // until it rests; the desk asks to be looked at again then.
+            // Outside the block above: when the ONLY thing to do was the
+            // deferred placement, the redraw was "nothing" and this never
+            // ran -- a fetched terminal came back rescaled and stayed so.
+            if (_desk.Unsettled)
+            {
+                _settle ??= new Timer(
+                    _ => _loop.Post("a window has come to rest", () =>
+                    {
+                        _dirty = true;
+                        Redraw();
+                    }),
+                    null,
+                    Timeout.Infinite,
+                    Timeout.Infinite);
+                _settle.Change(Desk.SettleMs + 20, Timeout.Infinite);
             }
         }
 

@@ -140,7 +140,7 @@ public class MonitorAwayTests
         f.Platform.ApplicationMoves(W(5), sticky5 with { Width = sticky5.Width * 5 / 6, Height = sticky5.Height * 5 / 6 });
         f.Sync();
         f.Turn();
-        f.Wait(Desk.SettleMs + 1);
+        f.Wait(AkuWM.Core.Desk.Desk.SettleMs + 1);
         f.Turn();
 
         Assert.Equal(floating4, f.FrameOf(4));
