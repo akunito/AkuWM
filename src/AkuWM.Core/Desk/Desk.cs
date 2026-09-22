@@ -1422,6 +1422,33 @@ public sealed partial class Desk
         }
     }
 
+    /// <summary>
+    /// How long a window refused as cloaked by its own application is read
+    /// again on a clock, not only on its next event. A DirectX window
+    /// (fliptest) that was born cloaked sent no un-cloak event AkuWM acted on,
+    /// and was adopted only when some other window happened to make noise --
+    /// three seconds later, or never (tests/wm, 2026-09-22 21:50 and 22:15).
+    /// Zen's un-cloak arrives on its own; the poll costs nothing then.
+    /// </summary>
+    public const int BirthCloakMs = 5000;
+
+    /// <summary>The handles of windows refused as self-cloaked less than <see cref="BirthCloakMs"/> ago.</summary>
+    public int BirthCloaked(List<WindowHandle> into)
+    {
+        int count = 0;
+        long now = Now;
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (!window.Managed && window.Reason == UnmanagedReason.SelfCloaked && now - window.AdoptedAt < BirthCloakMs)
+            {
+                into.Add(window.Handle);
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     /// <summary>Lets go of a window that has closed.</summary>
     public void Forget(WindowHandle handle)
     {

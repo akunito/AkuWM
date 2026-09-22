@@ -429,6 +429,10 @@ public sealed class WindowManager : IAsyncDisposable
     private Timer? _settle;
     private bool _sessionEnding;
 
+    private const int BirthPollMs = 150;
+    private readonly List<WindowHandle> _birthCloaked = [];
+    private bool _birthPending;
+
     /// <summary>Once per burst: look if anything appeared, decide, apply.</summary>
     private void Redraw()
     {
@@ -467,6 +471,33 @@ public sealed class WindowManager : IAsyncDisposable
                 // The platform proves, once, that a window it hides can be
                 // brought back. If it cannot, the model stops asking.
                 _desk.CanHide = _applier.CanHide;
+            }
+
+            // A window born cloaked by its own application is read again on
+            // a clock: the un-cloak event does not always come (Desk.BirthCloakMs).
+            _birthCloaked.Clear();
+            if (_desk.BirthCloaked(_birthCloaked) > 0 && !_birthPending)
+            {
+                _birthPending = true;
+                _ = Task.Delay(BirthPollMs).ContinueWith(_ => _loop.Post("birth re-check", () =>
+                {
+                    _birthPending = false;
+                    _birthCloaked.Clear();
+                    _desk.BirthCloaked(_birthCloaked);
+                    for (int i = 0; i < _birthCloaked.Count; i++)
+                    {
+                        if (_platform.Window(_birthCloaked[i]) is { } born)
+                        {
+                            _desk.Observe(born);
+                        }
+                        else
+                        {
+                            _desk.Forget(_birthCloaked[i]);
+                        }
+                    }
+
+                    _dirty = true;
+                }), TaskScheduler.Default);
             }
 
             // A floating window still in the person's hand is left alone

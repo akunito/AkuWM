@@ -13,6 +13,40 @@ namespace AkuWM.Tests;
 /// </summary>
 public class SelfCloakedBirthTests
 {
+    [Fact]
+    public void A_window_born_cloaked_is_listed_for_a_clocked_re_read_for_five_seconds()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        f.Platform.WindowList.Add(FakePlatform.Window(2, "fliptest", className: "FlipTestWnd", title: "fliptest", cloak: CloakKind.App));
+        f.Sync();
+
+        var born = new List<WindowHandle>();
+        Assert.Equal(1, f.Desk.BirthCloaked(born));
+        Assert.Equal([new WindowHandle(2)], born);
+
+        f.Wait(Desk.BirthCloakMs);
+        born.Clear();
+        Assert.Equal(0, f.Desk.BirthCloaked(born));
+    }
+
+    [Fact]
+    public void A_re_read_that_finds_the_cloak_gone_adopts_it_without_any_event()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        f.Platform.WindowList.Add(FakePlatform.Window(2, "fliptest", className: "FlipTestWnd", title: "fliptest", cloak: CloakKind.App));
+        f.Sync();
+        Assert.False(f.Managed(2)!.Managed);
+
+        f.Platform.WindowList[^1] = FakePlatform.Window(2, "fliptest", className: "FlipTestWnd", title: "fliptest");
+        f.Desk.Observe(f.Platform.WindowList[^1]);
+        Assert.True(f.Managed(2)!.Managed);
+        Assert.Contains(f.Turn().Place, p => p.Window == new WindowHandle(2));
+    }
+
     private static WindowHandle W(long handle) => new(handle);
 
     [Fact]
