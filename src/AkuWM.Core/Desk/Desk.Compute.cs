@@ -569,7 +569,7 @@ public sealed partial class Desk
         // "Exactly" within a pixel or two: the border is re-read across a
         // change of scale and came back 8 where it had been 9, which moved
         // the wanted rectangle by one pixel and sent a second placement.
-        if (window.Placed is { } asked && asked.CloseTo(frame, 2) && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
+        if (window.Placed is { } asked && asked.CloseTo(frame, 4) && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;

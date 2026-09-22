@@ -920,10 +920,25 @@ public sealed partial class Desk
             window.MovedAt = Now;
         }
 
-        if (window.Placed is { } asked && asked.CloseTo(snapshot.FrameBounds, PlacementSlack))
+        // Whether this observation is the window ARRIVING where AkuWM put it,
+        // or a later move that merely passes near that place. A drag through
+        // the old rectangle read as "where AkuWM put it" and was undone by 65
+        // px mid-drag (live, 13:17:23).
+        bool arriving = !window.Landed
+            && window.Placed is { } asked && asked.CloseTo(snapshot.FrameBounds, PlacementSlack);
+        if (arriving)
         {
             window.Landed = true;
         }
+
+        // A landed window whose SIZE alone shifts a little, still within the
+        // slack of what was asked, is an application rounding itself (a
+        // terminal to its cells); a change of position is a hand.
+        bool rounding = !arriving
+            && window.Landed
+            && snapshot.FrameBounds.X == was.FrameBounds.X
+            && snapshot.FrameBounds.Y == was.FrameBounds.Y
+            && window.Placed is { } putAt && putAt.CloseTo(snapshot.FrameBounds, PlacementSlack);
 
         if (!window.Managed)
         {
@@ -1022,7 +1037,8 @@ public sealed partial class Desk
         // little further every redraw.
         if ((window.State == WindowState.Floating || window.Sticky)
             && was.FrameBounds != snapshot.FrameBounds
-            && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
+            && !arriving
+            && !rounding)
         {
             // Just crossed to another screen: what is arriving now is Windows
             // rescaling the window for the new DPI, a beat after the move, and

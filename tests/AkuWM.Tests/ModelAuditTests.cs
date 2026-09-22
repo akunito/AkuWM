@@ -911,3 +911,31 @@ public class BlownUpWindowTests
         Assert.Equal(1500, fixture.Managed(1)!.FloatingRect!.Value.Width);
     }
 }
+
+/// <summary>A drag that passes where AkuWM last put the window is still the drag (2026-09-22 13:17).</summary>
+public class DragThroughTheOldPlaceTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void Passing_near_the_last_placement_mid_drag_does_not_send_the_window_back()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Open(1, resizable: false, frame: new Rect(1298, 100, 1890, 1235));
+        fixture.Turn(); // placed at 1298,100 and landed
+
+        Rect at = new(1879, 100, 1890, 1235);
+        fixture.Move(1, at);
+        fixture.Turn();
+        for (int x = 1814; x >= 1034; x -= 65)
+        {
+            fixture.Wait(16);
+            at = at with { X = x };
+            fixture.Move(1, at);
+            Redraw redraw = fixture.Turn();
+            Assert.Empty(redraw.Place);
+            Assert.Equal(x, fixture.FrameOf(1).X);
+        }
+    }
+}
