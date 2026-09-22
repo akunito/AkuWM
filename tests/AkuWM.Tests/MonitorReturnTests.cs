@@ -189,5 +189,37 @@ public class MonitorReturnTests
         Assert.True(f.FrameOf(1).FractionInside(FakePlatform.MainMonitor().WorkArea) > 0.99, $"{f.FrameOf(1)}");
         Assert.True(f.FrameOf(2).FractionInside(FakePlatform.MainMonitor().WorkArea) > 0.99, $"{f.FrameOf(2)}");
         Assert.Equal(WindowState.Tiling, f.Managed(1)!.State);
+
+        // The screen is back: both go home, and into their tree -- not to a
+        // workspace with no slot for them.
+        SecondReturns(f);
+        f.Turn();
+        Workspace home = f.Desk.Workspace("21")!;
+        Assert.Equal("21", f.Managed(1)!.Workspace);
+        Assert.True(home.Tiling.Contains(W(1)), "window 1 has a slot in its tree");
+        Assert.True(home.Tiling.Contains(W(2)), "window 2 has a slot in its tree");
+        Assert.True(f.FrameOf(1).FractionInside(SecondWork) > 0.99, $"{f.FrameOf(1)}");
+        Assert.True(f.FrameOf(2).FractionInside(SecondWork) > 0.99, $"{f.FrameOf(2)}");
+        Assert.True(f.Desk.Workspace("11")!.Tiling.Contains(W(3)));
+        Assert.False(f.Desk.Workspace("11")!.Tiling.Contains(W(1)));
+    }
+
+    [Fact]
+    public void A_tile_that_lands_a_border_inside_its_rectangle_is_asked_again()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        // Windows gives the frame 9 px short on three sides and 1 down: the
+        // border was read as 0 for the instant of a display change.
+        f.Platform.Lands = r => r.Shrink(1, 9, 10, 9);
+        Redraw first = f.Turn();
+        Assert.Contains(first.Place, p => p.Window == W(1));
+        Assert.Equal(new Rect(9, 43, 3822, 2107), f.FrameOf(1));
+
+        f.Platform.Lands = null;
+        Redraw second = f.Turn();
+        Assert.Contains(second.Place, p => p.Window == W(1));
+        Assert.Equal(FakePlatform.MainMonitor().WorkArea, f.FrameOf(1));
+        Assert.Empty(f.Turn().Place);
     }
 }

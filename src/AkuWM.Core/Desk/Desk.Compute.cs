@@ -585,7 +585,16 @@ public sealed partial class Desk
         // "Exactly" within a pixel or two: the border is re-read across a
         // change of scale and came back 8 where it had been 9, which moved
         // the wanted rectangle by one pixel and sent a second placement.
-        if (window.Placed is { } asked && asked.CloseTo(frame, 4) && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
+        // The SIZE may differ by the slack (cells, a minimum of its own); the
+        // ORIGIN may not. A tile that landed at 9,43 for an ask of 0,42 --
+        // Zen, placed while a returning monitor was still settling and the
+        // border read 0 for that instant, 2026-09-22 15:55 -- was inside the
+        // slack and stayed 9 px short on three sides for the rest of the run.
+        if (window.Placed is { } asked
+            && asked.CloseTo(frame, 4)
+            && Math.Abs(frame.X - window.Snapshot.FrameBounds.X) <= 4
+            && Math.Abs(frame.Y - window.Snapshot.FrameBounds.Y) <= 4
+            && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;

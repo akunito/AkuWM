@@ -157,6 +157,14 @@ public sealed partial class Desk
                             ? WindowState.Tiling
                             : window.PreviousState;
                         window.WasFullscreen = false;
+
+                        // Into its home layer BEFORE the tree is cloned: a
+                        // minimised window is in no layer, so the clone the
+                        // return restores did not have it, and Brave came
+                        // home to workspace 21 without a slot in its tree --
+                        // visible where Windows had left it, in no layout,
+                        // in no query (2026-09-22 15:55).
+                        Place(window, workspace);
                     }
 
                     windows[handle] = (window.FloatingRect, window.State, window.PreviousState);
@@ -325,6 +333,20 @@ public sealed partial class Desk
                 }
 
                 home.Tiling.Restore(item.Tree, h => Window(h) is { Managed: true } w && string.Equals(w.Workspace, home.Name, StringComparison.OrdinalIgnoreCase));
+
+                // A tile of this workspace the restored tree does not hold
+                // (minimised when the loan was made, woken since) gets a slot
+                // rather than a home with no place in it.
+                foreach (DeskWindow window in _windows.Values)
+                {
+                    if (window.Managed
+                        && window.State == WindowState.Tiling
+                        && string.Equals(window.Workspace, home.Name, StringComparison.OrdinalIgnoreCase)
+                        && !home.Tiling.Contains(window.Handle))
+                    {
+                        Place(window, home);
+                    }
+                }
                 home.Floating.Clear();
                 foreach (WindowHandle handle in item.Floating)
                 {

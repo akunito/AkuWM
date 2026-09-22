@@ -49,6 +49,9 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     /// <summary>Windows the fake refuses to uncloak, for the shell that lies.</summary>
     public HashSet<long> RefusesToUncloak { get; } = [];
 
+    /// <summary>Where a placed window actually lands, when Windows does not give exactly what was asked.</summary>
+    public Func<Rect, Rect>? Lands { get; set; }
+
     /// <summary>Windows that will not take the size they are given, like the real ones that do not.</summary>
     public HashSet<long> Stubborn { get; } = [];
 
@@ -85,10 +88,11 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
                 continue;
             }
 
+            Rect landed = Lands?.Invoke(placement.Frame) ?? placement.Frame;
             Replace(placement.Window, w => w with
             {
-                FrameBounds = placement.Frame,
-                WindowRect = placement.Frame.Inflate(9),
+                FrameBounds = landed,
+                WindowRect = landed.Inflate(9),
 
                 // The monitor travels with the rectangle, as it does when
                 // Windows is the one answering. Leaving it stale made a window
