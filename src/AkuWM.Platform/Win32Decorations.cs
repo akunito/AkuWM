@@ -210,12 +210,14 @@ internal static class Win32Decorations
     /// window that flickers every time the focus moves is worse than one
     /// carrying a style bit it is not using.
     /// </remarks>
+    /// <summary>The windows AkuWM itself made layered: the only ones whose alpha it may set (see <see cref="Layering"/>).</summary>
+    private static readonly HashSet<long> LayeredByUs = [];
+
     private static bool Opacity(HWND hwnd, double opacity)
     {
         const int GwlExStyle = -20;
         const int WsExLayered = 0x00080000;
 
-        bool solid = opacity >= 1;
         int ex = (int)PInvoke.GetWindowLongPtr(hwnd, (WINDOW_LONG_PTR_INDEX)GwlExStyle);
 
         if (ex == 0)
@@ -223,14 +225,21 @@ internal static class Win32Decorations
             return false;
         }
 
-        if ((ex & WsExLayered) == 0)
-        {
-            if (solid)
-            {
-                return false;
-            }
+        long key = hwnd.Value;
+        bool layered = (ex & WsExLayered) != 0;
 
+        // A window layered by its own doing is painted with
+        // UpdateLayeredWindow; one SetLayeredWindowAttributes on it and it
+        // never repaints again (NordVPN's dialog, 2026-09-22). Never touched.
+        if (!Layering.ShouldSetAlpha(layered, LayeredByUs.Contains(key), opacity))
+        {
+            return false;
+        }
+
+        if (!layered)
+        {
             PInvoke.SetWindowLongPtr(hwnd, (WINDOW_LONG_PTR_INDEX)GwlExStyle, ex | WsExLayered);
+            LayeredByUs.Add(key);
         }
 
         byte alpha = (byte)Math.Clamp((int)Math.Round(opacity * 255), 1, 255);
