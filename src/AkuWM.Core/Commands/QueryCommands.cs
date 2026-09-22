@@ -147,6 +147,7 @@ public sealed class QueryCommands
             ["topmost"] = window.IsTopmost,
             ["resizable"] = window.IsResizable,
             ["elevated"] = window.IsElevated,
+            ["perMonitorDpi"] = window.PerMonitorDpi,
             ["rules"] = new JsonArray([.. managed.Rules.Select(r => (JsonNode)r!)]),
         };
     }

@@ -78,6 +78,23 @@ public sealed record WindowSnapshot
     public required bool IsToolWindow { get; init; }
 
     /// <summary>
+    /// Whether the window scales itself per monitor, or leaves that to
+    /// Windows (system-DPI aware, or unaware).
+    /// </summary>
+    /// <remarks>
+    /// Measured on this desk 2026-09-22 with Notepad++ (system-DPI aware):
+    /// a window of that kind whose OUTER rectangle touches a monitor of a
+    /// different scale, by a single pixel, is rescaled by Windows right
+    /// there -- 3840 wide at x=0 is fine, 3841 becomes 5761, and 1000 wide
+    /// straddling the seam became 2460. Every edge column AkuWM lays out has
+    /// an invisible 9 px border past the monitor's edge, so every such
+    /// placement blew the window up and it could then not be resized, moved
+    /// or floated. True by default: a window not read from Windows is
+    /// assumed to look after itself.
+    /// </remarks>
+    public bool PerMonitorDpi { get; init; } = true;
+
+    /// <summary>
     /// Runs at a higher integrity level than AkuWM. It can be cloaked but
     /// never positioned (UIPI), which is the whole reason the distinction is
     /// carried in the model.

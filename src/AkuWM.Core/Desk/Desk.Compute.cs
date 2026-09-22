@@ -321,6 +321,17 @@ public sealed partial class Desk
         };
     }
 
+    /// <summary>The frame, pulled in so that frame plus border stays within the screen.</summary>
+    private static Rect InsideTheScreen(Rect frame, (int Top, int Right, int Bottom, int Left) border, Rect screen)
+    {
+        int left = Math.Max(frame.Left, screen.Left + border.Left);
+        int top = Math.Max(frame.Top, screen.Top + border.Top);
+        int right = Math.Min(frame.Right, screen.Right - border.Right);
+        int bottom = Math.Min(frame.Bottom, screen.Bottom - border.Bottom);
+
+        return right > left && bottom > top ? Rect.FromEdges(left, top, right, bottom) : frame;
+    }
+
     /// <summary>
     /// Whether a window covering its screen is the kind that must not have
     /// an always-on-top window over it: a game.
@@ -518,6 +529,17 @@ public sealed partial class Desk
                 && was.Snapshot.ScaleFactor != monitor.Snapshot.ScaleFactor)
                 ? null
                 : window.Snapshot.BorderDelta;
+
+        // A window that does not scale itself must not have its OUTER
+        // rectangle -- frame plus the invisible border -- touch a neighbour
+        // of another scale: Windows rescales it on the spot, by a pixel of
+        // overlap (see WindowSnapshot.PerMonitorDpi). The frame is pulled in
+        // by the border on every edge that meets the monitor's edge, so the
+        // border stays on this screen.
+        if (!window.Snapshot.PerMonitorDpi)
+        {
+            frame = InsideTheScreen(frame, border ?? window.Snapshot.BorderDelta, monitor.FullArea);
+        }
 
         into.Add(new Placement(window.Handle, frame, border));
     }

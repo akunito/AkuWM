@@ -258,7 +258,8 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         bool maximized = false,
         bool elevated = false,
         CloakKind cloak = CloakKind.None,
-        bool onCurrentDesktop = true)
+        bool onCurrentDesktop = true,
+        bool perMonitorDpi = true)
     {
         Rect bounds = frame ?? new Rect(100, 100, 800, 600);
         return new WindowSnapshot
@@ -280,6 +281,7 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
             IsToolWindow = false,
             IsElevated = elevated,
             OnCurrentVirtualDesktop = onCurrentDesktop,
+            PerMonitorDpi = perMonitorDpi,
         };
     }
 }

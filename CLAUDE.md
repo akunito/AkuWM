@@ -52,6 +52,11 @@ Plan: `~/.dotfiles/docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
 - `powershell.exe` is Windows PowerShell 5.1: no ternaries in install scripts.
 - `JsonArray.Add(x)` builds a node that cannot serialise without a TypeInfoResolver; cast
   to `(JsonNode)`.
+- A **system-DPI-aware window** (Notepad++) whose OUTER rectangle -- frame plus the
+  invisible 9 px border -- touches a monitor of another scale by ONE pixel is rescaled
+  by Windows on the spot (3840 wide at x=0 fine, 3841 → 5761; 1000 wide straddling the
+  seam → 2460). Measured 2026-09-22. `WindowSnapshot.PerMonitorDpi` is false for such
+  windows and every placement is pulled inside the screen for them.
 
 ## Build
 

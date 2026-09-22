@@ -10,6 +10,9 @@ GetWindow
 GetTopWindow
 GetCursorPos
 GetThreadDpiAwarenessContext
+GetWindowDpiAwarenessContext
+GetAwarenessFromDpiAwarenessContext
+DPI_AWARENESS
 AreDpiAwarenessContextsEqual
 SetProcessDpiAwarenessContext
 IsWindowVisible

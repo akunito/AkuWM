@@ -550,3 +550,56 @@ public class OversizedWindowTests
         Assert.Equal(WindowState.Fullscreen, fixture.Managed(1)!.State);
     }
 }
+
+/// <summary>
+/// A window that leaves its scaling to Windows must never be placed with its
+/// invisible border on another screen (Notepad++, 2026-09-22).
+/// </summary>
+public class SystemDpiAwareWindowTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_system_dpi_aware_window_alone_on_a_screen_keeps_its_border_on_that_screen()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", perMonitorDpi: false));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Rect screen = FakePlatform.MainMonitor().Bounds;
+
+        // The fake's border is 9 px all round: frame + border must lie inside 0..3840 x 0..2160.
+        Assert.True(placement.Frame.Left - 9 >= screen.Left, $"{placement.Frame}");
+        Assert.True(placement.Frame.Right + 9 <= screen.Right, $"{placement.Frame}");
+        Assert.True(placement.Frame.Bottom + 9 <= screen.Bottom, $"{placement.Frame}");
+    }
+
+    [Fact]
+    public void A_per_monitor_window_is_placed_edge_to_edge_as_before()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1);
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Assert.Equal(FakePlatform.MainMonitor().WorkArea, placement.Frame);
+    }
+
+    [Fact]
+    public void The_fullscreen_placement_of_such_a_window_stays_inside_the_screen_too()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+        fixture.Desk.SetFullscreen(W(1), true);
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Rect screen = FakePlatform.MainMonitor().Bounds;
+        Assert.True(placement.Frame.Right + 9 <= screen.Right, $"{placement.Frame}");
+        Assert.True(placement.Frame.Left - 9 >= screen.Left, $"{placement.Frame}");
+    }
+}

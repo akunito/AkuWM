@@ -166,6 +166,8 @@ public static class Win32Windows
             IsResizable = style.HasFlag(WINDOW_STYLE.WS_THICKFRAME),
             IsToolWindow = exStyle.HasFlag(WINDOW_EX_STYLE.WS_EX_TOOLWINDOW),
             IsElevated = elevated,
+            PerMonitorDpi = PInvoke.GetAwarenessFromDpiAwarenessContext(PInvoke.GetWindowDpiAwarenessContext(hwnd))
+                            == Windows.Win32.UI.HiDpi.DPI_AWARENESS.DPI_AWARENESS_PER_MONITOR_AWARE,
         };
     }
 
