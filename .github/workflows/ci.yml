@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only token: nothing here writes to the repository, and a pull request
+# from a fork must not be able to.
+permissions:
+  contents: read
+
 jobs:
   # The pure projects, where most of AkuWM's logic lives, are built and tested
   # on Linux: that is where they are written, and it keeps them honest about
@@ -70,7 +75,10 @@ jobs:
       - name: Publish the glazewm shim
         run: dotnet publish src/AkuWM.Shim/AkuWM.Shim.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 
-      - uses: actions/upload-artifact@v4
+      # Only what main built is offered as a download: a pull request's
+      # binary is untrusted code with a trusted-looking name.
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
         with:
           name: akuwm-win-x64
           path: |

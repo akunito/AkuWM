@@ -172,6 +172,7 @@ public sealed class GeometryJournal
         var restored = new List<OriginalGeometry>();
         var stale = new List<OriginalGeometry>();
         var batch = new List<Placement>();
+        IReadOnlyList<MonitorSnapshot> screens = platform.Monitors();
 
         foreach (OriginalGeometry entry in pending)
         {
@@ -181,6 +182,17 @@ public sealed class GeometryJournal
             if (window is null
                 || !string.Equals(window.ProcessName, entry.Process, StringComparison.OrdinalIgnoreCase))
             {
+                stale.Add(entry);
+                continue;
+            }
+
+            // A rectangle on no screen at all is a corrupt record, or a
+            // screen that has gone; replaying it puts a live window where
+            // nobody can reach it. The store checks its magic and nothing
+            // else, so this is where garbage is caught.
+            if (!entry.Frame.IsEmpty && !OnAnyScreen(entry.Frame, screens))
+            {
+                Log.Warn($"not putting {entry.Process} back at {entry.Frame}: that is on no screen");
                 stale.Add(entry);
                 continue;
             }
@@ -232,6 +244,24 @@ public sealed class GeometryJournal
         }
 
         return new GeometryRestoreResult(restored, stale);
+    }
+
+    private static bool OnAnyScreen(Rect frame, IReadOnlyList<MonitorSnapshot> screens)
+    {
+        if (screens.Count == 0)
+        {
+            return true; // nothing to check against
+        }
+
+        for (int i = 0; i < screens.Count; i++)
+        {
+            if (frame.FractionInside(screens[i].Bounds) > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 }

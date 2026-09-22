@@ -193,6 +193,7 @@ public static class Program
                 // and marking it clean here made safe mode unreachable by the
                 // failure it was designed for.
                 GiveTheDeskBack("the window-manager loop stopped answering");
+                Log.Flush();
                 Environment.Exit(3);
             });
 
@@ -286,6 +287,7 @@ public static class Program
             }
 
             GiveTheDeskBack("an unhandled exception");
+            Log.Flush();
         };
 
         if (!manager.Compat.Listening)

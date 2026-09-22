@@ -50,6 +50,7 @@ public static class Log
     /// </summary>
     public static void ToDirectory(string directory, long maxBytes = 4 * 1024 * 1024)
     {
+        Flush(); // what was queued goes to the file it was written for
         lock (Gate)
         {
             Directory.CreateDirectory(directory);
@@ -80,6 +81,7 @@ public static class Log
     /// <summary>Lets the log file go. For tests, which must be able to delete it.</summary>
     public static void ToConsoleOnly()
     {
+        Flush();
         lock (Gate)
         {
             _file?.Dispose();
@@ -119,6 +121,67 @@ public static class Log
             System.Globalization.CultureInfo.InvariantCulture,
             $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {Name(level)} [{Thread.CurrentThread.Name ?? "t" + Environment.CurrentManagedThreadId}] {message}");
 
+        // Off the caller's thread. The wm thread logs on the gesture path --
+        // at DBG, which this desk runs at, every redraw -- and each line was
+        // a formatted write and a flush to disk under a global lock, with
+        // Defender scanning the directory: tens of microseconds on a good
+        // day, milliseconds on a bad one, inside a 5 ms budget. Errors are
+        // still written through, because the line after an error may be the
+        // crash. A bounded queue: if the writer falls 4096 lines behind, the
+        // caller waits rather than the process eating memory.
+        if (level >= LogLevel.Error || _queue is null)
+        {
+            Emit(line);
+            return;
+        }
+
+        if (!_queue.Writer.TryWrite(line))
+        {
+            _queue.Writer.WriteAsync(line).AsTask().GetAwaiter().GetResult();
+        }
+    }
+
+    private static readonly System.Threading.Channels.Channel<string> _queue =
+        System.Threading.Channels.Channel.CreateBounded<string>(new System.Threading.Channels.BoundedChannelOptions(4096)
+        {
+            SingleReader = true,
+            FullMode = System.Threading.Channels.BoundedChannelFullMode.Wait,
+        });
+
+    private static readonly Thread WriterThread = Start();
+
+    private static Thread Start()
+    {
+        var thread = new Thread(() =>
+        {
+            while (_queue.Reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
+            {
+                while (_queue.Reader.TryRead(out string? line))
+                {
+                    Emit(line);
+                }
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "akuwm-log",
+        };
+        thread.Start();
+        return thread;
+    }
+
+    /// <summary>Writes what the queue holds. Before a Close, and before an exit.</summary>
+    public static void Flush()
+    {
+        SpinWait.SpinUntil(() => _queue.Reader.Count == 0, 2000);
+        lock (Gate)
+        {
+            _file?.Flush();
+        }
+    }
+
+    private static void Emit(string line)
+    {
         lock (Gate)
         {
             if (_file is not null)
@@ -194,6 +257,7 @@ public static class Log
 
     public static void Close()
     {
+        Flush();
         lock (Gate)
         {
             _file?.Dispose();

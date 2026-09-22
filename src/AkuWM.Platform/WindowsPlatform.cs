@@ -45,6 +45,9 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
     /// </remarks>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<WindowHandle, bool> _onThisDesktop = new();
 
+    public CloakKind CloakOf(WindowHandle handle) =>
+        Win32Windows.CloakOf(new Windows.Win32.Foundation.HWND((IntPtr)handle.Value));
+
     public WindowSnapshot? Window(WindowHandle handle)
     {
         if (Win32Windows.Read(handle) is not { } window)

@@ -150,8 +150,14 @@ public sealed class DeskApplier
         long placing = System.Diagnostics.Stopwatch.GetTimestamp();
         int placed = Place(redraw.Place);
         var placeTook = System.Diagnostics.Stopwatch.GetElapsedTime(placing);
+
+        // And every other phase apart: "48 ms of SetTopmost and DWM calls"
+        // in the plan was the remainder after the placement, unattributed,
+        // and the focus fallbacks alone can be 120 ms of polling.
+        long at = System.Diagnostics.Stopwatch.GetTimestamp();
         Cloak(redraw.Hide, true, refused);
         Cloak(redraw.Show, false, refused);
+        var cloakTook = Lap(ref at);
 
         foreach ((WindowHandle window, bool topmost) in redraw.Band)
         {
@@ -162,6 +168,8 @@ public sealed class DeskApplier
         {
             _actions.PlaceBehind(window, game);
         }
+
+        var bandTook = Lap(ref at);
 
         // The shell can refuse, and does when explorer.exe has just restarted.
         // Recording the mark as applied anyway left the taskbar sitting over a
@@ -181,6 +189,8 @@ public sealed class DeskApplier
                 (undecorated ??= []).Add(window);
             }
         }
+
+        var decorateTook = Lap(ref at);
 
         // Before the cloak would have been the wrong order: a button taken off
         // a window that is still on screen looks like the window vanished from
@@ -205,6 +215,8 @@ public sealed class DeskApplier
             Logging.Log.Info($"taskbar told {window} is {(fullscreen ? "fullscreen" : "not fullscreen")}");
         }
 
+        var taskbarTook = Lap(ref at);
+
         bool focusRefused = false;
         if (!redraw.Focus.IsNone)
         {
@@ -215,11 +227,50 @@ public sealed class DeskApplier
             _actions.Unfocus();
         }
 
+        var focusTook = Lap(ref at);
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
         Log.Debug(() => $"redraw: {redraw} -> {placed} placed, {refused.Count} refused, "
-            + $"{elapsed.TotalMilliseconds:F2} ms ({placeTook.TotalMilliseconds:F2} of it moving windows)");
+            + $"{elapsed.TotalMilliseconds:F2} ms (place {placeTook.TotalMilliseconds:F2}, cloak {cloakTook.TotalMilliseconds:F2}, "
+            + $"band {bandTook.TotalMilliseconds:F2}, decorate {decorateTook.TotalMilliseconds:F2}, "
+            + $"taskbar {taskbarTook.TotalMilliseconds:F2}, focus {focusTook.TotalMilliseconds:F2})");
+
+        // The slow tail of the day's redraws was six or seven windows placed
+        // with nothing else to do, about 100 ms each: SetWindowPos waiting
+        // for the application. Which application is the question, and it is
+        // answered here, once per slow placement, by name.
+        if (placeTook.TotalMilliseconds > SlowPlacementMs && redraw.Place.Count > 0)
+        {
+            Log.Info($"placing {redraw.Place.Count} window(s) took {placeTook.TotalMilliseconds:F0} ms: {Names(redraw.Place)}");
+        }
 
         return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused);
+    }
+
+    /// <summary>Above this, a placement names the windows it waited on.</summary>
+    public const int SlowPlacementMs = 50;
+
+    private static TimeSpan Lap(ref long since)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var took = System.Diagnostics.Stopwatch.GetElapsedTime(since, now);
+        since = now;
+        return took;
+    }
+
+    private string Names(IReadOnlyList<Placement> placements)
+    {
+        var names = new System.Text.StringBuilder();
+        for (int i = 0; i < placements.Count && i < 8; i++)
+        {
+            if (i > 0)
+            {
+                names.Append(", ");
+            }
+
+            names.Append(Look(placements[i].Window)?.ProcessName ?? placements[i].Window.ToString());
+        }
+
+        return names.ToString();
     }
 
     /// <summary>
@@ -378,7 +429,7 @@ public sealed class DeskApplier
             }
 
             string? error = _actions.SetCloak(handle, hidden);
-            bool nowCloaked = _platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) == true;
+            bool nowCloaked = _platform.CloakOf(handle).HasFlag(CloakKind.Shell);
 
             if (error is not null || nowCloaked != hidden)
             {

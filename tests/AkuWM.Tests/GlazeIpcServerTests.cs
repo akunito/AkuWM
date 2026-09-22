@@ -361,15 +361,23 @@ public class GlazeIpcServerTests
 
         // The subscription map used to be mutated outside the lock Publish
         // reads it under, so a sub arriving mid-event threw and the event was
-        // silently dropped.
+        // silently dropped. Subscribed to an event that is NOT being fired:
+        // this client reads only its replies, and a client that lets events
+        // pile up unread is dropped now, by design.
+        int answered = 0;
         for (int i = 0; i < 20 && !stop.IsCancellationRequested; i++)
         {
-            await Ask(client, "sub -e all");
+            if ((await Ask(client, "sub -e focus_changed")).Contains("\"success\":true", StringComparison.Ordinal))
+            {
+                answered++;
+            }
+
             await Ask(client, "unsub");
         }
 
         stop.Cancel();
         await publishing;
+        Assert.Equal(20, answered);
     }
 
     [Fact]

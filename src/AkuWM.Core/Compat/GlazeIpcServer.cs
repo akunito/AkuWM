@@ -44,6 +44,18 @@ public sealed class GlazeIpcServer : IAsyncDisposable
     private readonly int _port;
     private readonly Func<string, ExecResult> _handle;
     private readonly List<Subscriber> _subscribers = [];
+
+    // Caps. This is loopback TCP with no authentication, reachable by any web
+    // page; each of these was unbounded, and one client could park a Task and
+    // a socket per connection for ever, log a line per subscription, or grow
+    // a message without limit. Generous for a bar with two widgets.
+    private const int MaxConnections = 32;
+    private const int MaxSubscriptionsPerClient = 16;
+    private const int MaxMessageBytes = 64 * 1024;
+    private const int MaxHandshakeBytes = 8192;
+    private const int HandshakeTimeoutMs = 5_000;
+    private const int OutboxFrames = 256;
+    private const int SendTimeoutMs = 2_000;
     private readonly CancellationTokenSource _stopping = new();
     private readonly object _gate = new();
 
@@ -198,6 +210,16 @@ public sealed class GlazeIpcServer : IAsyncDisposable
                 return;
             }
 
+            lock (_gate)
+            {
+                if (_subscribers.Count >= MaxConnections)
+                {
+                    Log.Warn($"a compatibility client was refused: {MaxConnections} already connected");
+                    client.Dispose();
+                    continue;
+                }
+            }
+
             _ = Task.Run(() => Serve(client));
         }
     }
@@ -228,6 +250,7 @@ public sealed class GlazeIpcServer : IAsyncDisposable
                 }
 
                 Log.Debug(() => $"a client connected: {request}");
+                subscriber.Writer = Task.Run(() => Drain(subscriber));
                 await Converse(socket, subscriber).ConfigureAwait(false);
             }
         }
@@ -246,6 +269,37 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             {
                 _subscribers.Remove(subscriber);
             }
+
+            subscriber.Outbox.Writer.TryComplete();
+        }
+    }
+
+    /// <summary>
+    /// One writer per client, fed by a bounded queue. A client that stops
+    /// reading fills its own queue and is dropped; nobody else waits on it.
+    /// </summary>
+    /// <remarks>
+    /// Publish used to send to every subscriber in turn with no timeout, and
+    /// every event was chained behind the previous one: a bar that stopped
+    /// reading -- a hung WebView, a page that subscribed and walked away --
+    /// parked SendAsync for good, and every event for every other client
+    /// queued behind it, each holding its payload, for the life of the daemon.
+    /// </remarks>
+    private async Task Drain(Subscriber subscriber)
+    {
+        try
+        {
+            await foreach (string text in subscriber.Outbox.Reader.ReadAllAsync(_stopping.Token).ConfigureAwait(false))
+            {
+                if (!await Send(subscriber, text).ConfigureAwait(false))
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping.
         }
     }
 
@@ -253,16 +307,58 @@ public sealed class GlazeIpcServer : IAsyncDisposable
     public static string AcceptFor(string key) =>
         Convert.ToBase64String(SHA1.HashData(Encoding.UTF8.GetBytes(key + HandshakeSalt)));
 
+    /// <summary>
+    /// Whether a browser page may open this socket, by the Origin it sends.
+    /// </summary>
+    /// <remarks>
+    /// A browser always sends Origin on a WebSocket upgrade and the
+    /// same-origin policy does not apply to WebSockets, so without this any
+    /// page on the internet could read every window title and process name
+    /// on the desk through `query windows`. A page served from the machine
+    /// itself (the bar's WebView2, a local dev server) has a loopback host or
+    /// no http origin at all; anything else is refused with 403. The scripts
+    /// use the pipe and never send one.
+    /// </remarks>
+    internal static bool OriginAllowed(string? origin)
+    {
+        if (origin is null || origin.Length == 0 || origin == "null")
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out Uri? uri))
+        {
+            return true; // app://, zebar://, file: -- not a web page
+        }
+
+        if (uri.Scheme is not ("http" or "https" or "ws" or "wss"))
+        {
+            return true;
+        }
+
+        return uri.IsLoopback;
+    }
+
     /// <summary>The HTTP upgrade, done by hand.</summary>
     private static async Task<string?> Handshake(NetworkStream stream)
     {
-        var buffer = new byte[8192];
+        var buffer = new byte[MaxHandshakeBytes];
         var request = new StringBuilder();
         int total = 0;
+        using var patience = new CancellationTokenSource(HandshakeTimeoutMs);
 
         while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
         {
-            int read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total)).ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), patience.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return null; // a connection that never finishes its headers holds nothing
+            }
+
             if (read <= 0)
             {
                 return null;
@@ -279,15 +375,25 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         }
 
         string text = request.ToString();
-        string? key = text
-            .Split("\r\n")
-            .FirstOrDefault(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase))
-            ?.Split(':', 2)[1]
-            .Trim();
+        string[] lines = text.Split("\r\n");
+        string? key = Header(lines, "Sec-WebSocket-Key");
 
         if (key is null)
         {
             return null;
+        }
+
+        string? origin = Header(lines, "Origin");
+        if (!OriginAllowed(origin))
+        {
+            Log.Warn($"a web page at {origin} tried to open the bar's socket and was refused");
+            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")).ConfigureAwait(false);
+            return null;
+        }
+
+        if (origin is not null)
+        {
+            Log.Debug(() => $"a client with Origin {origin} connected");
         }
 
         string accept = AcceptFor(key);
@@ -299,7 +405,22 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             + $"Sec-WebSocket-Accept: {accept}\r\n\r\n");
 
         await stream.WriteAsync(response).ConfigureAwait(false);
-        return text.Split("\r\n")[0];
+        return lines[0];
+    }
+
+    private static string? Header(string[] lines, string name)
+    {
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].StartsWith(name, StringComparison.OrdinalIgnoreCase)
+                && lines[i].Length > name.Length
+                && lines[i][name.Length] == ':')
+            {
+                return lines[i][(name.Length + 1)..].Trim();
+            }
+        }
+
+        return null;
     }
 
     private async Task Converse(WebSocket socket, Subscriber subscriber)
@@ -322,6 +443,13 @@ public sealed class GlazeIpcServer : IAsyncDisposable
                     return;
                 }
 
+                if (message.Length + result.Count > MaxMessageBytes)
+                {
+                    await socket.CloseAsync(
+                        WebSocketCloseStatus.MessageTooBig, null, CancellationToken.None).ConfigureAwait(false);
+                    return;
+                }
+
                 message.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
             }
             while (!result.EndOfMessage);
@@ -335,7 +463,15 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             Traffic?.Invoke(false, request);
             string reply = Answer(request, subscriber);
             Traffic?.Invoke(true, reply);
-            await Send(subscriber, reply).ConfigureAwait(false);
+
+            // Through the same queue as the events, so a reply and an event
+            // never interleave their frames and a slow client stalls only
+            // itself.
+            await Enqueue(subscriber, reply).ConfigureAwait(false);
+            if (subscriber.Outbox.Reader.Completion.IsCompleted)
+            {
+                return;
+            }
         }
     }
 
@@ -443,9 +579,14 @@ public sealed class GlazeIpcServer : IAsyncDisposable
 
         lock (_gate)
         {
+            if (subscriber.Subscriptions.Count >= MaxSubscriptionsPerClient)
+            {
+                return ExecResult.Fail($"this connection already has {MaxSubscriptionsPerClient} subscriptions");
+            }
+
             subscriber.Subscriptions[id] = wanted;
         }
-        Log.Info($"a client subscribed to {string.Join(", ", wanted)}");
+        Log.Debug(() => $"a client subscribed to {string.Join(", ", wanted)}");
 
         return ExecResult.Ok(data: new JsonObject { ["subscriptionId"] = id.ToString() });
     }
@@ -506,35 +647,69 @@ public sealed class GlazeIpcServer : IAsyncDisposable
             GlazeProtocol.Subscription(frame, id);
             string text = frame.ToJsonString(GlazeProtocol.Compact);
             Traffic?.Invoke(true, text);
-            await Send(subscriber, text).ConfigureAwait(false);
+
+            // Queued, with a bounded wait: this runs on the publisher's own
+            // continuation, never the wm thread, so waiting for room is
+            // allowed -- a burst of events outrunning a healthy bar for a
+            // moment is not a bar that stopped reading. One that gives no
+            // room within the timeout is, and it is dropped rather than
+            // caught up with; nothing else waited on it.
+            await Enqueue(subscriber, text).ConfigureAwait(false);
         }
     }
 
-    private static async Task Send(Subscriber subscriber, string text)
+    private static async Task Enqueue(Subscriber subscriber, string text)
     {
-        if (subscriber.Socket is not { State: WebSocketState.Open } socket)
+        if (subscriber.Outbox.Writer.TryWrite(text))
         {
             return;
         }
 
-        // One writer at a time: a reply and an event racing on the same socket
-        // interleave their frames and the client sees neither.
-        await subscriber.Writing.WaitAsync().ConfigureAwait(false);
+        using var patience = new CancellationTokenSource(SendTimeoutMs);
+        try
+        {
+            await subscriber.Outbox.Writer.WriteAsync(text, patience.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Warn("a compatibility client stopped reading; dropping it");
+            subscriber.Outbox.Writer.TryComplete();
+            subscriber.Socket?.Abort();
+        }
+        catch (System.Threading.Channels.ChannelClosedException)
+        {
+            // Already gone.
+        }
+    }
+
+    /// <returns>False when the client is gone or would not take the frame in time.</returns>
+    private static async Task<bool> Send(Subscriber subscriber, string text)
+    {
+        if (subscriber.Socket is not { State: WebSocketState.Open } socket)
+        {
+            return false;
+        }
+
+        using var patience = new CancellationTokenSource(SendTimeoutMs);
         try
         {
             await socket.SendAsync(
                 Encoding.UTF8.GetBytes(text),
                 WebSocketMessageType.Text,
                 endOfMessage: true,
-                CancellationToken.None).ConfigureAwait(false);
+                patience.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Warn("a compatibility client did not take a frame within 2 s; dropping it");
+            socket.Abort();
+            return false;
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException or IOException)
         {
             // The client went away between the check and the send.
-        }
-        finally
-        {
-            subscriber.Writing.Release();
+            return false;
         }
     }
 
@@ -565,6 +740,14 @@ public sealed class GlazeIpcServer : IAsyncDisposable
 
         public Dictionary<Guid, string[]> Subscriptions { get; } = [];
 
-        public SemaphoreSlim Writing { get; } = new(1, 1);
+        /// <summary>Replies and events, in order, drained by one writer task.</summary>
+        public System.Threading.Channels.Channel<string> Outbox { get; } =
+            System.Threading.Channels.Channel.CreateBounded<string>(new System.Threading.Channels.BoundedChannelOptions(OutboxFrames)
+            {
+                SingleReader = true,
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.Wait,
+            });
+
+        public Task? Writer { get; set; }
     }
 }

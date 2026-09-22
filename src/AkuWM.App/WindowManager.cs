@@ -304,8 +304,16 @@ public sealed class WindowManager : IAsyncDisposable
         if (_desk.Window(handle) is null)
         {
             // Not a window AkuWM knows: it may have become one (a splash
-            // screen that turned into an application window).
-            _resync = true;
+            // screen that turned into an application window). The same three
+            // cheap calls that gate WindowCreated gate this: a tooltip, a
+            // menu, an IME candidate window and a taskbar thumbnail all move
+            // and rename at mouse rate, and each one cost a hundred-window
+            // enumeration.
+            if (Win32Windows.CouldBeManaged(handle))
+            {
+                _resync = true;
+            }
+
             return;
         }
 

@@ -28,6 +28,9 @@ public class LogTests
                 Log.Info($"a line long enough to matter, number {i}, padded {new string('x', 60)}");
             }
 
+            // The writer is a thread of its own now; the file is behind the queue.
+            Log.Flush();
+
             string live = Path.Combine(dir, "akuwm.log");
             Assert.True(File.Exists(live));
             Assert.True(File.Exists(live + ".1"), "the previous log should have been kept");

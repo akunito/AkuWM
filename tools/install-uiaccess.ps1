@@ -69,15 +69,20 @@ $cert = Get-ChildItem Cert:\LocalMachine\My |
 if ($cert) {
     Good "already there, valid until $($cert.NotAfter.ToString('yyyy-MM-dd'))"
 } else {
+    # Non-exportable: this key is trusted as a code-signing root on this
+    # machine, and an exportable one is a signing key any administrator
+    # process could carry off. Two years, not ten -- the signature is
+    # timestamped, so a binary signed today stays valid after it expires.
     $cert = New-SelfSignedCertificate `
         -Type CodeSigningCert `
         -Subject $subject `
         -CertStoreLocation Cert:\LocalMachine\My `
         -KeyUsage DigitalSignature `
+        -KeyExportPolicy NonExportable `
         -KeyLength 2048 `
         -KeyAlgorithm RSA `
         -HashAlgorithm SHA256 `
-        -NotAfter (Get-Date).AddYears(10)
+        -NotAfter (Get-Date).AddYears(2)
     Good "created, thumbprint $($cert.Thumbprint)"
 }
 

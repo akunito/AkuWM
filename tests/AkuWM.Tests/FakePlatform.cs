@@ -34,6 +34,8 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     public WindowSnapshot? Window(WindowHandle handle) =>
         WindowList.FirstOrDefault(w => w.Handle == handle);
 
+    public CloakKind CloakOf(WindowHandle handle) => Window(handle)?.Cloak ?? CloakKind.None;
+
     public WindowHandle Foreground() => ForegroundWindow;
 
     public (int X, int Y) CursorPosition() => Cursor;

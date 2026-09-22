@@ -46,10 +46,21 @@ internal static class Win32Decorations
     /// </remarks>
     private static readonly Dictionary<long, int> Captions = [];
 
+    /// <summary>What AkuWM last sent each window, so only the fields that differ go again.</summary>
+    /// <remarks>
+    /// Every focus change decorates two windows, and each one re-sent the
+    /// corner preference it already had: four DWM calls where two do. Held in
+    /// memory only, like the captions; a fresh daemon sends everything once.
+    /// </remarks>
+    private static readonly Dictionary<long, Decoration> Sent = [];
+
     internal static bool Apply(HWND hwnd, Decoration decoration)
     {
-        bool did = Caption(hwnd, decoration.TitleBar);
-        did |= Opacity(hwnd, decoration.Opacity);
+        Sent.TryGetValue((long)hwnd.Value, out Decoration previous);
+        bool known = Sent.ContainsKey((long)hwnd.Value);
+
+        bool did = (!known || previous.TitleBar != decoration.TitleBar) && Caption(hwnd, decoration.TitleBar);
+        did |= (!known || previous.Opacity != decoration.Opacity) && Opacity(hwnd, decoration.Opacity);
 
         if (_unsupported)
         {
@@ -58,23 +69,46 @@ internal static class Win32Decorations
 
         unsafe
         {
-            uint border = decoration.Border;
-            HRESULT colour = PInvoke.DwmSetWindowAttribute(hwnd, BorderColor, &border, sizeof(uint));
+            HRESULT colour = default;
+            HRESULT shape = default;
+            bool sentColour = false;
+            bool sentShape = false;
 
-            uint corners = decoration.Corners switch
+            if (!known || previous.Border != decoration.Border)
             {
-                Corners.Square => 1u,      // DWMWCP_DONOTROUND
-                Corners.Round => 2u,       // DWMWCP_ROUND
-                Corners.RoundSmall => 3u,  // DWMWCP_ROUNDSMALL
-                _ => 0u,                   // DWMWCP_DEFAULT
-            };
+                uint border = decoration.Border;
+                colour = PInvoke.DwmSetWindowAttribute(hwnd, BorderColor, &border, sizeof(uint));
+                sentColour = true;
+            }
 
-            HRESULT shape = PInvoke.DwmSetWindowAttribute(hwnd, CornerPreference, &corners, sizeof(uint));
-
-            if (colour.Succeeded || shape.Succeeded)
+            if (!known || previous.Corners != decoration.Corners)
             {
+                uint corners = decoration.Corners switch
+                {
+                    Corners.Square => 1u,      // DWMWCP_DONOTROUND
+                    Corners.Round => 2u,       // DWMWCP_ROUND
+                    Corners.RoundSmall => 3u,  // DWMWCP_ROUNDSMALL
+                    _ => 0u,                   // DWMWCP_DEFAULT
+                };
+
+                shape = PInvoke.DwmSetWindowAttribute(hwnd, CornerPreference, &corners, sizeof(uint));
+                sentShape = true;
+            }
+
+            if (!sentColour && !sentShape)
+            {
+                return true; // nothing differed
+            }
+
+            if ((sentColour && colour.Succeeded) || (sentShape && shape.Succeeded))
+            {
+                Sent[(long)hwnd.Value] = decoration;
                 return true;
             }
+
+            // Which call, and why: UIPI refuses an elevated window from a
+            // build without uiAccess, and there was nothing in the log.
+            Log.Debug(() => $"decorating {hwnd.Value:x} refused: border 0x{colour.Value:x8}, corners 0x{shape.Value:x8}");
 
             if (did)
             {
@@ -83,7 +117,8 @@ internal static class Win32Decorations
 
             // E_INVALIDARG from BOTH is the old-Windows answer. A single
             // window refusing is ordinary; everything refusing is the build.
-            if (colour.Value == unchecked((int)0x80070057) && shape.Value == unchecked((int)0x80070057))
+            if (sentColour && sentShape
+                && colour.Value == unchecked((int)0x80070057) && shape.Value == unchecked((int)0x80070057))
             {
                 _unsupported = true;
                 Log.Info("this Windows build has no window border or corner attributes; AkuWM will not ask again");

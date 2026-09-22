@@ -26,6 +26,12 @@ public interface IPlatform
     /// <summary>One window, or null when the handle is gone.</summary>
     WindowSnapshot? Window(WindowHandle handle);
 
+    /// <summary>
+    /// The cloak flag alone, read back from DWM: one call, where a full
+    /// window read is fourteen plus a COM one.
+    /// </summary>
+    CloakKind CloakOf(WindowHandle handle);
+
     /// <summary>What has the keyboard focus, as the OS sees it.</summary>
     WindowHandle Foreground();
 
