@@ -90,18 +90,21 @@ DISPLAYCONFIG_DEVICE_INFO_TYPE
 QUERY_DISPLAY_CONFIG_FLAGS
 
 // --- the outline: AkuWM's own border around a window it may not touch ---
-CreateRectRgn
-CombineRgn
-SetWindowRgn
-CreateSolidBrush
-FillRect
+UpdateLayeredWindow
+GetDC
+ReleaseDC
+CreateCompatibleDC
+CreateDIBSection
+SelectObject
 DeleteObject
-InvalidateRect
-BeginPaint
-EndPaint
+DeleteDC
 GetDpiForWindow
-RGN_COMBINE_MODE
-PAINTSTRUCT
+BLENDFUNCTION
+UPDATE_LAYERED_WINDOW_FLAGS
+BITMAPINFO
+BITMAPINFOHEADER
+DIB_USAGE
+BI_COMPRESSION
 
 // --- the message window that hears about the screens --------------------
 CreateWindowExW

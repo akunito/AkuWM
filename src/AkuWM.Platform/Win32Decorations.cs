@@ -192,6 +192,21 @@ internal static class Win32Decorations
 
         PInvoke.SetWindowLongPtr(hwnd, (WINDOW_LONG_PTR_INDEX)GwlStyle, style);
 
+        // Read back: UIPI refuses the style change on an elevated window and
+        // SetWindowLongPtr does not say so. Counted as done, an elevated
+        // console had "its caption stripped", the decoration passed as
+        // applied, and the outline that stands in for the refused border
+        // was never drawn (Administrator: Windows PowerShell, 2026-09-22).
+        if ((int)PInvoke.GetWindowLongPtr(hwnd, (WINDOW_LONG_PTR_INDEX)GwlStyle) != style)
+        {
+            if (!wanted)
+            {
+                Captions.Remove(key);
+            }
+
+            return false;
+        }
+
         PInvoke.SetWindowPos(
             hwnd, HWND.Null, 0, 0, 0, 0,
             SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE

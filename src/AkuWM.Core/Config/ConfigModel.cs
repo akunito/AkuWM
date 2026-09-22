@@ -161,6 +161,29 @@ public sealed class EffectsConfig
     /// showed for an instant and went (live desk 2026-09-22). Live on reload.
     /// </remarks>
     public int? ReassertMs { get; set; }
+
+    /// <summary>
+    /// The border AkuWM draws itself, in pixels at 100 % (1 to 8, default 2).
+    /// </summary>
+    /// <remarks>
+    /// Only the outline (the border around windows the shell will not
+    /// decorate, and every border once <c>border: outline</c> exists) has a
+    /// width; the shell's own border is one pixel and not negotiable.
+    /// </remarks>
+    public int? BorderWidth { get; set; }
+
+    /// <summary>
+    /// <c>#rrggbb</c> for the focused border of an ELEVATED window, so a
+    /// window nothing but the outline can decorate is told apart; null takes
+    /// <see cref="FocusedBorder"/>.
+    /// </summary>
+    public string? ElevatedBorder { get; set; }
+
+    /// <summary>A soft shadow under the window. Read and validated; drawn by a later build.</summary>
+    public bool? Shadow { get; set; }
+
+    /// <summary>A glow outside the border, in pixels at 100 % (0 to 32). Read and validated; drawn by a later build.</summary>
+    public int? Glow { get; set; }
 }
 
 public sealed class LayoutConfig

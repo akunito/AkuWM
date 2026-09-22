@@ -220,7 +220,7 @@ public sealed class DeskFixture
 
         foreach (Outline o in redraw.Outline)
         {
-            Platform.Outline(o.Window, o.Frame, o.Colour, o.Topmost);
+            Platform.Outline(o.Window, o.Frame, o.Colour, o.Topmost, o.Corner, o.Width);
         }
 
         // The focus half of the applier, which this fixture used to skip: the

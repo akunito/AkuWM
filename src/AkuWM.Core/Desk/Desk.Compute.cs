@@ -896,7 +896,8 @@ public sealed partial class Desk
             && window.State is WindowState.Tiling or WindowState.Floating
             && !window.Snapshot.IsMinimized;
 
-        uint colour = wanted ? DecorationFor(window).Border : Decoration.NoBorder;
+        Decoration how = wanted ? DecorationFor(window) : Decoration.Untouched;
+        uint colour = how.Border;
         if (colour is Decoration.NoBorder or Decoration.DefaultBorder)
         {
             wanted = false;
@@ -914,12 +915,14 @@ public sealed partial class Desk
 
         Rect frame = window.Snapshot.FrameBounds;
         bool topmost = window.Snapshot.IsTopmost;
-        if (window.Outlined is { } last && last.Frame == frame && last.Colour == colour && last.Topmost == topmost)
+        int corner = Outline.RadiusOf(how.Corners);
+        int width = Math.Clamp(window.Effects?.BorderWidth ?? Config.Effects?.BorderWidth ?? 2, 1, 8);
+        if (window.Outlined is { } last && last.Frame == frame && last.Colour == colour && last.Topmost == topmost && last.Corner == corner && last.Width == width)
         {
             return;
         }
 
-        into.Add(new Outline(window.Handle, frame, colour, topmost));
+        into.Add(new Outline(window.Handle, frame, colour, topmost, corner, width));
     }
 
     private Decoration DecorationFor(DeskWindow window)
@@ -929,8 +932,11 @@ public sealed partial class Desk
 
         // The window's own rules first, then the global block for anything
         // they did not mention.
+        // An elevated window may have its own focused colour: the outline is
+        // all that can decorate it, and a different colour says so.
         string? border = Focused == window.Handle
-            ? mine?.FocusedBorder ?? global?.FocusedBorder
+            ? (window.Snapshot.IsElevated ? mine?.ElevatedBorder ?? global?.ElevatedBorder : null)
+              ?? mine?.FocusedBorder ?? global?.FocusedBorder
             : mine?.OtherBorder ?? global?.OtherBorder;
 
         double opacity = mine?.Opacity ?? global?.Opacity ?? 1;
@@ -1098,7 +1104,7 @@ public sealed partial class Desk
         {
             if (Window(drawn.Window) is { } outlined)
             {
-                outlined.Outlined = drawn.Frame is { } frame ? (frame, drawn.Colour, drawn.Topmost) : null;
+                outlined.Outlined = drawn.Frame is { } frame ? (frame, drawn.Colour, drawn.Topmost, drawn.Corner, drawn.Width) : null;
             }
         }
 

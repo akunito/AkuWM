@@ -236,6 +236,28 @@ public static class ConfigValidator
         {
             issues.Add(ValidationIssue.Error(at + ".reassert_ms", $"{reassert} is outside 0 to 5000"));
         }
+
+        CheckColour(effects.ElevatedBorder, at + ".elevated_border", issues);
+
+        if (effects.BorderWidth is { } width && width is < 1 or > 8)
+        {
+            issues.Add(ValidationIssue.Error(at + ".border_width", $"{width} is outside 1 to 8"));
+        }
+
+        if (effects.Glow is { } glow && glow is < 0 or > 32)
+        {
+            issues.Add(ValidationIssue.Error(at + ".glow", $"{glow} is outside 0 to 32"));
+        }
+
+        if (effects.Shadow is not null)
+        {
+            issues.Add(ValidationIssue.Warning(at + ".shadow", "is read and validated, but this build does not act on it (the outline renderer draws it next)"));
+        }
+
+        if (effects.Glow is > 0)
+        {
+            issues.Add(ValidationIssue.Warning(at + ".glow", "is read and validated, but this build does not act on it (the outline renderer draws it next)"));
+        }
     }
 
     private static void CheckColour(string? value, string path, List<ValidationIssue> issues)

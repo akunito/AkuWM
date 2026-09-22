@@ -201,7 +201,7 @@ public sealed class DeskWindow
     public Decoration? DecorationRefused { get; set; }
 
     /// <summary>The outline last drawn around it (frame, colour, band), or null for none.</summary>
-    public (Rect Frame, uint Colour, bool Topmost)? Outlined { get; set; }
+    public (Rect Frame, uint Colour, bool Topmost, int Corner, int Width)? Outlined { get; set; }
 
     /// <summary>The next decoration is sent whatever was sent before: an application painted over it.</summary>
     public bool RedecorateAsked { get; set; }

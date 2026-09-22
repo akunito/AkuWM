@@ -239,7 +239,7 @@ public sealed class DeskApplier
         for (int i = 0; i < redraw.Outline.Count; i++)
         {
             Outline o = redraw.Outline[i];
-            _actions.Outline(o.Window, o.Frame, o.Colour, o.Topmost);
+            _actions.Outline(o.Window, o.Frame, o.Colour, o.Topmost, o.Corner, o.Width);
         }
 
         var decorateTook = Lap(ref at);

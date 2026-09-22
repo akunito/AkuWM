@@ -129,7 +129,7 @@ public interface IPlatformActions
     /// Draws, moves or takes away AkuWM's own border around a window (see
     /// <see cref="Outline"/>). A null frame takes it away.
     /// </summary>
-    void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost);
+    void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost, int corner, int width);
 }
 
 /// <summary>The shell's taskbar, for the one thing a window manager tells it.</summary>

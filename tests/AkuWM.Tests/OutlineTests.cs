@@ -37,10 +37,55 @@ public class OutlineTests
         f.Turn();
 
         Assert.NotNull(f.Managed(1)!.DecorationRefused);
-        (Rect frame, uint colour, bool topmost) = f.Platform.Outlines[1];
+        (Rect frame, uint colour, bool topmost, int corner, int width) = f.Platform.Outlines[1];
         Assert.Equal(f.FrameOf(1), frame);
         Assert.Equal(Purple, colour);
         Assert.False(topmost);
+        Assert.Equal(0, corner); // corners: square in this fixture
+        Assert.Equal(2, width);
+    }
+
+    [Fact]
+    public void The_border_width_and_the_elevated_colour_come_from_the_configuration()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "#444444", ElevatedBorder = "#ff8800", BorderWidth = 4 };
+        var f = new DeskFixture(config);
+        f.Platform.RefusesDecoration = true;
+        f.Open(1, elevated: true);
+        f.Open(2);
+        f.Turn();
+        f.Foreground(1);
+        f.Turn();
+        f.Turn();
+
+        (_, uint colour, _, _, int width) = f.Platform.Outlines[1];
+        Assert.Equal(0x000088FFu, colour); // #ff8800 as a COLORREF
+        Assert.Equal(4, width);
+
+        // Unfocused, the elevated colour does not apply.
+        f.Foreground(2);
+        f.Turn();
+        f.Turn();
+        Assert.Equal(0x00444444u, f.Platform.Outlines[1].Colour);
+    }
+
+    [Theory]
+    [InlineData("round", 8)]
+    [InlineData("round_small", 4)]
+    [InlineData("square", 0)]
+    [InlineData("default", 8)]
+    public void The_outline_rounds_its_corners_as_the_windows_are(string corners, int radius)
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "#444444", Corners = corners };
+        var f = new DeskFixture(config);
+        f.Platform.RefusesDecoration = true;
+        f.Open(1, elevated: true);
+        f.Turn();
+        f.Turn();
+
+        Assert.Equal(radius, f.Platform.Outlines[1].Corner);
     }
 
     [Fact]
@@ -191,5 +236,32 @@ public class OutlineSurvivesRedecorationTests
         Assert.DoesNotContain(redraw.Outline, o => o.Window == W(1) && o.Frame is null);
         Assert.True(f.Platform.Outlines.ContainsKey(1));
         Assert.NotNull(f.Managed(1)!.DecorationRefused);
+    }
+}
+
+public class EffectsConfigValidationTests
+{
+    private static List<AkuWM.Core.Config.ValidationIssue> Validate(EffectsConfig effects)
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = effects;
+        return AkuWM.Core.Config.ConfigValidator.Validate(config).Issues.ToList();
+    }
+
+    [Fact]
+    public void Border_width_glow_and_elevated_colour_are_checked()
+    {
+        Assert.Contains(Validate(new EffectsConfig { BorderWidth = 0 }), i => i.Path == "effects.border_width");
+        Assert.Contains(Validate(new EffectsConfig { Glow = 40 }), i => i.Path == "effects.glow");
+        Assert.Contains(Validate(new EffectsConfig { ElevatedBorder = "orange" }), i => i.Path == "effects.elevated_border");
+        Assert.DoesNotContain(Validate(new EffectsConfig { BorderWidth = 3, ElevatedBorder = "#ff8800" }), i => i.Path.StartsWith("effects.", StringComparison.Ordinal) && i.Severity == AkuWM.Core.Config.Severity.Error);
+    }
+
+    [Fact]
+    public void Shadow_and_glow_are_taken_but_say_they_are_not_drawn_yet()
+    {
+        var issues = Validate(new EffectsConfig { Shadow = true, Glow = 6 });
+        Assert.Contains(issues, i => i.Path == "effects.shadow" && i.Message.Contains("does not act", StringComparison.Ordinal));
+        Assert.Contains(issues, i => i.Path == "effects.glow" && i.Message.Contains("does not act", StringComparison.Ordinal));
     }
 }

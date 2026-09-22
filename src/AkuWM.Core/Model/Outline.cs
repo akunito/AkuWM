@@ -15,4 +15,15 @@ namespace AkuWM.Core.Model;
 /// <param name="Frame">Where the target's visible frame is; null takes the outline away.</param>
 /// <param name="Colour">COLORREF, as the DWM border colour is.</param>
 /// <param name="Topmost">The target is in the always-on-top band, so the outline must be too.</param>
-public readonly record struct Outline(WindowHandle Window, Rect? Frame, uint Colour, bool Topmost);
+/// <param name="Corner">Corner radius at 100 %, as Windows 11 rounds the window itself: 8 round, 4 small, 0 square.</param>
+/// <param name="Width">Border width at 100 %.</param>
+public readonly record struct Outline(WindowHandle Window, Rect? Frame, uint Colour, bool Topmost, int Corner = 0, int Width = 2)
+{
+    /// <summary>The radius Windows 11 gives a window for each corner preference.</summary>
+    public static int RadiusOf(Corners corners) => corners switch
+    {
+        Corners.Square => 0,
+        Corners.RoundSmall => 4,
+        _ => 8, // Round, and Default -- Windows 11 rounds an ordinary window by 8
+    };
+}

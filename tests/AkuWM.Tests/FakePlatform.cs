@@ -139,14 +139,14 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     }
 
     /// <summary>The outlines on screen, by window: frame, colour, band.</summary>
-    public Dictionary<long, (Rect Frame, uint Colour, bool Topmost)> Outlines { get; } = [];
+    public Dictionary<long, (Rect Frame, uint Colour, bool Topmost, int Corner, int Width)> Outlines { get; } = [];
 
-    public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost)
+    public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost, int corner, int width)
     {
         Calls.Add($"outline {window.Value} {(frame is null ? "off" : frame.ToString())}");
         if (frame is { } f)
         {
-            Outlines[window.Value] = (f, colour, topmost);
+            Outlines[window.Value] = (f, colour, topmost, corner, width);
         }
         else
         {
