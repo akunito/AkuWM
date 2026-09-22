@@ -349,23 +349,32 @@ public sealed partial class Desk
     /// it up against the top edge: 1551, 1293, 1032, 645 px tall in four
     /// rounds (Notepad++, 2026-09-22 12:59:52).
     /// </remarks>
-    private static Rect InsideTheScreen(Rect frame, (int Top, int Right, int Bottom, int Left) border, Rect screen)
+    private static Rect InsideTheScreen(Rect frame, (int Top, int Right, int Bottom, int Left) border, Rect screen, Rect work)
     {
-        int minLeft = screen.Left + border.Left;
-        int minTop = screen.Top + border.Top;
-        int maxRight = screen.Right - border.Right;
-        int maxBottom = screen.Bottom - border.Bottom;
-
-        int width = Math.Min(frame.Width, maxRight - minLeft);
-        int height = Math.Min(frame.Height, maxBottom - minTop);
-        if (width <= 0 || height <= 0)
+        // A frame lying off the screen is moved into the WORK area, size
+        // kept: a window dragged past the top edge comes down, under the
+        // bar, not shorter. One already on the screen is left where it is.
+        int left = frame.Left;
+        int top = frame.Top;
+        int width = frame.Width;
+        int height = frame.Height;
+        if (!screen.Contains(frame))
         {
-            return frame;
+            width = Math.Min(width, work.Width);
+            height = Math.Min(height, work.Height);
+            left = Math.Clamp(left, work.Left, work.Right - width);
+            top = Math.Clamp(top, work.Top, work.Bottom - height);
         }
 
-        int left = Math.Clamp(frame.Left, minLeft, maxRight - width);
-        int top = Math.Clamp(frame.Top, minTop, maxBottom - height);
-        return new Rect(left, top, width, height);
+        // Then the border, by shrinking the edges that meet the screen's:
+        // moving here put a tile 9 px up into the taskbar, because its
+        // bottom border did not fit (Notepad++ at 9,33 for 9,42, 2026-09-22).
+        int right = Math.Min(left + width, screen.Right - border.Right);
+        int bottom = Math.Min(top + height, screen.Bottom - border.Bottom);
+        left = Math.Max(left, screen.Left + border.Left);
+        top = Math.Max(top, screen.Top + border.Top);
+
+        return right > left && bottom > top ? Rect.FromEdges(left, top, right, bottom) : frame;
     }
 
     /// <summary>
@@ -535,7 +544,7 @@ public sealed partial class Desk
         // seconds, 2026-09-22).
         if (!window.Snapshot.PerMonitorDpi)
         {
-            frame = InsideTheScreen(frame, window.Snapshot.BorderDelta, monitor.FullArea);
+            frame = InsideTheScreen(frame, window.Snapshot.BorderDelta, monitor.FullArea, monitor.TilingArea);
         }
 
         // Where it should be: the patience clock restarts, so a drag an hour

@@ -823,7 +823,7 @@ public class WindowInMotionTests
 
         Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
         Assert.Equal(1623, placement.Frame.Height);
-        Assert.Equal(9, placement.Frame.Top); // the fake's border is 9 px, kept on this screen
+        Assert.Equal(FakePlatform.MainMonitor().WorkArea.Top, placement.Frame.Top); // under the bar, full height
     }
 }
 
@@ -937,5 +937,26 @@ public class DragThroughTheOldPlaceTests
             Assert.Empty(redraw.Place);
             Assert.Equal(x, fixture.FrameOf(1).X);
         }
+    }
+}
+
+/// <summary>The tile of a system-DPI window stays under the taskbar, shorter, not higher (2026-09-22).</summary>
+public class TileUnderTheBarTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_tile_whose_bottom_border_does_not_fit_is_shortened_not_moved_into_the_bar()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", perMonitorDpi: false));
+        fixture.Sync();
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Rect work = FakePlatform.MainMonitor().WorkArea;
+        Assert.Equal(work.Top, placement.Frame.Top);
+        Assert.True(placement.Frame.Bottom + 9 <= FakePlatform.MainMonitor().Bounds.Bottom, $"{placement.Frame}");
+        Assert.Equal(work.Left + 9, placement.Frame.Left);
     }
 }
