@@ -445,9 +445,13 @@ public sealed partial class Desk
             return false;
         }
 
+        // Leaving fullscreen IS a change: `set-tiling` on a maximised window
+        // used to take it out of fullscreen and then answer "already tiling",
+        // so the caller believed nothing had happened.
+        bool changed = false;
         if (window.State == WindowState.Fullscreen)
         {
-            SetFullscreen(window, false);
+            changed = SetFullscreen(window, false);
         }
 
         // A minimised window is asked about the layer it will come back to,
@@ -462,7 +466,7 @@ public sealed partial class Desk
 
         if (floating == (now == WindowState.Floating))
         {
-            return false;
+            return changed;
         }
 
         if (floating)

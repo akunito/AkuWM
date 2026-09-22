@@ -72,6 +72,12 @@ public sealed class DeskWindow
     /// <summary>Where AkuWM last put it, so an unchanged rectangle is not sent again.</summary>
     public Rect? Placed { get; set; }
 
+    /// <summary>
+    /// When AkuWM last asked Windows to un-maximise it, so the maximised
+    /// rectangle seen meanwhile is not read as the window covering its screen.
+    /// </summary>
+    public long? UnmaximizeAskedAt { get; set; }
+
     /// <summary>When that was, in milliseconds, so a move that never lands is noticed.</summary>
     public long PlacedAt { get; set; }
 

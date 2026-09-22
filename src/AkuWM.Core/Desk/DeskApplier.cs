@@ -135,10 +135,31 @@ public sealed class DeskApplier
         var refused = new HashSet<WindowHandle>();
 
         // Before the placements: a minimised window has no frame to move, so
-        // placing it first throws the move away.
+        // placing it first throws the move away; a maximised one ignores it.
         for (int i = 0; i < redraw.Restore.Count; i++)
         {
             _actions.SetMinimized(redraw.Restore[i], false);
+        }
+
+        for (int i = 0; i < redraw.Unmaximize.Count; i++)
+        {
+            _actions.SetMaximized(redraw.Unmaximize[i], false);
+        }
+
+        // Which window, which rectangle: the count alone could not say whose
+        // placement a storm was made of.
+        if (Log.DebugOn)
+        {
+            for (int i = 0; i < redraw.Place.Count; i++)
+            {
+                Placement p = redraw.Place[i];
+                Log.Debug($"  place {p.Window} {Look(p.Window)?.ProcessName} -> {p.Frame} border {p.Border?.ToString() ?? "re-read"}");
+            }
+
+            for (int i = 0; i < redraw.Band.Count; i++)
+            {
+                Log.Debug($"  band {redraw.Band[i].Window} topmost={redraw.Band[i].Topmost}");
+            }
         }
 
         // Timed apart from the rest. The whole-redraw number could not answer

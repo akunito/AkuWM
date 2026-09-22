@@ -36,6 +36,7 @@ public sealed partial class Desk
         var hide = new List<WindowHandle>();
         var show = new List<WindowHandle>();
         var restore = new List<WindowHandle>();
+        var unmaximize = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
         var behind = new List<(WindowHandle, WindowHandle)>();
         var mark = new List<(WindowHandle, bool)>();
@@ -105,6 +106,7 @@ public sealed partial class Desk
                     }
 
                     WantHidden(window, false, hide, show);
+                    WantUnmaximized(window, unmaximize);
                     WantPlaced(window, rect, monitor, place);
                     WantBanded(window, false, band);
                     WantBehind(window, shielding, behind);
@@ -119,6 +121,7 @@ public sealed partial class Desk
                     }
 
                     WantHidden(window, false, hide, show);
+                    WantUnmaximized(window, unmaximize);
                     WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
 
                     // A fullscreen window on this workspace takes everything
@@ -189,6 +192,7 @@ public sealed partial class Desk
                 }
 
                 WantHidden(window, false, hide, show);
+                WantUnmaximized(window, unmaximize);
                 WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
                 WantBanded(window, !covered, band);
                 WantBehind(window, covered ? displayed!.Fullscreen : WindowHandle.None, behind);
@@ -304,6 +308,7 @@ public sealed partial class Desk
             Hide = hide,
             Show = show,
             Restore = restore,
+            Unmaximize = unmaximize,
             Band = band,
             Behind = behind,
             TaskbarMark = mark,
@@ -447,8 +452,34 @@ public sealed partial class Desk
     /// </remarks>
     public const int PlacementSlack = 32;
 
+    /// <summary>Asks once, with patience, for a maximised window to stop being one.</summary>
+    private void WantUnmaximized(DeskWindow window, List<WindowHandle> into)
+    {
+        if (!window.Snapshot.IsMaximized
+            || (window.UnmaximizeAskedAt is { } asked && Now - asked < PlacementPatienceMs))
+        {
+            return;
+        }
+
+        into.Add(window.Handle);
+    }
+
     private void WantPlaced(DeskWindow window, Rect frame, DeskMonitor monitor, List<Placement> into)
     {
+        // A window that does not scale itself must not have its OUTER
+        // rectangle -- frame plus the invisible border -- touch a neighbour
+        // of another scale: Windows rescales it on the spot, by a pixel of
+        // overlap (see WindowSnapshot.PerMonitorDpi). The frame is pulled in
+        // by the border on every edge that meets the monitor's edge, so the
+        // border stays on this screen. BEFORE the comparisons below: the
+        // window is at the pulled-in rectangle, and comparing it against the
+        // wanted one re-sent the placement on every pass (39 in four
+        // seconds, 2026-09-22).
+        if (!window.Snapshot.PerMonitorDpi)
+        {
+            frame = InsideTheScreen(frame, window.Snapshot.BorderDelta, monitor.FullArea);
+        }
+
         // Where it should be: the patience clock restarts, so a drag an hour
         // from now is a fresh request rather than a refusal that never was.
         if (window.Snapshot.FrameBounds == frame)
@@ -529,17 +560,6 @@ public sealed partial class Desk
                 && was.Snapshot.ScaleFactor != monitor.Snapshot.ScaleFactor)
                 ? null
                 : window.Snapshot.BorderDelta;
-
-        // A window that does not scale itself must not have its OUTER
-        // rectangle -- frame plus the invisible border -- touch a neighbour
-        // of another scale: Windows rescales it on the spot, by a pixel of
-        // overlap (see WindowSnapshot.PerMonitorDpi). The frame is pulled in
-        // by the border on every edge that meets the monitor's edge, so the
-        // border stays on this screen.
-        if (!window.Snapshot.PerMonitorDpi)
-        {
-            frame = InsideTheScreen(frame, border ?? window.Snapshot.BorderDelta, monitor.FullArea);
-        }
 
         into.Add(new Placement(window.Handle, frame, border));
     }
@@ -670,6 +690,14 @@ public sealed partial class Desk
             }
 
             window.Placed = placement.Frame;
+        }
+
+        foreach (WindowHandle handle in redraw.Unmaximize)
+        {
+            if (Window(handle) is { } window)
+            {
+                window.UnmaximizeAskedAt = Now;
+            }
         }
 
         foreach (WindowHandle handle in redraw.Hide)

@@ -49,6 +49,7 @@ public static class ConfigDefaults
             FloatUnresizable = true,
             FloatCentered = true,
             FloatingAboveMaximized = true,
+            UnmaximizeToShare = true,
             DragToTop = "fullscreen",
             AcrossMonitors = new AcrossConfig { All = "hybrid" },
         },

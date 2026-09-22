@@ -603,3 +603,99 @@ public class SystemDpiAwareWindowTests
         Assert.True(placement.Frame.Left - 9 >= screen.Left, $"{placement.Frame}");
     }
 }
+
+/// <summary>Notepad++ meets Brave on the vertical monitor (2026-09-22).</summary>
+public class MaximisedNeighbourTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    private static DeskFixture BraveMaximisedOnTheSecondMonitor()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(
+            1, "brave", frame: FakePlatform.SecondMonitor().WorkArea, monitor: new MonitorHandle(2), maximized: true));
+        fixture.Sync();
+        fixture.Turn();
+        Assert.Equal(WindowState.Fullscreen, fixture.Managed(1)!.State);
+        return fixture;
+    }
+
+    [Fact]
+    public void A_window_moved_beside_a_maximised_application_shares_the_screen_with_it()
+    {
+        DeskFixture fixture = BraveMaximisedOnTheSecondMonitor();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(2, "notepad++", perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+
+        Assert.True(fixture.Desk.MoveToWorkspace(W(2), "21"));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains(W(1), redraw.Unmaximize);
+        Assert.Equal(WindowState.Tiling, fixture.Managed(1)!.State);
+        Assert.Equal(WindowState.Tiling, fixture.Managed(2)!.State);
+        Assert.True(fixture.Desk.Workspace("21")!.Fullscreen.IsNone);
+
+        // Both get a tile, stacked on the portrait screen, and the maximised
+        // rectangle Windows still reports for a beat does not put Brave back.
+        fixture.Turn();
+        fixture.Turn();
+        Assert.False(fixture.Platform.Window(W(1))!.IsMaximized);
+        Assert.Equal(WindowState.Tiling, fixture.Managed(1)!.State);
+        Assert.True(fixture.FrameOf(2).Top > fixture.FrameOf(1).Top || fixture.FrameOf(1).Top > fixture.FrameOf(2).Top);
+        Assert.True(fixture.FrameOf(1).Height < 2000 && fixture.FrameOf(2).Height < 2000, $"{fixture.FrameOf(1)} {fixture.FrameOf(2)}");
+    }
+
+    [Fact]
+    public void A_maximised_game_keeps_the_screen()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(
+            1, "game", frame: FakePlatform.SecondMonitor().Bounds, monitor: new MonitorHandle(2), maximized: true, resizable: false));
+        fixture.Sync();
+        fixture.Turn();
+        fixture.Open(2);
+        fixture.Turn();
+
+        fixture.Desk.MoveToWorkspace(W(2), "21");
+        Redraw redraw = fixture.Turn();
+
+        Assert.Empty(redraw.Unmaximize);
+        Assert.Equal(WindowState.Fullscreen, fixture.Managed(1)!.State);
+    }
+
+    [Fact]
+    public void Tiling_a_maximised_window_by_chord_unmaximises_it_first()
+    {
+        DeskFixture fixture = BraveMaximisedOnTheSecondMonitor();
+
+        Assert.True(fixture.Desk.SetFloating(W(1), false));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains(W(1), redraw.Unmaximize);
+        Assert.Equal(WindowState.Tiling, fixture.Managed(1)!.State);
+
+        // The maximised rectangle is still what Windows reports for a moment.
+        fixture.Platform.WindowList[0] = fixture.Platform.WindowList[0] with { IsMaximized = true };
+        fixture.Sync();
+        Assert.Equal(WindowState.Tiling, fixture.Managed(1)!.State);
+    }
+
+    [Fact]
+    public void A_system_dpi_window_floated_is_placed_once_not_on_every_pass()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+        fixture.Desk.SetFloating(W(1), true);
+        fixture.Turn();
+
+        // Alone on a screen, its floating rectangle meets the screen's edge:
+        // pulled in once, then left alone.
+        fixture.Desk.SetFloatingRect(W(1), FakePlatform.MainMonitor().WorkArea);
+        fixture.Turn();
+        Assert.Empty(fixture.Turn().Place);
+        Assert.Empty(fixture.Turn().Place);
+    }
+}

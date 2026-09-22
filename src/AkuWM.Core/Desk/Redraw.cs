@@ -46,6 +46,15 @@ public sealed record Redraw
     /// </remarks>
     public IReadOnlyList<WindowHandle> Restore { get; init; } = [];
 
+    /// <summary>
+    /// Windows to un-maximise before they are placed: a maximised window
+    /// ignores a move, so a tile or a floating rectangle asked of one was
+    /// refused every time ("will not go to", Brave on the vertical monitor,
+    /// 2026-09-22). AkuWM never maximises; this is the only way it takes a
+    /// maximised state off.
+    /// </summary>
+    public IReadOnlyList<WindowHandle> Unmaximize { get; init; } = [];
+
     /// <summary>Windows entering or leaving the always-on-top band.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
@@ -83,14 +92,14 @@ public sealed record Redraw
     public bool Unfocus { get; init; }
 
     public bool IsNothing =>
-        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0
+        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0 && Unmaximize.Count == 0
         && Band.Count == 0 && Behind.Count == 0 && TaskbarMark.Count == 0 && Decorate.Count == 0
         && TaskbarButton.Count == 0 && Focus.IsNone && !Unfocus;
 
     public override string ToString() =>
         IsNothing
             ? "nothing to do"
-            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, "
+            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, {Unmaximize.Count} to unmaximize, "
               + $"{Band.Count} to reband, {Behind.Count} behind a game, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
               + (Focus.IsNone ? string.Empty : $", focus {Focus}")
               + (Unfocus ? ", unfocus" : string.Empty);

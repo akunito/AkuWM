@@ -987,6 +987,14 @@ public sealed partial class Desk
         // for the rest of the run. tests/fullscreen 8-startmax steps 3-5.
         bool weMovedItThere = !snapshot.IsMaximized && window.Placed == snapshot.FrameBounds;
 
+        // A maximised rectangle seen while AkuWM has just asked Windows to
+        // un-maximise the window is the old state on its way out, not the
+        // window choosing to cover the screen.
+        if (snapshot.IsMaximized && window.UnmaximizeAskedAt is { } askedAt && Now - askedAt < PlacementPatienceMs)
+        {
+            coversTheScreen = false;
+        }
+
         // A floating window keeps where the person put it. Without this the
         // next redraw asked for the rectangle AkuWM still remembered and
         // dragged it straight back, so moving or resizing a floating window --
@@ -1424,6 +1432,21 @@ public sealed partial class Desk
                 break;
 
             default:
+                // A maximised application that has the workspace to itself
+                // makes room: un-maximised and tiled beside the newcomer,
+                // which would otherwise be laid out behind a window covering
+                // the screen (Notepad++ behind Brave on the vertical monitor,
+                // 2026-09-22). Never a game.
+                if (Config.Layout?.UnmaximizeToShare != false
+                    && !workspace.Fullscreen.IsNone
+                    && workspace.Fullscreen != window.Handle
+                    && Window(workspace.Fullscreen) is { } covering
+                    && covering.Snapshot.IsMaximized
+                    && !LooksLikeAGame(covering))
+                {
+                    SetFullscreen(covering, false);
+                }
+
                 WindowHandle beside = workspace.FocusOrder
                     .FirstOrDefault(h => workspace.Tiling.Contains(h));
                 workspace.Tiling.Add(window.Handle, beside, DirectionFor(workspace));

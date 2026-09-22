@@ -201,6 +201,14 @@ public sealed class LayoutConfig
     public bool? FloatingAboveMaximized { get; set; }
 
     /// <summary>
+    /// Whether a maximised application window alone on a workspace is
+    /// un-maximised and tiled when a second tiling window arrives (true), or
+    /// keeps covering the screen with the newcomer behind it (false). Live
+    /// on reload; a window that looks like a game is never touched.
+    /// </summary>
+    public bool? UnmaximizeToShare { get; set; }
+
+    /// <summary>
     /// What dragging a TILED window to the top edge does.
     /// </summary>
     /// <remarks>
