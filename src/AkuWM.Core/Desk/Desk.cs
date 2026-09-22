@@ -890,6 +890,15 @@ public sealed partial class Desk
         WindowSnapshot was = window.Snapshot;
         window.Snapshot = snapshot;
 
+        // Every change of rectangle, with whether it is where AkuWM put it:
+        // the only way to tell a window moving itself from the desk moving it.
+        if (window.Managed && was.FrameBounds != snapshot.FrameBounds && Log.DebugOn)
+        {
+            Log.Debug($"  moved {snapshot.Handle} {snapshot.ProcessName} {was.FrameBounds} -> {snapshot.FrameBounds}"
+                + (window.Placed is { } put ? (put.CloseTo(snapshot.FrameBounds, PlacementSlack) ? " (where AkuWM put it)" : $" (AkuWM asked for {put})") : " (never placed)")
+                + (snapshot.IsMaximized ? " maximized" : string.Empty));
+        }
+
         // An application that puts ITSELF in the always-on-top band (NordVPN
         // does, on every activation) is not where the model thinks it is: a
         // tiled window up there sits over every floating one, and the model,

@@ -699,3 +699,27 @@ public class MaximisedNeighbourTests
         Assert.Empty(fixture.Turn().Place);
     }
 }
+
+/// <summary>What Alt+RButton sends for a floating window (2026-09-22).</summary>
+public class FloatingResizeByPixelsTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_pixel_resize_of_a_floating_window_changes_both_sides_by_that_much()
+    {
+        var fixture = new DeskFixture();
+        fixture.Open(1, resizable: false, frame: new Rect(3848, -155, 1424, 1997), monitor: new MonitorHandle(2));
+        fixture.Turn();
+        Assert.Equal(WindowState.Floating, fixture.Managed(1)!.State);
+        var executor = new GlazeExecutor(fixture.Desk, new FakeDeskPlatform());
+
+        ExecResult result = executor.Command($"--id {fixture.Managed(1)!.Id} resize --width -300px --height -200px");
+        Redraw redraw = fixture.Turn();
+
+        Assert.True(result.Success, result.Error);
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Assert.Equal(new Rect(3848, -155, 1124, 1797), placement.Frame);
+        Assert.Equal(new Rect(3848, -155, 1124, 1797), fixture.FrameOf(1));
+    }
+}
