@@ -218,6 +218,11 @@ public sealed class DeskFixture
             Platform.PlaceBehind(handle, behind);
         }
 
+        foreach (Outline o in redraw.Outline)
+        {
+            Platform.Outline(o.Window, o.Frame, o.Colour, o.Topmost);
+        }
+
         // The focus half of the applier, which this fixture used to skip: the
         // model then only ever learned the focus from direct calls, and the
         // whole class of "where does the next window open" faults the desk

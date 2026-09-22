@@ -40,9 +40,31 @@ public sealed class Win32MessageWindow : IDisposable
 
     private const string ClassName = "AkuWM.Messages";
 
+    private const uint WorkMessage = 0x8001; // WM_APP + 1
+
     private WNDPROC? _procedure;
     private HWND _window;
     private ushort _class;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _work = new();
+
+    /// <summary>The one message window of the process, for whoever needs its thread.</summary>
+    public static Win32MessageWindow? Current { get; private set; }
+
+    /// <summary>
+    /// Runs work on the thread that pumps this window's messages -- the only
+    /// thread of the process that does. A window created anywhere else never
+    /// gets its messages (the wm thread is a plain work queue).
+    /// </summary>
+    public bool Post(Action work)
+    {
+        if (_window.IsNull)
+        {
+            return false;
+        }
+
+        _work.Enqueue(work);
+        return PInvoke.PostMessage(_window, WorkMessage, default, default);
+    }
 
     public event Action<PlatformEvent>? Event;
 
@@ -105,12 +127,30 @@ public sealed class Win32MessageWindow : IDisposable
             return false;
         }
 
+        Current = this;
         Log.Info("message window up: display, work-area and power changes are heard");
         return true;
     }
 
     private LRESULT Procedure(HWND window, uint message, WPARAM wParam, LPARAM lParam)
     {
+        if (message == WorkMessage)
+        {
+            while (_work.TryDequeue(out Action? work))
+            {
+                try
+                {
+                    work();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"work on the message thread failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            return (LRESULT)0;
+        }
+
         PlatformEventKind? kind = message switch
         {
             DisplayChange => PlatformEventKind.DisplayChanged,
@@ -139,8 +179,14 @@ public sealed class Win32MessageWindow : IDisposable
 
     public void Dispose()
     {
+        if (ReferenceEquals(Current, this))
+        {
+            Current = null;
+        }
+
         if (!_window.IsNull)
         {
+            Win32Outline.DisposeAll();
             PInvoke.DestroyWindow(_window);
             _window = HWND.Null;
         }

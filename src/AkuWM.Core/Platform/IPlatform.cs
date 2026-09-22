@@ -124,6 +124,12 @@ public interface IPlatformActions
     /// for an application that painted over it on activation.
     /// </param>
     bool Decorate(WindowHandle window, Decoration decoration, bool force = false);
+
+    /// <summary>
+    /// Draws, moves or takes away AkuWM's own border around a window (see
+    /// <see cref="Outline"/>). A null frame takes it away.
+    /// </summary>
+    void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost);
 }
 
 /// <summary>The shell's taskbar, for the one thing a window manager tells it.</summary>

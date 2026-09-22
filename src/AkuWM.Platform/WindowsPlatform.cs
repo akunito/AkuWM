@@ -131,6 +131,9 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void Unfocus() => Win32Focus.Unfocus();
 
+    public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost) =>
+        Win32Outline.Set(window, frame, colour, topmost);
+
     public bool Decorate(WindowHandle window, Decoration decoration, bool force = false) =>
         Win32Decorations.Apply(new Windows.Win32.Foundation.HWND((IntPtr)window.Value), decoration, force);
 

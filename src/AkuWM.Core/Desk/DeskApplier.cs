@@ -236,6 +236,12 @@ public sealed class DeskApplier
             }
         }
 
+        for (int i = 0; i < redraw.Outline.Count; i++)
+        {
+            Outline o = redraw.Outline[i];
+            _actions.Outline(o.Window, o.Frame, o.Colour, o.Topmost);
+        }
+
         var decorateTook = Lap(ref at);
 
         // Before the cloak would have been the wrong order: a button taken off

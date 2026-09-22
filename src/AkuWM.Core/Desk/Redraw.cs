@@ -75,6 +75,9 @@ public sealed record Redraw
     /// <summary>Floating windows the person sent behind the tiles (the <c>lower</c> command).</summary>
     public IReadOnlyList<WindowHandle> Lower { get; init; } = [];
 
+    /// <summary>Borders AkuWM draws itself around windows it may not decorate (see <see cref="Model.Outline"/>).</summary>
+    public IReadOnlyList<Outline> Outline { get; init; } = [];
+
     /// <summary>
     /// Windows to put directly behind a fullscreen one, in the ordinary band.
     /// </summary>
@@ -113,7 +116,7 @@ public sealed record Redraw
 
     public bool IsNothing =>
         Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0 && Unmaximize.Count == 0
-        && Band.Count == 0 && Behind.Count == 0 && Raise.Count == 0 && Lower.Count == 0
+        && Band.Count == 0 && Behind.Count == 0 && Raise.Count == 0 && Lower.Count == 0 && Outline.Count == 0
         && TaskbarMark.Count == 0 && Decorate.Count == 0
         && TaskbarButton.Count == 0 && Focus.IsNone && !Unfocus;
 
@@ -121,7 +124,7 @@ public sealed record Redraw
         IsNothing
             ? "nothing to do"
             : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, {Unmaximize.Count} to unmaximize, "
-              + $"{Band.Count} to reband, {Behind.Count} behind a game, {Raise.Count} to raise, {Lower.Count} to lower, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
+              + $"{Band.Count} to reband, {Behind.Count} behind a game, {Raise.Count} to raise, {Lower.Count} to lower, {Outline.Count} to outline, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
               + (Focus.IsNone ? string.Empty : $", focus {Focus}")
               + (Unfocus ? ", unfocus" : string.Empty);
 }

@@ -44,6 +44,7 @@ public sealed partial class Desk
         var behind = new List<(WindowHandle, WindowHandle)>();
         var raise = new List<WindowHandle>();
         var lower = new List<WindowHandle>();
+        var outline = new List<Outline>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
         HashSet<WindowHandle>? forced = null;
@@ -263,9 +264,10 @@ public sealed partial class Desk
             // Null means AkuWM has never touched it, and Untouched means put it
             // back: a window that was never decorated needs neither. A
             // decoration the shell refused is asked for once.
-            if (window.Decorated == want
-                || (window.Decorated is null && want == Decoration.Untouched)
-                || window.DecorationRefused == want)
+            if (!window.RedecorateAsked
+                && (window.Decorated == want
+                    || (window.Decorated is null && want == Decoration.Untouched)
+                    || window.DecorationRefused == want))
             {
                 continue;
             }
@@ -275,6 +277,25 @@ public sealed partial class Desk
             {
                 (forced ??= []).Add(window.Handle);
             }
+        }
+
+        // A border of AkuWM's own around the windows the shell would not
+        // decorate: elevated ones, refused with UIPI. Only while visible, never
+        // over a fullscreen window, and only when a colour is wanted at all.
+        foreach (DeskWindow window in _windows.Values)
+        {
+            WantOutlined(window, hide, show, outline);
+        }
+
+        // Windows that closed while outlined: the border must not outlive them.
+        if (_outlinedGone is { Count: > 0 })
+        {
+            foreach (WindowHandle handle in _outlinedGone)
+            {
+                outline.Add(new Outline(handle, null, 0, false));
+            }
+
+            _outlinedGone.Clear();
         }
 
         // The taskbar button follows the cloak, when the configuration says
@@ -344,6 +365,7 @@ public sealed partial class Desk
             Behind = behind,
             Raise = raise,
             Lower = lower,
+            Outline = outline,
             TaskbarMark = mark,
             Decorate = decorate,
             Forced = forced ?? (IReadOnlySet<WindowHandle>)new HashSet<WindowHandle>(),
@@ -440,8 +462,11 @@ public sealed partial class Desk
     {
         if (Window(handle) is { Managed: true } window)
         {
+            // The refusal is kept: it is what the outline (AkuWM's own
+            // border) is drawn on, and clearing it for the 300 ms between
+            // the re-assert and its refusal took the outline down with it
+            // (Purple, 2026-09-22 18:33). RedecorateAsked re-asks anyway.
             window.Decorated = null;
-            window.DecorationRefused = null;
             window.RedecorateAsked = true;
         }
     }
@@ -836,6 +861,8 @@ public sealed partial class Desk
         }
     }
 
+    private List<WindowHandle>? _outlinedGone;
+
     /// <summary>The workspace whose tile has just taken the focus, until the raise has gone out.</summary>
     private Workspace? _raiseOver;
 
@@ -855,6 +882,46 @@ public sealed partial class Desk
     public const int RaiseDelayMs = 300;
 
     /// <summary>What the shell should draw around one window, right now.</summary>
+    /// <summary>
+    /// A border of AkuWM's own around a window the shell would not decorate.
+    /// Never over a fullscreen window: nothing to see there, and a window
+    /// above a game costs it the direct path to the screen.
+    /// </summary>
+    private void WantOutlined(DeskWindow window, List<WindowHandle> hiding, List<WindowHandle> showing, List<Outline> into)
+    {
+        bool visible = (!window.Hidden || showing.Contains(window.Handle)) && !hiding.Contains(window.Handle);
+        bool wanted = window.Managed
+            && visible
+            && window.DecorationRefused is not null
+            && window.State is WindowState.Tiling or WindowState.Floating
+            && !window.Snapshot.IsMinimized;
+
+        uint colour = wanted ? DecorationFor(window).Border : Decoration.NoBorder;
+        if (colour is Decoration.NoBorder or Decoration.DefaultBorder)
+        {
+            wanted = false;
+        }
+
+        if (!wanted)
+        {
+            if (window.Outlined is not null)
+            {
+                into.Add(new Outline(window.Handle, null, 0, false));
+            }
+
+            return;
+        }
+
+        Rect frame = window.Snapshot.FrameBounds;
+        bool topmost = window.Snapshot.IsTopmost;
+        if (window.Outlined is { } last && last.Frame == frame && last.Colour == colour && last.Topmost == topmost)
+        {
+            return;
+        }
+
+        into.Add(new Outline(window.Handle, frame, colour, topmost));
+    }
+
     private Decoration DecorationFor(DeskWindow window)
     {
         Config.EffectsConfig? global = Config.Effects;
@@ -1024,6 +1091,14 @@ public sealed partial class Desk
             if (Window(handle) is { } window)
             {
                 window.Behind = game;
+            }
+        }
+
+        foreach (Outline drawn in redraw.Outline)
+        {
+            if (Window(drawn.Window) is { } outlined)
+            {
+                outlined.Outlined = drawn.Frame is { } frame ? (frame, drawn.Colour, drawn.Topmost) : null;
             }
         }
 

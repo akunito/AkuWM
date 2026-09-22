@@ -138,6 +138,22 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         return true;
     }
 
+    /// <summary>The outlines on screen, by window: frame, colour, band.</summary>
+    public Dictionary<long, (Rect Frame, uint Colour, bool Topmost)> Outlines { get; } = [];
+
+    public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost)
+    {
+        Calls.Add($"outline {window.Value} {(frame is null ? "off" : frame.ToString())}");
+        if (frame is { } f)
+        {
+            Outlines[window.Value] = (f, colour, topmost);
+        }
+        else
+        {
+            Outlines.Remove(window.Value);
+        }
+    }
+
     public List<WindowHandle> Raised { get; } = [];
 
     public List<WindowHandle> Lowered { get; } = [];

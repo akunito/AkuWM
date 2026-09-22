@@ -1257,6 +1257,11 @@ public sealed partial class Desk
             return;
         }
 
+        if (window.Outlined is not null)
+        {
+            (_outlinedGone ??= []).Add(handle);
+        }
+
         // Said out loud: a window closing while AkuWM had it hidden is a
         // window the person may not know is gone.
         if (window.Managed && window.Hidden)
