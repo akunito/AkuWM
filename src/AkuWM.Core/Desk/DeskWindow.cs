@@ -154,6 +154,14 @@ public sealed class DeskWindow
     /// </summary>
     public bool Lowered { get; set; }
 
+    /// <summary>
+    /// Minimised by Windows, not by the person: within <see cref="Desk.ParkWindowMs"/>
+    /// of a screen change. Windows parks every window of a monitor it loses
+    /// (and of one it reconfigures); once the screens have settled and the
+    /// window's monitor is here, it is brought back where it was.
+    /// </summary>
+    public bool Parked { get; set; }
+
     /// <summary>The HWND_BOTTOM for <see cref="Lowered"/> has been sent.</summary>
     public bool LoweredApplied { get; set; }
 

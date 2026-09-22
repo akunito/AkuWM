@@ -46,9 +46,14 @@ public static class MonitorRoles
             }
         }
 
-        // Then whatever is left, by position, to the roles that are left.
+        // Then whatever is left, by position, to the roles that are left --
+        // the roles WITHOUT an identity only. A role that names its screen
+        // and does not find it is absent, not free: when the main monitor
+        // went dark, Windows added a 1024x768 "Default_Monitor" and made the
+        // vertical one primary, and "main" landed on the ghost -- workspace
+        // 11 laid out at 1024x740 (2026-09-22 17:41).
         List<string> remainingRoles = configured
-            .Where(role => role.Id is { Length: > 0 } && role.Enabled != false)
+            .Where(role => role.Id is { Length: > 0 } && role.Enabled != false && !HasIdentity(role))
             .Select(role => role.Id!)
             .Where(id => !takenRoles.Contains(id))
             .ToList();
@@ -66,6 +71,11 @@ public static class MonitorRoles
 
         return roles;
     }
+
+    /// <summary>Whether the role names its screen (EDID, name or device path).</summary>
+    public static bool HasIdentity(MonitorConfig role) =>
+        role.Match is { } match
+        && (match.Edid is { Length: > 0 } || match.Name is { Length: > 0 } || match.DevicePath is { Length: > 0 });
 
     public static bool Matches(MonitorConfig role, MonitorSnapshot monitor)
     {

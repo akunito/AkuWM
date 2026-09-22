@@ -497,6 +497,11 @@ public sealed partial class Desk
         {
             _screensChanged = true;
             _screensChangedAt = Now;
+            // A screen that came, went or changed shape is a slow burst (a
+            // monitor powering on takes seconds and passes through wrong
+            // shapes -- the vertical one came back LANDSCAPE for 1.2 s,
+            // 2026-09-22 18:06); a bar that moved is one notification.
+            _screenSettleFor = SameScreenSet(monitors) ? ScreenSettleMs : MonitorSettleMs;
         }
 
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
@@ -570,6 +575,28 @@ public sealed partial class Desk
                 Reclaim(_monitors[i]);
             }
         }
+    }
+
+    private bool SameScreenSet(IReadOnlyList<MonitorSnapshot> monitors)
+    {
+        if (monitors.Count != _monitorSnapshots.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            MonitorSnapshot now = monitors[i];
+            if (!_monitorSnapshots.TryGetValue(now.Handle, out MonitorSnapshot? was)
+                || was.Bounds != now.Bounds
+                || was.Dpi != now.Dpi
+                || !string.Equals(was.HardwareId, now.HardwareId, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private bool SameScreens(IReadOnlyList<MonitorSnapshot> monitors)
@@ -1026,6 +1053,13 @@ public sealed partial class Desk
 
         if (snapshot.IsMinimized && window.State != WindowState.Minimized)
         {
+            // Windows' doing, not the person's, when the screens have just
+            // changed: every window of a lost or re-configured monitor is
+            // parked in the taskbar (2026-09-22 17:41 and 18:06, all of the
+            // main screen's windows "disappeared"). Brought back by Compute
+            // once the screens settle.
+            window.Parked = _screensChanged && Now - _screensChangedAt < ParkWindowMs;
+
             // Fullscreen is not a state to come back FROM: what the window was
             // before it covered the screen is what it goes back to when it
             // stops, and that is kept across the taskbar.
@@ -1065,6 +1099,7 @@ public sealed partial class Desk
 
         if (!snapshot.IsMinimized && window.State == WindowState.Minimized)
         {
+            window.Parked = false;
             // Back from the taskbar as something SMALLER than the screen: not
             // fullscreen any more, whatever it was when it went. Windows parks
             // every window of a monitor that is disabled and hands a maximised

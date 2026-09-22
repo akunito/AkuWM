@@ -55,7 +55,7 @@ public sealed class DeskFixture
     public void Screens()
     {
         Desk.SetMonitors(Platform.Monitors());
-        Wait(Desk.ScreenSettleMs);
+        Wait(Desk.MonitorSettleMs);
     }
 
     public FakePlatform Platform { get; }

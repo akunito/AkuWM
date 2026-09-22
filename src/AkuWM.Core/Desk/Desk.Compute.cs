@@ -50,6 +50,8 @@ public sealed partial class Desk
         var button = new List<(WindowHandle, bool)>();
         var accounted = new HashSet<WindowHandle>();
 
+        Unpark();
+
         foreach (DeskMonitor monitor in _monitors)
         {
             Layout.Gaps gaps = GapsFor(monitor);
@@ -540,12 +542,20 @@ public sealed partial class Desk
     /// </remarks>
     public const int ScreenSettleMs = 600;
 
+    /// <summary>The wait after a screen came, went or changed shape (see <see cref="ScreenSettleMs"/>).</summary>
+    public const int MonitorSettleMs = 2000;
+
+    /// <summary>A window minimised this soon after a screen change was parked by Windows, not by the person.</summary>
+    public const int ParkWindowMs = 5000;
+
+    private int _screenSettleFor = ScreenSettleMs;
+
     // A flag and a time, not a time alone: zero is a real tick on a clock
     // that starts at zero (the fixture's), and "never" read as "now".
     private bool _screensChanged;
     private long _screensChangedAt;
 
-    private bool ScreensSettling => _screensChanged && Now - _screensChangedAt < ScreenSettleMs;
+    private bool ScreensSettling => _screensChanged && Now - _screensChangedAt < _screenSettleFor;
 
     /// <summary>
     /// How far from where it was put a window may land and still count as
@@ -787,6 +797,45 @@ public sealed partial class Desk
         }
     }
 
+    /// <summary>
+    /// Brings back the windows Windows parked, once the screens have settled
+    /// and their monitor is here.
+    /// </summary>
+    /// <remarks>
+    /// The state goes back to what it was (Restore), the old placement is
+    /// forgotten, and the restore pass below asks the shell to un-minimise;
+    /// the tile or the floating rectangle is then placed as before. A parked
+    /// window whose monitor is still away waits for it.
+    /// </remarks>
+    private void Unpark()
+    {
+        if (ScreensSettling)
+        {
+            return;
+        }
+
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (!window.Parked || window.State != WindowState.Minimized || !window.Managed)
+            {
+                continue;
+            }
+
+            bool here = window.Sticky
+                ? MonitorByRole(window.StickyMonitor ?? string.Empty) is not null
+                : window.Workspace is { } name && Workspace(name) is { } workspace && MonitorOf(workspace) is not null;
+
+            if (!here)
+            {
+                continue;
+            }
+
+            window.Parked = false;
+            window.Placed = null;
+            Restore(window);
+        }
+    }
+
     /// <summary>The workspace whose tile has just taken the focus, until the raise has gone out.</summary>
     private Workspace? _raiseOver;
 
@@ -880,6 +929,17 @@ public sealed partial class Desk
             if (Window(placement.Window) is not { } window)
             {
                 continue;
+            }
+
+            // Across the seam NOW: Windows rescales the window for the new DPI
+            // a beat after this move, and that must not be learned as the
+            // person's size. Stamped at the return of a monitor, the crossing
+            // was over (CrossingMs) before the placement went out, now that
+            // a screen change waits MonitorSettleMs.
+            if (MonitorByHandle(window.Snapshot.Monitor) is { } from
+                && !from.FullArea.Contains(placement.Frame.X, placement.Frame.Y))
+            {
+                window.CrossedAt = Now;
             }
 
             // The clock starts when the rectangle being ASKED FOR changes, not
