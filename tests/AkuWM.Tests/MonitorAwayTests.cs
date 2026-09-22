@@ -152,6 +152,7 @@ public class MonitorAwayTests
     {
         DeskFixture f = ArrangedOnBoth("move_windows", "keep");
         SecondGoesAway(f);
+        f.Wait(AkuWM.Core.Desk.Desk.ParkWindowMs); // the person acts once Windows has stopped moving things
         f.Move(4, new Rect(200, 200, 640, 480));
         f.Turn();
 

@@ -190,3 +190,85 @@ public class ParkedWindowsTests
         Assert.Single(f.Turn().Place, p => p.Window == W(1));
     }
 }
+
+/// <summary>
+/// The wake of 2026-09-22 19:02: Windows moved NordVPN to the vertical
+/// screen, a terminal to the main one, and cut another terminal's height to
+/// the landscape screen it passed through -- and the model learned all three
+/// as the person's. Nothing Windows does to a window in the seconds after a
+/// screen change is the person's.
+/// </summary>
+public class ScreensMovingThingsTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_floating_window_windows_moves_during_a_screen_change_is_put_back_and_keeps_its_workspace()
+    {
+        var f = new DeskFixture();
+        f.Open(1, frame: new Rect(1000, 500, 900, 700));
+        Assert.True(f.Desk.SetFloating(W(1), true));
+        f.Turn();
+        Rect chosen = f.Managed(1)!.FloatingRect!.Value;
+
+        // The vertical screen changes shape; a second later Windows drops
+        // the window onto it, clamped to its height.
+        MonitorSnapshot second = f.Platform.MonitorList[1];
+        f.Platform.MonitorList[1] = second with { Bounds = new Rect(3840, 0, 2560, 1440), WorkArea = new Rect(3840, 35, 2560, 1405) };
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Wait(1000);
+        f.Move(1, new Rect(3900, 100, 900, 600));
+        f.Turn();
+
+        Assert.Equal(chosen, f.Managed(1)!.FloatingRect);
+        Assert.Equal("11", f.Managed(1)!.Workspace);
+
+        f.Platform.MonitorList[1] = second;
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Wait(AkuWM.Core.Desk.Desk.MonitorSettleMs);
+        f.Turn();
+        f.Turn();
+
+        Assert.Equal(chosen, f.FrameOf(1));
+        Assert.Equal("11", f.Managed(1)!.Workspace);
+    }
+
+    [Fact]
+    public void A_drag_well_after_the_change_is_still_the_persons()
+    {
+        var f = new DeskFixture();
+        f.Open(1, frame: new Rect(1000, 500, 900, 700));
+        Assert.True(f.Desk.SetFloating(W(1), true));
+        f.Turn();
+        f.Screens();
+        f.Wait(AkuWM.Core.Desk.Desk.ParkWindowMs);
+
+        f.Move(1, new Rect(1500, 600, 900, 700));
+        f.Turn();
+        Assert.Equal(new Rect(1500, 600, 900, 700), f.Managed(1)!.FloatingRect);
+    }
+
+    [Fact]
+    public void Parked_windows_ask_to_be_looked_at_again_when_the_burst_is_over()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        MonitorSnapshot main = f.Platform.MonitorList[0];
+        f.Platform.MonitorList[0] = main with { Bounds = new Rect(0, 0, 2560, 1440), WorkArea = new Rect(0, 42, 2560, 1398) };
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Wait(500);
+        f.Platform.SetMinimized(W(1), true);
+        f.Move(1, new Rect(-32000, -32000, 237, 39));
+        f.Platform.MonitorList[0] = main;
+        f.Desk.SetMonitors(f.Platform.Monitors());
+
+        // Inside the burst: nothing restored yet, but the desk asks for another look.
+        Redraw during = f.Turn();
+        Assert.Empty(during.Restore);
+        Assert.True(f.Desk.Unsettled);
+
+        f.Wait(AkuWM.Core.Desk.Desk.MonitorSettleMs);
+        Assert.Contains(W(1), f.Turn().Restore);
+    }
+}

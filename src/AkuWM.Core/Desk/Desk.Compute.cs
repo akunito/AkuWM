@@ -582,6 +582,9 @@ public sealed partial class Desk
 
     private bool ScreensSettling => _screensChanged && Now - _screensChangedAt < _screenSettleFor;
 
+    /// <summary>Windows is still moving windows about after a screen change: nothing it does to them is the person's.</summary>
+    private bool ScreensMovingThings => _screensChanged && Now - _screensChangedAt < ParkWindowMs;
+
     /// <summary>
     /// How far from where it was put a window may land and still count as
     /// there.
@@ -836,6 +839,19 @@ public sealed partial class Desk
     {
         if (ScreensSettling)
         {
+            // Nothing else may bring the desk back here once the burst is
+            // over (the parked windows raise no events): ask to be looked
+            // at again. Without this the elevated console stayed parked
+            // after the wake of 2026-09-22 19:02.
+            foreach (DeskWindow waiting in _windows.Values)
+            {
+                if (waiting.Parked && waiting.State == WindowState.Minimized)
+                {
+                    Unsettled = true;
+                    break;
+                }
+            }
+
             return;
         }
 

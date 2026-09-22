@@ -1009,6 +1009,19 @@ public sealed partial class Desk
         if (was.FrameBounds != snapshot.FrameBounds)
         {
             window.MovedAt = Now;
+
+            // Moved by Windows in the seconds after a screen change: the
+            // placement AkuWM made before is no longer where the window is,
+            // and comparing the two read as the window refusing it ("will
+            // not go to ... stopped asking"). A fresh request instead, once
+            // the screens settle.
+            if (ScreensMovingThings
+                && window.Placed is { } put
+                && !put.CloseTo(snapshot.FrameBounds, PlacementSlack))
+            {
+                window.Placed = null;
+                window.PlacementRefused = false;
+            }
         }
 
         // Whether this observation is the window ARRIVING where AkuWM put it,
@@ -1163,8 +1176,16 @@ public sealed partial class Desk
         // Not while HIDDEN: nobody can drag a cloaked window, and Windows
         // moves them itself on a display change; learning that put a
         // floating window somewhere the person never chose.
+        // Nor while the screens are changing: Windows moves and clamps
+        // windows itself for seconds after a monitor comes or goes (the
+        // wake of 2026-09-22 19:02 sent NordVPN to the vertical screen and a
+        // terminal to the main one, and cut a terminal's height to the
+        // landscape screen it passed through); learned, that became where
+        // the person put them. The rectangle the model has is put back once
+        // the screens settle.
         if ((window.State == WindowState.Floating || window.Sticky)
             && !window.Hidden
+            && !ScreensMovingThings
             && was.FrameBounds != snapshot.FrameBounds
             && !arriving
             && !rounding)

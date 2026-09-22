@@ -100,6 +100,7 @@ public class MonitorReturnTests
         // And it can be floated and moved like any other window.
         Assert.True(f.Desk.SetFloating(W(1), true));
         f.Turn();
+        f.Wait(AkuWM.Core.Desk.Desk.ParkWindowMs); // the person acts once Windows has stopped moving things
         f.Move(1, new Rect(3900, 100, 900, 700));
         f.Wait(AkuWM.Core.Desk.Desk.SettleMs + 1);
         f.Turn();
