@@ -51,6 +51,13 @@ public sealed class DeskFixture
     /// <summary>Lets time pass without taking any.</summary>
     public void Wait(int milliseconds) => _now += milliseconds;
 
+    /// <summary>The screens as the platform now lists them, and the burst is over: placements may follow.</summary>
+    public void Screens()
+    {
+        Desk.SetMonitors(Platform.Monitors());
+        Wait(Desk.ScreenSettleMs);
+    }
+
     public FakePlatform Platform { get; }
 
     public Desk Desk { get; }

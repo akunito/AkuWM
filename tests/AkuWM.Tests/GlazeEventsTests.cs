@@ -169,7 +169,7 @@ public class GlazeEventsTests
         // The Samsung goes to sleep: Windows says there is one screen.
         _fixture.Platform.MonitorList.Clear();
         _fixture.Platform.MonitorList.Add(FakePlatform.MainMonitor());
-        _fixture.Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         Publish();
 
         Assert.Contains("monitor_removed", Types);
@@ -177,7 +177,7 @@ public class GlazeEventsTests
 
         _fired.Clear();
         _fixture.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        _fixture.Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         Publish();
 
         // Without this the bar goes on drawing pills for a screen that is not
@@ -203,7 +203,7 @@ public class GlazeEventsTests
         _fixture.Platform.MonitorList.Clear();
         _fixture.Platform.MonitorList.Add(FakePlatform.MainMonitor());
         _fixture.Platform.MonitorList.Add(smaller);
-        _fixture.Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         Publish();
 
         Assert.Contains("monitor_updated", Types);
@@ -217,7 +217,7 @@ public class GlazeEventsTests
         Publish();
         _fired.Clear();
 
-        _fixture.Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         Publish();
 
         Assert.Empty(_fired);

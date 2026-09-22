@@ -41,7 +41,7 @@ public class BarAuditTests
         int at = f.Platform.MonitorList.FindIndex(m => m.Handle.Value == monitor);
         MonitorSnapshot was = f.Platform.MonitorList[at];
         f.Platform.MonitorList[at] = was with { WorkArea = BarredWorkArea(was.Bounds, edge, thickness) };
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
     }
 
     private static Placement PlacementOf(Redraw redraw, long handle) =>

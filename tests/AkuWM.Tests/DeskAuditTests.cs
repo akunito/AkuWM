@@ -849,7 +849,7 @@ public class DeskAuditTests
         // no displayed workspace and left the window belonging to nothing:
         // managed, in no layer, never placed, hidden or shown again.
         _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
 
         Assert.True(Desk.SetSticky(W(1), false));
 
@@ -872,7 +872,7 @@ public class DeskAuditTests
         // drawn, and a window AkuWM cannot account for must not stay invisible
         // because of AkuWM.
         _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         _fixture.Turn();
 
         Assert.False(_fixture.IsHidden(1));
@@ -888,11 +888,11 @@ public class DeskAuditTests
         Assert.Equal("22", _fixture.Managed(2)!.Workspace);
 
         _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         _fixture.Turn();
 
         _fixture.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         _fixture.Turn();
 
         // The workspaces belong to the desk, not to a screen: the one that
@@ -909,7 +909,7 @@ public class DeskAuditTests
 
         // The screen it was on is gone; the rectangle it remembers is nowhere.
         _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         Desk.MoveToWorkspace(W(1), "11");
         _fixture.Turn();
 
@@ -935,7 +935,7 @@ public class DeskAuditTests
     public void With_one_screen_there_is_nowhere_else_to_go()
     {
         _fixture.Platform.MonitorList.RemoveAll(m => m.HardwareId == "NSL2711");
-        Desk.SetMonitors(_fixture.Platform.Monitors());
+        _fixture.Screens();
         _fixture.Open(1);
         _fixture.Turn();
         Desk.Focus(W(1));

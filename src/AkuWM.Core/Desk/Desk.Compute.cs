@@ -514,6 +514,28 @@ public sealed partial class Desk
     public const int SettleMs = 300;
 
     /// <summary>
+    /// How long after the last screen change the placements wait.
+    /// </summary>
+    /// <remarks>
+    /// A display change is a burst, not an event: five notifications over a
+    /// second, and the main screen's work area reads 0,0 for the first ~600 ms
+    /// of each while the taskbar re-reserves its strip (2026-09-22 16:10,
+    /// monitors dragged in Settings). Laying the desk out against each one
+    /// placed every window twice per change, 500 ms + 300 ms of it, and
+    /// every window on the main screen jumped up 42 px and back. The model
+    /// takes each notification as it comes; only the placements wait for
+    /// the burst to end.
+    /// </remarks>
+    public const int ScreenSettleMs = 600;
+
+    // A flag and a time, not a time alone: zero is a real tick on a clock
+    // that starts at zero (the fixture's), and "never" read as "now".
+    private bool _screensChanged;
+    private long _screensChangedAt;
+
+    private bool ScreensSettling => _screensChanged && Now - _screensChangedAt < ScreenSettleMs;
+
+    /// <summary>
     /// How far from where it was put a window may land and still count as
     /// there.
     /// </summary>
@@ -560,6 +582,12 @@ public sealed partial class Desk
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;
+            return;
+        }
+
+        if (ScreensSettling)
+        {
+            Unsettled = true;
             return;
         }
 

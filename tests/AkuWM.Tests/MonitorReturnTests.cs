@@ -43,7 +43,7 @@ public class MonitorReturnTests
     private static void SecondGoes(DeskFixture f)
     {
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Turn();
     }
@@ -51,7 +51,7 @@ public class MonitorReturnTests
     private static void SecondReturns(DeskFixture f)
     {
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Turn();
     }
@@ -75,7 +75,7 @@ public class MonitorReturnTests
         // Back: restored maximised over the whole bounds (no bar yet), then
         // parked again by the second phase.
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Platform.SetMaximized(W(1), true);
         f.Move(1, SecondBounds);
         f.Turn();
@@ -221,5 +221,112 @@ public class MonitorReturnTests
         Assert.Contains(second.Place, p => p.Window == W(1));
         Assert.Equal(FakePlatform.MainMonitor().WorkArea, f.FrameOf(1));
         Assert.Empty(f.Turn().Place);
+    }
+}
+
+/// <summary>A display change is a burst; the placements wait for it to end.</summary>
+public class ScreenSettleTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    private static void MainWorkAreaTop(DeskFixture f, int top)
+    {
+        MonitorSnapshot main = f.Platform.MonitorList[0];
+        f.Platform.MonitorList[0] = main with { WorkArea = Rect.FromEdges(main.Bounds.Left, main.Bounds.Top + top, main.Bounds.Right, main.Bounds.Bottom) };
+        f.Desk.SetMonitors(f.Platform.Monitors());
+    }
+
+    [Fact]
+    public void Placements_wait_for_the_burst_and_land_once_against_the_last_list()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        Rect before = f.FrameOf(1);
+
+        // The taskbar's strip vanishes for the first notification ...
+        MainWorkAreaTop(f, 0);
+        Redraw first = f.Turn();
+        Assert.Empty(first.Place);
+        Assert.True(f.Desk.Unsettled);
+        Assert.Equal(before, f.FrameOf(1));
+
+        // ... and is back for the next, 300 ms later: the clock restarts.
+        f.Wait(300);
+        MainWorkAreaTop(f, 42);
+        f.Wait(400);
+        Assert.Empty(f.Turn().Place);
+
+        f.Wait(200);
+        Redraw settled = f.Turn();
+        // Already where it belongs: nothing moved at all.
+        Assert.Empty(settled.Place);
+        Assert.Equal(before, f.FrameOf(1));
+        Assert.False(f.Desk.Unsettled);
+    }
+
+    [Fact]
+    public void A_change_that_stands_is_applied_when_the_burst_ends()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+
+        MainWorkAreaTop(f, 90);
+        Assert.Empty(f.Turn().Place);
+        f.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
+        Placement placement = Assert.Single(f.Turn().Place, p => p.Window == W(1));
+        Assert.Equal(90, placement.Frame.Top);
+    }
+
+    [Fact]
+    public void The_startup_layout_does_not_wait()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        Assert.Single(f.Turn().Place, p => p.Window == W(1));
+    }
+
+    [Fact]
+    public void The_same_list_again_starts_no_clock()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Open(2);
+        Assert.Single(f.Turn().Place, p => p.Window == W(2));
+    }
+}
+
+/// <summary>A cloaked window that Windows moves is not a window the person moved.</summary>
+public class HiddenFloatingTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_hidden_floating_window_moved_by_windows_comes_back_where_the_person_left_it()
+    {
+        var f = new DeskFixture();
+        f.Open(1, frame: new Rect(1000, 500, 900, 700));
+        Assert.True(f.Desk.SetFloating(W(1), true));
+        f.Turn();
+        Rect chosen = f.FrameOf(1);
+
+        f.Desk.FocusWorkspace("12");
+        f.Open(2);
+        f.Turn();
+        Assert.True(f.IsHidden(1));
+
+        // A display change: Windows drags the cloaked window somewhere else.
+        f.Move(1, new Rect(214, 382, 900, 700));
+        f.Turn();
+        Assert.Equal(chosen, f.Managed(1)!.FloatingRect);
+
+        f.Desk.FocusWorkspace("11");
+        f.Wait(AkuWM.Core.Desk.Desk.SettleMs + 1);
+        f.Turn();
+        f.Turn();
+        Assert.Equal(chosen, f.FrameOf(1));
     }
 }

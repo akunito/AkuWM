@@ -46,7 +46,7 @@ public class MonitorAwayTests
     private static void SecondGoesAway(DeskFixture f)
     {
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Turn();
     }
@@ -54,7 +54,7 @@ public class MonitorAwayTests
     private static void SecondComesBack(DeskFixture f)
     {
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Turn();
     }
@@ -305,13 +305,13 @@ public class MonitorAwayTests
         Rect floating4 = f.Managed(4)!.FloatingRect!.Value;
 
         f.Platform.MonitorList.Clear();
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Empty(f.Desk.OnLoan);
 
         f.Platform.MonitorList.Add(FakePlatform.MainMonitor());
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Turn();
 
@@ -363,12 +363,12 @@ public class MonitorAwayTests
         // The second goes: its window is lent to main. Then main goes: the
         // borrowed window is lent on to the third with main's own.
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("11", f.Managed(2)!.Workspace);
 
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 1);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("31", f.Managed(2)!.Workspace);
         Assert.Equal("31", f.Managed(1)!.Workspace);
@@ -376,14 +376,14 @@ public class MonitorAwayTests
         // The second is back first: its window is on the third now, not where
         // the loan put it, so it stays -- the person may be using it there.
         f.Platform.MonitorList.Insert(1, FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("31", f.Managed(2)!.Workspace);
 
         // Main is back: its own window returns, and the borrowed one with it
         // (it was lent to main's workspace 11 at the time).
         f.Platform.MonitorList.Insert(0, FakePlatform.MainMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("11", f.Managed(1)!.Workspace);
         Assert.Equal("11", f.Managed(2)!.Workspace);
@@ -419,11 +419,11 @@ public class FetchWindowsTests
 
         // The vertical monitor drops out and is listed again two seconds later.
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("21", f.Managed(2)!.Workspace);
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         Assert.Equal("21", f.Managed(2)!.Workspace);
         Assert.Empty(f.Desk.OnLoan);
@@ -462,10 +462,10 @@ public class FetchWindowsTests
         Assert.Equal("11", f.Managed(2)!.Workspace);
 
         f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
         f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
-        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Screens();
         f.Turn();
 
         Assert.Equal("21", f.Managed(2)!.Workspace);

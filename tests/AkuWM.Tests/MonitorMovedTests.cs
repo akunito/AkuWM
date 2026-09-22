@@ -53,6 +53,7 @@ public class MonitorMovedTests
         // Diego moved it up: 3840,-720, work area at -685. The same screen,
         // the same size, 312 px higher.
         fixture.Desk.SetMonitors([FakePlatform.MainMonitor(), Second(new Rect(3840, -720, 1440, 2560))]);
+        fixture.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
         fixture.Turn();
         fixture.Turn();
 
@@ -68,6 +69,7 @@ public class MonitorMovedTests
         fixture.Turn();
 
         fixture.Desk.SetMonitors([FakePlatform.MainMonitor(), Second(new Rect(3840, -720, 1440, 2560))]);
+        fixture.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
 
         // It is on the taskbar: nothing is placed, and the rectangle it will
         // come back to is the one that has to have moved.
@@ -84,6 +86,7 @@ public class MonitorMovedTests
         // entirely, at 0,0.
         fixture.Desk.SetMonitors(
             [FakePlatform.MainMonitor(), Second(new Rect(0, -1080, 1920, 1080), bar: 35)]);
+        fixture.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
         fixture.Turn();
         fixture.Turn();
 
@@ -105,6 +108,7 @@ public class MonitorMovedTests
         fixture.Turn();
 
         fixture.Desk.SetMonitors([FakePlatform.MainMonitor(), Second(new Rect(3840, -720, 1440, 2560))]);
+        fixture.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
         fixture.Turn();
         fixture.Turn();
 
@@ -121,6 +125,7 @@ public class MonitorMovedTests
 
         var moved = new Rect(3840, -720, 1440, 2560);
         fixture.Desk.SetMonitors([FakePlatform.MainMonitor(), Second(moved)]);
+        fixture.Wait(AkuWM.Core.Desk.Desk.ScreenSettleMs);
         fixture.Turn();
         fixture.Turn();
 

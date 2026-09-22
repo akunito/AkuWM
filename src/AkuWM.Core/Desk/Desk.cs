@@ -492,6 +492,13 @@ public sealed partial class Desk
     /// </remarks>
     public void SetMonitors(IReadOnlyList<MonitorSnapshot> monitors)
     {
+        // Not the first list of a run: the startup layout does not wait.
+        if (_monitorSnapshots.Count > 0 && !SameScreens(monitors))
+        {
+            _screensChanged = true;
+            _screensChangedAt = Now;
+        }
+
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
         List<string> before = _monitors.Select(m => m.Role).ToList();
         _monitors.Clear();
@@ -563,6 +570,28 @@ public sealed partial class Desk
                 Reclaim(_monitors[i]);
             }
         }
+    }
+
+    private bool SameScreens(IReadOnlyList<MonitorSnapshot> monitors)
+    {
+        if (monitors.Count != _monitorSnapshots.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            MonitorSnapshot now = monitors[i];
+            if (!_monitorSnapshots.TryGetValue(now.Handle, out MonitorSnapshot? was)
+                || was.Bounds != now.Bounds
+                || was.WorkArea != now.WorkArea
+                || was.Dpi != now.Dpi)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Hands every workspace to the present monitor its role names.</summary>
@@ -1088,7 +1117,11 @@ public sealed partial class Desk
         // to character cells lands near what was asked for, not on it, and
         // learning that as a move would drift the remembered rectangle a
         // little further every redraw.
+        // Not while HIDDEN: nobody can drag a cloaked window, and Windows
+        // moves them itself on a display change; learning that put a
+        // floating window somewhere the person never chose.
         if ((window.State == WindowState.Floating || window.Sticky)
+            && !window.Hidden
             && was.FrameBounds != snapshot.FrameBounds
             && !arriving
             && !rounding)
