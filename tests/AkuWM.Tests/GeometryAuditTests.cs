@@ -202,3 +202,54 @@ public class GeometryAuditTests
         Assert.All(redraw.Place.Where(p => p.Window == W(1)), p => Assert.Null(p.Border));
     }
 }
+
+/// <summary>
+/// Reported from the desk 2026-09-22: dragging a floating window right after
+/// moving it to another monitor flickered for a second or so, the first time.
+/// </summary>
+public class DragAfterCrossingTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_drag_that_starts_right_after_a_move_to_another_monitor_is_never_fought()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Open(1, resizable: false);
+        fixture.Turn();
+
+        // Hyper+Shift+Right: the model moves it, the redraw places it.
+        Assert.True(fixture.Desk.MoveToWorkspace(W(1), "21"));
+        fixture.Turn();
+        Rect placed = fixture.FrameOf(1);
+        Assert.True(placed.X >= 3840, $"{placed} is not on the second monitor");
+
+        // Windows rescales it for 125 % a beat later, behind everybody's back.
+        fixture.Wait(140);
+        fixture.Platform.ApplicationMoves(W(1), placed with { Width = placed.Width * 5 / 6, Height = placed.Height * 5 / 6 });
+        fixture.Sync();
+        fixture.Turn();
+
+        // And the hand takes it, at the drag script's rate. Every tick the
+        // window is where the hand put it; a placement now is AkuWM putting it
+        // back, which the script then undoes on its next tick: that is the
+        // flicker. The crossing guard threw away every move for a second.
+        Rect at = fixture.FrameOf(1);
+        int fought = 0;
+        for (int tick = 1; tick <= 60; tick++)
+        {
+            fixture.Wait(8);
+            at = at with { X = at.X + 6, Y = at.Y + 2 };
+            fixture.Move(1, at);
+            Redraw redraw = fixture.Turn();
+            if (redraw.Place.Any(p => p.Window == W(1)))
+            {
+                fought++;
+            }
+        }
+
+        Assert.Equal(0, fought);
+        Assert.Equal(at, fixture.FrameOf(1));
+    }
+}
