@@ -525,6 +525,21 @@ public sealed partial class Desk
     /// whole monitor, AkuWM does not read it as fullscreen.
     /// </remarks>
     /// <summary>The monitor a point is on.</summary>
+    /// <summary>Whether a rectangle lies across more than one screen.</summary>
+    private bool SpansScreens(Rect frame)
+    {
+        int on = 0;
+        for (int i = 0; i < _monitors.Count; i++)
+        {
+            if (frame.FractionInside(_monitors[i].Snapshot.Bounds) > 0 && ++on > 1)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public DeskMonitor? MonitorAtPoint(int x, int y)
     {
         for (int at = 0; at < _monitors.Count; at++)

@@ -869,6 +869,26 @@ public class BlownUpWindowTests
     }
 
     [Fact]
+    public void A_big_shrink_in_one_step_on_one_screen_is_a_command_not_a_blow_up()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(9, 42, 3822, 2109), resizable: false, perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+
+        // A script sets it to 1908x1244 in one call, on the main screen.
+        fixture.Wait(16);
+        fixture.Move(1, new Rect(100, 100, 1908, 1244));
+        fixture.Turn();
+        fixture.Wait(Desk.SettleMs + 1);
+        fixture.Turn();
+
+        Assert.Equal(1908, fixture.FrameOf(1).Width);
+        Assert.Null(fixture.Managed(1)!.SteadySize);
+    }
+
+    [Fact]
     public void A_hand_resizing_it_a_few_pixels_a_tick_is_still_the_hand()
     {
         var fixture = new DeskFixture();

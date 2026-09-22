@@ -1047,11 +1047,15 @@ public sealed partial class Desk
             // (1908 wide to 3318, 2026-09-22); a hand resizes a window by a
             // few pixels a tick. A jump that big in one observation is not
             // the person's: the size is kept and only the place follows.
+            // GREW, in one step, while lying across two screens: that is the
+            // whole signature. A shrink in one step is a command or a snap,
+            // and a jump on one screen is a size somebody asked for.
             bool blownUp = !snapshot.PerMonitorDpi
                 && !snapshot.IsMaximized
                 && window.FloatingRect is not null
-                && (Math.Abs(snapshot.FrameBounds.Width - was.FrameBounds.Width) > RescaleJump
-                    || Math.Abs(snapshot.FrameBounds.Height - was.FrameBounds.Height) > RescaleJump);
+                && (snapshot.FrameBounds.Width - was.FrameBounds.Width > RescaleJump
+                    || snapshot.FrameBounds.Height - was.FrameBounds.Height > RescaleJump)
+                && SpansScreens(snapshot.FrameBounds);
 
             if (blownUp && window.SteadySize is null)
             {
