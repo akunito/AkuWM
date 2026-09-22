@@ -28,6 +28,7 @@ public static class ConfigDefaults
             ToggleWorkspaceOnRefocus = true,
             ShowAllInTaskbar = false,
             ShowEmptyWorkspaces = true,
+            RememberPlacements = true,
         },
         Gaps = new GapsConfig
         {

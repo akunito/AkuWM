@@ -716,6 +716,9 @@ public sealed partial class Desk
             Focused = WindowHandle.None;
         }
 
+        // Cheap: a compare per window, a memory-mapped write per change.
+        RememberPlacements();
+
         foreach ((WindowHandle handle, bool shown) in redraw.TaskbarButton)
         {
             if (Window(handle) is { } buttoned)

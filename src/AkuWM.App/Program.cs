@@ -155,6 +155,15 @@ public static class Program
         var ledger = new CloakLedger(paths.CloakLedgerFile);
         var journal = new GeometryJournal(paths.GeometryJournalFile);
 
+        // Where every window was under the previous run. `--fresh` places
+        // everything as new, once; records from before this boot are dropped.
+        long bootedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (Environment.TickCount64 / 1000);
+        var placements = new PlacementJournal(paths.PlacementsFile, droppedBefore: bootedAt);
+        if (args.Contains("--fresh"))
+        {
+            placements.Clear();
+        }
+
         // Before anything else touches a window: whatever went wrong in the
         // last run, the desk is whole again by the time AkuWM is listening.
         RecoveryResult recovery = ledger.Recover(platform, platform, taskbar);
@@ -203,7 +212,8 @@ public static class Program
         bool manage = !shadow && (!verdict.SafeMode || force);
 
         var manager = new WindowManager(
-            loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args), paths);
+            loaded.Effective, platform, ledger, journal, watchdog, manage, CompatPort(args), paths,
+            loaded.Effective.General?.RememberPlacements != false ? placements : null);
 
         // `--capture <file>`: every frame the bar exchanges, written down, so
         // what Zebar asks for becomes a test instead of a memory.

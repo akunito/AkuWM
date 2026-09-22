@@ -769,6 +769,16 @@ public sealed partial class Desk
             return window;
         }
 
+        // What the previous run had it as, unless a rule names a workspace:
+        // the desk a person arranged survives a restart of the daemon.
+        if (decision.Target?.Workspace is not { Length: > 0 }
+            && decision.Target?.Monitor is not { Length: > 0 }
+            && _placements?.Recall(snapshot.Handle, snapshot.ProcessName) is { } remembered
+            && Recall(window, remembered))
+        {
+            return window;
+        }
+
         if (window.Sticky)
         {
             MakeSticky(window);
@@ -782,6 +792,86 @@ public sealed partial class Desk
         }
 
         return window;
+    }
+
+    private State.PlacementJournal? _placements;
+
+    /// <summary>Lets the desk remember where every window is across a restart.</summary>
+    public void RemembersPlacementsWith(State.PlacementJournal journal) => _placements = journal;
+
+    /// <summary>Puts an adopted window back where the last run had it. False when that place is gone.</summary>
+    private bool Recall(DeskWindow window, in State.Placed remembered)
+    {
+        if (remembered.StickyTo is { } role)
+        {
+            if (MonitorByRole(role) is not { } monitor)
+            {
+                return false;
+            }
+
+            window.State = WindowState.Floating;
+            window.PreviousState = WindowState.Floating;
+            if (!remembered.FloatingRect.IsEmpty)
+            {
+                window.FloatingRect = remembered.FloatingRect;
+            }
+
+            MakeSticky(window, monitor);
+            return true;
+        }
+
+        if (remembered.Workspace is not { } name || Workspace(name) is not { } workspace || MonitorOf(workspace) is null)
+        {
+            return false;
+        }
+
+        // A window covering its screen stays what the snapshot says it is;
+        // any other one takes the layer it had.
+        if (window.State != WindowState.Fullscreen)
+        {
+            window.State = remembered.Floating ? WindowState.Floating : WindowState.Tiling;
+            window.PreviousState = window.State;
+        }
+
+        if (remembered.Floating && !remembered.FloatingRect.IsEmpty)
+        {
+            window.FloatingRect = remembered.FloatingRect;
+        }
+
+        window.Sticky = false;
+        Place(window, workspace);
+        return true;
+    }
+
+    /// <summary>Writes down where every managed window is now, for the next start.</summary>
+    private void RememberPlacements()
+    {
+        if (_placements is null)
+        {
+            return;
+        }
+
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (!window.Managed)
+            {
+                continue;
+            }
+
+            var where = new State.Placed(
+                window.Sticky ? null : window.Workspace,
+                window.Sticky ? window.StickyMonitor : null,
+                window.Sticky || window.State == WindowState.Floating
+                    || (window.State == WindowState.Minimized && window.PreviousState == WindowState.Floating),
+                window.FloatingRect ?? default);
+
+            if (where.Workspace is null && where.StickyTo is null)
+            {
+                continue;
+            }
+
+            _placements.Remember(window.Handle, window.Snapshot.ProcessName, where);
+        }
     }
 
     /// <summary>

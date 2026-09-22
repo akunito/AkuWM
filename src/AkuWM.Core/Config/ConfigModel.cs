@@ -65,6 +65,14 @@ public sealed class GeneralConfig
     public bool? ShowAllInTaskbar { get; set; }
 
     /// <summary>
+    /// Whether a window that was open when AkuWM starts goes back to the
+    /// workspace, layer and rectangle it had under the previous run (true),
+    /// or is placed like a new one. A rule that names a workspace wins
+    /// either way. Read at start; <c>akuwm daemon --fresh</c> ignores it once.
+    /// </summary>
+    public bool? RememberPlacements { get; set; }
+
+    /// <summary>
     /// Whether the bar lists a workspace that has no windows in it.
     /// </summary>
     /// <remarks>

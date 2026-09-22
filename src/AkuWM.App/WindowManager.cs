@@ -63,7 +63,8 @@ public sealed class WindowManager : IAsyncDisposable
         Watchdog watchdog,
         bool manage,
         int compatPort = GlazeProtocol.Port,
-        ConfigPaths? paths = null)
+        ConfigPaths? paths = null,
+        PlacementJournal? placements = null)
     {
         _paths = paths;
         _platform = platform;
@@ -93,6 +94,12 @@ public sealed class WindowManager : IAsyncDisposable
         // name happens to match.
         _desk.Forgotten += journal.Forget;
         _desk.Forgotten += ledger.Forget;
+
+        if (placements is not null)
+        {
+            _desk.RemembersPlacementsWith(placements);
+            _desk.Forgotten += placements.Forget;
+        }
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
         _desk.ReadsTheCursorWith(() => _platform.CursorPosition());
 
