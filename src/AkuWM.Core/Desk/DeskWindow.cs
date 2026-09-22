@@ -230,6 +230,9 @@ public sealed class DeskWindow
     /// <summary>Rules that fired for it, by name, for <c>query</c> and the GUI.</summary>
     public IReadOnlyList<string> Rules { get; set; } = [];
 
+    /// <summary>A rule with the <c>anticheat</c> action fired, managed or not.</summary>
+    public bool AntiCheat { get; set; }
+
     /// <summary>
     /// Whether the person has changed this window's state themselves.
     /// </summary>

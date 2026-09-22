@@ -448,6 +448,16 @@ public static class ConfigValidator
 
             // A rule may now say only how a window should LOOK, with no verb
             // at all: "every Zen window at 90% opacity" is a whole rule.
+            if (rule.Actions?.Contains("anticheat") == true
+                && (config.General?.HotkeyHost is not { } host
+                    || string.IsNullOrWhiteSpace(host.Process)
+                    || string.IsNullOrWhiteSpace(host.Command)))
+            {
+                issues.Add(ValidationIssue.Warning(
+                    path + ".actions",
+                    "'anticheat' stops the hotkey process around the game, and general.hotkey_host names no process and command to stop and start"));
+            }
+
             if (rule.Actions is not { Count: > 0 } actions)
             {
                 if (rule.Effects is null)

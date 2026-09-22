@@ -805,6 +805,8 @@ public sealed partial class Desk
         window.ReasonDetail = decision.ReasonDetail;
         window.Rules = decision.Rules;
         window.Effects = EffectsFor(decision.Rules);
+        window.AntiCheat = decision.AntiCheat;
+        RefreshGameMode();
 
         if (!decision.Managed)
         {
@@ -850,9 +852,11 @@ public sealed partial class Desk
             // exists to avoid.
             Banded = snapshot.IsTopmost,
             AdoptedAt = Now,
+            AntiCheat = decision.AntiCheat,
         };
 
         _windows[snapshot.Handle] = window;
+        RefreshGameMode();
 
         if (!window.Managed)
         {
@@ -902,6 +906,9 @@ public sealed partial class Desk
 
     /// <summary>Lets the desk open a window as the last one of its application was closed.</summary>
     public void RemembersAppsWith(State.AppMemory memory) => _apps = memory;
+
+    /// <summary>Forgets how the last window of a process was closed; the next one opens as a stranger.</summary>
+    public int ForgetApp(string process) => _apps?.ForgetProcess(Matching.RuleMatcher.StripExe(process)) ?? 0;
 
     private bool RemembersApps => _apps is not null && Config.General?.RememberApps != false;
 
@@ -1385,6 +1392,36 @@ public sealed partial class Desk
     /// </remarks>
     public event Action<WindowHandle>? Forgotten;
 
+    /// <summary>
+    /// True while a window of an application with the <c>anticheat</c> action
+    /// exists on the desk, managed or ignored. The host stops the hotkey
+    /// process on the rising edge and starts it again on the falling one.
+    /// </summary>
+    public bool GameMode { get; private set; }
+
+    /// <summary>Raised once per change of <see cref="GameMode"/>.</summary>
+    public event Action<bool>? GameModeChanged;
+
+    private void RefreshGameMode()
+    {
+        bool on = false;
+        foreach (DeskWindow window in _windows.Values)
+        {
+            if (window.AntiCheat)
+            {
+                on = true;
+                break;
+            }
+        }
+
+        if (on != GameMode)
+        {
+            GameMode = on;
+            Log.Info(on ? "game mode: on, a window with the anticheat action is on the desk" : "game mode: off");
+            GameModeChanged?.Invoke(on);
+        }
+    }
+
     /// <summary>Lets go of a window that has closed.</summary>
     public void Forget(WindowHandle handle)
     {
@@ -1414,6 +1451,7 @@ public sealed partial class Desk
         Forgotten?.Invoke(handle);
         _hidden.Remove(handle);
         _asked.Remove(handle);
+        RefreshGameMode();
 
         if (_wantFocus == handle)
         {

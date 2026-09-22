@@ -20,6 +20,7 @@ public sealed class CommandRouter
     private readonly CompatCommand? _compat;
     private readonly StateCommand? _state;
     private readonly RulesCommand? _rules;
+    private readonly Func<string, int>? _forgetApp;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -37,8 +38,10 @@ public sealed class CommandRouter
         RescueCommand? rescue = null,
         CompatCommand? compat = null,
         StateCommand? state = null,
-        RulesCommand? rules = null)
+        RulesCommand? rules = null,
+        Func<string, int>? forgetApp = null)
     {
+        _forgetApp = forgetApp;
         _config = config;
         _doctor = doctor;
         _query = query;
@@ -108,6 +111,11 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "there is no platform layer on this host to rescue"),
                 "state" => _state?.Execute(line)
                     ?? CommandResponse.Fail(line, "there is no state directory on this host"),
+                "forget-app" => tokens.Length < 2
+                    ? CommandResponse.Fail(line, "forget-app <process>: which application to forget")
+                    : _forgetApp is null
+                        ? CommandResponse.Fail(line, "the daemon is not running; there is nothing to forget")
+                        : CommandResponse.Ok(line, new { forgotten = _forgetApp(tokens[1]) }),
                 "compat" => _compat?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "AkuWM is not managing the desk, so there is nothing to ask"),
                 "rules" => _rules?.Execute(line, tokens)
@@ -149,6 +157,7 @@ public sealed class CommandRouter
         "uncloak-all",
         "rescue [--all] [--keep-daemon] [--forgive]",
         "state",
+        "forget-app <process>         (the next window of it opens as a stranger)",
         "compat <query|command> ...   (what the glazewm shim sends)",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",

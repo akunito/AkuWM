@@ -100,6 +100,24 @@ public sealed class GeneralConfig
 
     /// <summary>Fold stray native virtual desktops into the first one at startup.</summary>
     public bool? StartupFoldVirtualDesktops { get; set; }
+
+    /// <summary>
+    /// The hotkey process (the AutoHotkey script) that is stopped while a
+    /// window of a rule with the <c>anticheat</c> action exists, and started
+    /// again when the last one is gone. Anti-cheats block or disconnect by
+    /// process NAME (NCSoft on Aion 2, December 2025); a pause or an
+    /// uninstalled hook hides nothing from a process scan, only absence does.
+    /// </summary>
+    public HotkeyHostConfig? HotkeyHost { get; set; }
+}
+
+public sealed class HotkeyHostConfig
+{
+    /// <summary>Process name without <c>.exe</c>, e.g. <c>AutoHotkey64_UIA</c>.</summary>
+    public string? Process { get; set; }
+
+    /// <summary>What starts it again: a <c>.lnk</c>, an executable, or a command the shell runs.</summary>
+    public string? Command { get; set; }
 }
 
 public sealed class GapsConfig

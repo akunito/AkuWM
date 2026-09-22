@@ -31,6 +31,9 @@ public sealed record ManagedWindow
     /// wins, in configuration order.
     /// </remarks>
     public RuleTarget? Target { get; init; }
+
+    /// <summary>A rule with the <c>anticheat</c> action fired: the hotkey process stays away while it exists.</summary>
+    public bool AntiCheat { get; init; }
 }
 
 /// <summary>The whole desk, as AkuWM sees it at one instant.</summary>
@@ -131,6 +134,7 @@ public static class ShadowModel
             MonitorRole = role,
             Rules = fired.Select(r => r.Name ?? r.Id ?? "?").ToList(),
             Target = fired.FirstOrDefault(r => r.Target is not null)?.Target,
+            AntiCheat = actions.Contains("anticheat"),
         };
     }
 

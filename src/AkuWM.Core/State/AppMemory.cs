@@ -43,6 +43,33 @@ public sealed class AppMemory
 
     public static string KeyOf(WindowSnapshot window) => window.ProcessName + "|" + window.ClassName;
 
+    /// <summary>Drops every record of one process (the driven suites reset what they taught it).</summary>
+    public int ForgetProcess(string process)
+    {
+        string prefix = process + "|";
+        List<string>? gone = null;
+        foreach (string key in _records.Keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                (gone ??= []).Add(key);
+            }
+        }
+
+        if (gone is null)
+        {
+            return 0;
+        }
+
+        for (int i = 0; i < gone.Count; i++)
+        {
+            _records.Remove(gone[i]);
+        }
+
+        Save();
+        return gone.Count;
+    }
+
     public AppRecord? Recall(string key) => _records.TryGetValue(key, out AppRecord record) ? record : null;
 
     public void Remember(string key, AppRecord record)

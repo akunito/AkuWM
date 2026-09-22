@@ -400,7 +400,10 @@ public static class Program
             new StateCommand(paths),
             manager is null
                 ? null
-                : new RulesCommand(read => manager.Do("rules", read).GetAwaiter().GetResult()));
+                : new RulesCommand(read => manager.Do("rules", read).GetAwaiter().GetResult()),
+            manager is null
+                ? null
+                : process => manager.Do("forget-app", desk => desk.ForgetApp(process)).GetAwaiter().GetResult());
     }
 
     /// <summary>The checks only the Windows host can make.</summary>

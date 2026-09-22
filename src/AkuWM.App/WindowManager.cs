@@ -95,6 +95,12 @@ public sealed class WindowManager : IAsyncDisposable
         _desk.Forgotten += journal.Forget;
         _desk.Forgotten += ledger.Forget;
 
+        // The hotkey process is stopped while a game with an anti-cheat has a
+        // window, and started again when the last one is gone: anti-cheats
+        // block or disconnect by process NAME (NCSoft on Aion 2, December
+        // 2025); nothing short of absence hides a process from that scan.
+        _desk.GameModeChanged += on => HotkeyHost.Toggle(_desk.Config.General?.HotkeyHost, !on);
+
         if (placements is not null)
         {
             _desk.RemembersPlacementsWith(placements);

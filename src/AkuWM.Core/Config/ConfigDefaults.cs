@@ -67,7 +67,7 @@ public static class ConfigDefaults
 
     /// <summary>What a rule may ask for.</summary>
     public static readonly string[] RuleActions =
-        ["float", "tile", "sticky", "unsticky", "fullscreen", "minimize", "ignore"];
+        ["float", "tile", "sticky", "unsticky", "fullscreen", "minimize", "ignore", "anticheat"];
 
     public static readonly string[] ShortcutKinds = ["app", "wm", "exec", "send"];
 
