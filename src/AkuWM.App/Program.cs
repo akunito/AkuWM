@@ -444,6 +444,19 @@ public static class Program
             return new Check("hidden windows", CheckStatus.Info,
                 hidden.Length == 0 ? "none: every managed window is on screen" : hidden);
         },
+        () =>
+        {
+            if (manager is null)
+            {
+                return new Check("monitors away", CheckStatus.Info, "not running in this process");
+            }
+
+            string away = manager.Read("monitors away", desk => string.Join(", ", desk.OnLoan)).GetAwaiter().GetResult();
+            return new Check("monitors away", away.Length == 0 ? CheckStatus.Ok : CheckStatus.Info,
+                away.Length == 0
+                    ? "none: every configured screen that has been seen is here"
+                    : $"{away}: its windows are lent to a screen that is here and go back when it returns");
+        },
         () => manager is null
             ? new Check("bar and scripts", CheckStatus.Info, "not running in this process")
             : new Check(

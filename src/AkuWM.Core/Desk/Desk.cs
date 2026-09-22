@@ -493,6 +493,7 @@ public sealed partial class Desk
     public void SetMonitors(IReadOnlyList<MonitorSnapshot> monitors)
     {
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
+        List<string> before = _monitors.Select(m => m.Role).ToList();
         _monitors.Clear();
         List<(DeskMonitor Monitor, Rect Was)>? moved = null;
 
@@ -530,7 +531,45 @@ public sealed partial class Desk
         {
             _monitorSnapshots[monitor.Handle] = monitor.Snapshot;
             _monitorRoles[monitor.Handle] = monitor.Role;
+        }
 
+        BindWorkspaces();
+
+        // A workspace whose monitor is away keeps its displayed flag: the
+        // screen coming back should find the desk as it left it, and nothing
+        // draws a workspace whose monitor is not in the list anyway.
+        if (moved is not null)
+        {
+            foreach ((DeskMonitor monitor, Rect was) in moved)
+            {
+                FollowTheScreen(monitor, was);
+            }
+        }
+
+        // Screens that went, and screens that are back: their windows are
+        // lent to a screen that is here, and taken back (Desk.Loans.cs).
+        for (int i = 0; i < before.Count; i++)
+        {
+            if (!_monitors.Any(m => string.Equals(m.Role, before[i], StringComparison.OrdinalIgnoreCase)))
+            {
+                Lend(before[i]);
+            }
+        }
+
+        for (int i = 0; i < _monitors.Count; i++)
+        {
+            if (!before.Contains(_monitors[i].Role, StringComparer.OrdinalIgnoreCase))
+            {
+                Reclaim(_monitors[i]);
+            }
+        }
+    }
+
+    /// <summary>Hands every workspace to the present monitor its role names.</summary>
+    private void BindWorkspaces()
+    {
+        foreach (DeskMonitor monitor in _monitors)
+        {
             monitor.Workspaces.Clear();
 
             for (int i = 0; i < _order.Count; i++)
@@ -545,17 +584,6 @@ public sealed partial class Desk
             if (monitor.Displayed is null && monitor.Workspaces.Count > 0)
             {
                 monitor.Workspaces[0].Displayed = true;
-            }
-        }
-
-        // A workspace whose monitor is away keeps its displayed flag: the
-        // screen coming back should find the desk as it left it, and nothing
-        // draws a workspace whose monitor is not in the list anyway.
-        if (moved is not null)
-        {
-            foreach ((DeskMonitor monitor, Rect was) in moved)
-            {
-                FollowTheScreen(monitor, was);
             }
         }
     }

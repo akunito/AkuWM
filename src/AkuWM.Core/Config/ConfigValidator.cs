@@ -269,6 +269,19 @@ public static class ConfigValidator
             issues.Add(ValidationIssue.Error("layout.resize_step_ppt", "must be between 1 and 50"));
         }
 
+        if (layout.WhenMonitorLeaves is { Length: > 0 } leaves
+            && leaves.ToLowerInvariant() is not ("move_windows" or "move-windows" or "move_workspaces" or "move-workspaces" or "leave"))
+        {
+            issues.Add(ValidationIssue.Error(
+                "layout.when_monitor_leaves", $"'{leaves}' is not move_windows, move_workspaces or leave"));
+        }
+
+        if (layout.WhenMonitorReturns is { Length: > 0 } returns
+            && returns.ToLowerInvariant() is not ("restore" or "keep"))
+        {
+            issues.Add(ValidationIssue.Error("layout.when_monitor_returns", $"'{returns}' is not restore or keep"));
+        }
+
         if (layout.DragToTop is { Length: > 0 } drag
             && drag.ToLowerInvariant() is not ("fullscreen" or "float_maximized" or "float-maximized"
                 or "float_fullscreen" or "float-fullscreen" or "none"))

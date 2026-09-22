@@ -209,6 +209,23 @@ public sealed class LayoutConfig
     public bool? UnmaximizeToShare { get; set; }
 
     /// <summary>
+    /// What happens to a monitor's windows when it goes away (sleeps, is
+    /// unplugged): <c>move_windows</c> lends them to the workspace on screen
+    /// of the monitor the person is on, <c>move_workspaces</c> lends the
+    /// whole workspaces to that monitor (put away, reachable by the
+    /// workspace keys), <c>leave</c> only stops hiding them. Live on reload.
+    /// </summary>
+    public string? WhenMonitorLeaves { get; set; }
+
+    /// <summary>
+    /// What happens when it comes back: <c>restore</c> puts every window
+    /// back on the workspace, in the layout and at the rectangle it had when
+    /// the monitor went, whatever was done with it meanwhile; <c>keep</c>
+    /// leaves the windows where they are now. Live on reload.
+    /// </summary>
+    public string? WhenMonitorReturns { get; set; }
+
+    /// <summary>
     /// What dragging a TILED window to the top edge does.
     /// </summary>
     /// <remarks>

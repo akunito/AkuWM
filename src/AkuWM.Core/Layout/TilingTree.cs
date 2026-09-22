@@ -39,6 +39,22 @@ public sealed class TilingTree
     /// <summary>A copy to try a change on. The drag outline asks it where a drop would land.</summary>
     public TilingTree Clone() => new() { Root = Root?.Clone() };
 
+    /// <summary>
+    /// Becomes a saved tree again, less the windows that are gone. What a
+    /// monitor's workspace gets back when the monitor returns.
+    /// </summary>
+    public void Restore(TilingTree saved, Func<WindowHandle, bool> stillThere)
+    {
+        Root = saved.Root?.Clone();
+        foreach (WindowHandle window in Windows.ToList())
+        {
+            if (!stillThere(window))
+            {
+                Remove(window);
+            }
+        }
+    }
+
     public Dictionary<WindowHandle, Rect> Rects(Rect area, Gaps gaps) =>
         TileGeometry.Compute(Root, area, gaps);
 
