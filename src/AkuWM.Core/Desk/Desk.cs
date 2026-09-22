@@ -945,8 +945,15 @@ public sealed partial class Desk
     /// window -- is a fact about the window and does not change while it is
     /// open. These two are facts about the MOMENT it was looked at.
     /// </remarks>
+    // SelfCloaked is temporary too: Zen (Firefox) shows a new window with
+    // DWM_CLOAKED_APP set for its first ~200 ms of paint (measured 2026-09-22
+    // 16:24: visible+cloaked at 661 ms after Ctrl+N, uncloaked at 863 ms), so
+    // every new browser window was refused at exactly that instant and never
+    // asked again -- floating, deaf to toggle-floating, until the daemon
+    // restarted. A window that cloaks itself for the tray comes back the
+    // same way, and that is the moment to take it.
     private static bool Temporary(UnmanagedReason reason) =>
-        reason is UnmanagedReason.CloakedElsewhere or UnmanagedReason.OtherVirtualDesktop;
+        reason is UnmanagedReason.CloakedElsewhere or UnmanagedReason.OtherVirtualDesktop or UnmanagedReason.SelfCloaked;
 
     private void Update(DeskWindow window, WindowSnapshot snapshot)
     {
@@ -1007,6 +1014,7 @@ public sealed partial class Desk
             // moment and stayed unmanaged for ever. Found by tests/wm.
             if (Temporary(window.Reason)
                 && !snapshot.Cloak.HasFlag(CloakKind.Shell)
+                && !snapshot.Cloak.HasFlag(CloakKind.App)
                 && !snapshot.Cloak.HasFlag(CloakKind.InheritedOrOtherDesktop)
                 && snapshot.OnCurrentVirtualDesktop != false)
             {
