@@ -43,12 +43,12 @@ public sealed class CloakLedger
     private readonly Dictionary<long, CloakedWindow> _entries = [];
     private readonly object _gate = new();
 
-    public CloakLedger(string file)
+    public CloakLedger(string file, int? capacity = null)
     {
         // Memory-mapped, not JSON. Measured on the desk: rewriting the file per
         // record cost 0.576 ms, paid once per window hidden and once per window
         // shown -- 9.2 ms for a workspace switch of eight, inside a 5 ms budget.
-        _store = new RecordStore(file);
+        _store = capacity is { } slots ? new RecordStore(file, slots) : new RecordStore(file);
 
         foreach (StoredWindow stored in _store.All())
         {
@@ -72,7 +72,12 @@ public sealed class CloakLedger
     }
 
     /// <summary>Called before the cloak goes on, never after.</summary>
-    public void Record(WindowSnapshot window)
+    /// <returns>
+    /// False when the record did not reach the disk -- the store is broken or
+    /// full -- in which case the cloak must not go on: a record that lives
+    /// only in this process is exactly what the next crash loses.
+    /// </returns>
+    public bool Record(WindowSnapshot window)
     {
         lock (_gate)
         {
@@ -82,8 +87,31 @@ public sealed class CloakLedger
                 window.Title,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
+            if (!_store.Put(new StoredWindow(entry.Handle, entry.Process, entry.Title, entry.At)))
+            {
+                return false;
+            }
+
             _entries[entry.Handle] = entry;
-            _store.Put(new StoredWindow(entry.Handle, entry.Process, entry.Title, entry.At));
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reads the file again: for a ledger that reports what another process
+    /// -- the daemon -- is writing, such as `doctor` and `rescue`.
+    /// </summary>
+    public void Reload()
+    {
+        lock (_gate)
+        {
+            _store.Rescan();
+            _entries.Clear();
+            foreach (StoredWindow stored in _store.All())
+            {
+                _entries[stored.Handle] = new CloakedWindow(
+                    stored.Handle, stored.Process, stored.Title, stored.At);
+            }
         }
     }
 

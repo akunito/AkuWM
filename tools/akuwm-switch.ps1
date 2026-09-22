@@ -7,17 +7,12 @@
     Two window managers cannot run at once, so changing over is one command
     either way.
 
-    THE INVARIANT THIS SCRIPT KEEPS: it never touches the Startup folder. The
-    shortcuts there -- GlazeWM, hyper-desktops, Zebar -- are what Windows runs
-    at logon, and they stay as they are. So whatever this script does, and
-    however badly it goes, restarting the machine brings back the stack that
-    was there before AkuWM existed. Nothing in AkuWM has to work for that to
-    be true, which is the point: it is a property of the machine, not a
-    feature of the program.
-
-    That also means switching to AkuWM does not survive a reboot, and is not
-    meant to. Moving AkuWM into Startup is a deliberate step for a later
-    milestone, once it has earned it.
+    THE INVARIANT THIS SCRIPT KEEPS: it never touches the Startup folder.
+    What runs at logon is decided there by tools\akuwm-autostart.ps1 (AkuWM
+    since 2026-09-21, GlazeWM parked as GlazeWM.lnk.off), and this script only
+    changes the current session, so whatever it does and however badly it
+    goes, a restart comes up on whatever Startup says. GlazeWM is no longer
+    installed on this desk; -To glazewm only works while its binary exists.
 
 .PARAMETER To
     akuwm or glazewm.

@@ -248,6 +248,7 @@ public sealed class DoctorCommand
 
         if (_ledger is { } ledger)
         {
+            ledger.Reload();
             int ours = ledger.Entries.Count;
             checks.Add(new("cloak ledger", ours > 0 ? CheckStatus.Warn : CheckStatus.Ok,
                 ours > 0

@@ -85,8 +85,12 @@ public sealed class WindowManager : IAsyncDisposable
         // It was declared and never assigned, so the F24 route ran regardless.
         Win32Focus.GameInFront = () => _desk.Window(_platform.Foreground()) is { State: WindowState.Fullscreen };
 
-        // A window that has closed is not one AkuWM has to put back.
+        // A window that has closed is not one AkuWM has to put back -- and
+        // not one to keep a cloak record for: Windows reuses the handle, and
+        // the next start would uncloak whatever holds it now if the process
+        // name happens to match.
         _desk.Forgotten += journal.Forget;
+        _desk.Forgotten += ledger.Forget;
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
         _desk.ReadsTheCursorWith(() => _platform.CursorPosition());
 
@@ -106,6 +110,9 @@ public sealed class WindowManager : IAsyncDisposable
 
     /// <summary>Raised when a command asked the window manager to stop.</summary>
     public event Action? ExitRequested;
+
+    /// <summary>Raised once when Windows says the session is ending.</summary>
+    public event Action? SessionEnding;
 
     /// <summary>Whether AkuWM is arranging the desk or only watching it.</summary>
     public bool Managing { get; private set; }
@@ -221,6 +228,17 @@ public sealed class WindowManager : IAsyncDisposable
 
     private void OnEvent(PlatformEvent platformEvent)
     {
+        if (platformEvent.Kind == PlatformEventKind.SessionEnding)
+        {
+            if (!_sessionEnding)
+            {
+                _sessionEnding = true;
+                SessionEnding?.Invoke();
+            }
+
+            return;
+        }
+
         switch (WmEvents.Decide(platformEvent.Kind))
         {
             case EventResponse.ReadTheDesk:
@@ -339,6 +357,7 @@ public sealed class WindowManager : IAsyncDisposable
     }
 
     private Timer? _reassert;
+    private bool _sessionEnding;
 
     /// <summary>Once per burst: look if anything appeared, decide, apply.</summary>
     private void Redraw()

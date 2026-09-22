@@ -98,6 +98,18 @@ public sealed class GlazeIpcServer : IAsyncDisposable
     public const int WaitForThePortMs = 120_000;
     private const int RetryEveryMs = 3_000;
 
+    /// <summary>
+    /// After the first two minutes, how often the port is tried again, for
+    /// ever. A bind attempt costs nothing, and the socket of a manager that
+    /// died can stay bound until a reboot (an exited watcher stuck in kernel
+    /// teardown held it for a whole day on this desk, 2026-09-22); the bar
+    /// must come back the moment it is free, not after somebody notices.
+    /// </summary>
+    private const int RetrySlowlyEveryMs = 30_000;
+
+    /// <summary>Raised on the thread that bound the port, once it is listening.</summary>
+    public event Action? Bound;
+
     public bool Start()
     {
         if (Bind())
@@ -138,18 +150,20 @@ public sealed class GlazeIpcServer : IAsyncDisposable
         Unavailable = null;
         _accepting = Task.Run(AcceptLoop);
         Log.Info($"compatibility server listening on 127.0.0.1:{_port}");
+        Bound?.Invoke();
         return true;
     }
 
     private async Task WaitForThePort()
     {
         DateTime deadline = DateTime.UtcNow.AddMilliseconds(WaitForThePortMs);
+        bool slowly = false;
 
-        while (!_stopping.IsCancellationRequested && DateTime.UtcNow < deadline)
+        while (!_stopping.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(RetryEveryMs, _stopping.Token).ConfigureAwait(false);
+                await Task.Delay(slowly ? RetrySlowlyEveryMs : RetryEveryMs, _stopping.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -161,9 +175,13 @@ public sealed class GlazeIpcServer : IAsyncDisposable
                 Log.Info($"port {_port} came free; the bar and the scripts can reach AkuWM again");
                 return;
             }
-        }
 
-        Log.Warn($"port {_port} was still taken after {WaitForThePortMs / 1000} s; giving up on it");
+            if (!slowly && DateTime.UtcNow >= deadline)
+            {
+                slowly = true;
+                Log.Warn($"port {_port} was still taken after {WaitForThePortMs / 1000} s; trying every {RetrySlowlyEveryMs / 1000} s from now on");
+            }
+        }
     }
 
     private async Task AcceptLoop()

@@ -78,6 +78,7 @@ public static class WmEvents
         PlatformEventKind.SettingsChanged => EventResponse.TheScreensChanged,
         PlatformEventKind.PowerSuspend => EventResponse.Nothing,
         PlatformEventKind.PowerResume => EventResponse.TheScreensChanged,
+        PlatformEventKind.SessionEnding => EventResponse.Nothing,
 
         _ => EventResponse.ReadTheDesk,
     };

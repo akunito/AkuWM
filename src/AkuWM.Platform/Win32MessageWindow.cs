@@ -28,6 +28,8 @@ public sealed class Win32MessageWindow : IDisposable
     private const uint SettingChange = 0x001A;
     private const uint PowerBroadcast = 0x0218;
     private const uint DpiChanged = 0x02E0;
+    private const uint QueryEndSession = 0x0011;
+    private const uint EndSession = 0x0016;
 
     private const uint SuspendResumeAutomatic = 0x0012;
     private const uint Suspend = 0x0004;
@@ -114,8 +116,14 @@ public sealed class Win32MessageWindow : IDisposable
             DisplayChange => PlatformEventKind.DisplayChanged,
             DpiChanged => PlatformEventKind.DisplayChanged,
             SettingChange when (uint)wParam.Value == SpiSetWorkArea => PlatformEventKind.SettingsChanged,
-            PowerBroadcast when (uint)wParam.Value is Suspend or ResumeSuspend => PlatformEventKind.PowerSuspend,
-            PowerBroadcast when (uint)wParam.Value == SuspendResumeAutomatic => PlatformEventKind.PowerResume,
+            PowerBroadcast when (uint)wParam.Value == Suspend => PlatformEventKind.PowerSuspend,
+            // PBT_APMRESUMESUSPEND (7) is a RESUME, the one that follows a
+            // person waking the machine; it was mapped to the suspend side.
+            PowerBroadcast when (uint)wParam.Value is ResumeSuspend or SuspendResumeAutomatic => PlatformEventKind.PowerResume,
+            // Logoff and shutdown: the one notice the process gets before it
+            // is killed, and the exit handlers do not reliably run after it.
+            QueryEndSession => PlatformEventKind.SessionEnding,
+            EndSession when wParam.Value != 0 => PlatformEventKind.SessionEnding,
             _ => null,
         };
 

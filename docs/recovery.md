@@ -7,20 +7,27 @@ when something has gone wrong and reading source code is not an option.
 ## The short version
 
 1. **Double-click "Rescue my desk (AkuWM)" on the Desktop.** It stops AkuWM and
-   gives back every window AkuWM hid or moved.
-2. **If that will not run, restart the machine.** Nothing of AkuWM is in the
-   Startup folder, so Windows comes up on the old stack -- GlazeWM,
-   AutoHotkey, Zebar -- with every window visible.
+   gives back every window AkuWM hid or moved. The shortcut is installed by
+   `tools\install-uiaccess.ps1`; if it is not there, run
+   `akuwm rescue --forgive` from any terminal (`%LOCALAPPDATA%\Programs\AkuWM\akuwm.exe`).
+2. **If that will not run, restart the machine.** Since 2026-09-21 the Startup
+   folder runs `akuwm-boot.ps1`, which starts the daemon and waits for its pipe
+   to answer; if it never does, the script runs the rescue itself, clears the
+   marker the hotkeys read, and leaves the desk usable by hand. GlazeWM is no
+   longer installed, so there is no older stack to come up on.
 
-There is no third step. Neither of the two needs AkuWM to be working.
+Neither step needs AkuWM to be working. A cloak does not survive a logon
+either, so a restart cannot leave anything hidden.
 
-## Why a reboot is always enough
+## What the boot script guarantees
 
-The Startup folder decides what runs at logon, and AkuWM is not in it. That is
-a property of the machine, not a feature of the program: no code of AkuWM's
-has to run correctly, or at all, for a restart to come up on the stack that
-was there before. `tools\akuwm-switch.ps1` switches the desk over for the
-current session and deliberately leaves Startup alone.
+`akuwm-boot.ps1` never trusts that a process exists -- a wedged manager is a
+running one (that cost this desk eight hours once). It waits for the named
+pipe to answer, and only then writes the marker that points the hotkeys at
+AkuWM. On a timeout it kills the daemon, runs `akuwm rescue --forgive` and
+removes the marker. A reboot is also not counted as a bad ending: a run that
+started before the current boot is one the machine ended, not a crash, so two
+reboots in a row can never put the third start into safe mode.
 
 A cloak does not survive a logon either. Cloaking is a property of a live
 window, so logging out and back in cannot leave anything hidden: the windows

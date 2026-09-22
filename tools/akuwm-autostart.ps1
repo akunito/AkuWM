@@ -84,8 +84,12 @@ if ($Shim) {
     }
 }
 
-$pwsh = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
-if (-not $pwsh) { $pwsh = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
+# The app-execution alias, never (Get-Command pwsh).Source: that resolves to
+# the Store package's version-stamped directory, which changes on the next
+# PowerShell update and leaves the shortcut pointing at nothing -- AkuWM
+# would simply stop starting at logon. Windows PowerShell 5.1 otherwise.
+$pwsh = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe'
+if (-not (Test-Path $pwsh)) { $pwsh = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
 
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($lnk)

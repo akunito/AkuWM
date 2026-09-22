@@ -92,6 +92,14 @@ public sealed class DeskApplier
         _journal = journal;
         _taskbar = taskbar;
         _lastResort = lastResort;
+
+        if (ledger.Broken)
+        {
+            // No record can be written, so no window may be hidden: what the
+            // records exist to survive is exactly what would lose it.
+            _proof = Proof.OneWay;
+            Log.Error("the cloak ledger cannot be written; AkuWM will not hide any window this run");
+        }
     }
 
     /// <summary>
@@ -275,7 +283,13 @@ public sealed class DeskApplier
             return; // gone before it could be tried; the next hide proves it
         }
 
-        _ledger.Record(before);
+        if (!_ledger.Record(before))
+        {
+            _proof = Proof.OneWay;
+            Log.Error("the cloak ledger would not take a record; AkuWM will not hide any window this run");
+            return;
+        }
+
         _proof = Proof.OneWay; // until shown otherwise
 
         _actions.SetCloak(handle, true);
@@ -353,11 +367,14 @@ public sealed class DeskApplier
                 continue;
             }
 
-            if (hidden)
+            if (hidden && !_ledger.Record(before))
             {
                 // Written first: a window nobody can see, with no record of
-                // who hid it, is a window that is simply gone.
-                _ledger.Record(before);
+                // who hid it, is a window that is simply gone. No record, no
+                // cloak.
+                refused.Add(handle);
+                Log.Warn($"not hiding {before.ProcessName} \"{before.Title}\": its record could not be written");
+                continue;
             }
 
             string? error = _actions.SetCloak(handle, hidden);

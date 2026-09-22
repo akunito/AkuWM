@@ -166,6 +166,9 @@ public enum PlatformEventKind
     SettingsChanged,
     PowerSuspend,
     PowerResume,
+
+    /// <summary>The session is logging off or the machine shutting down.</summary>
+    SessionEnding,
 }
 
 /// <param name="Kind">What happened.</param>

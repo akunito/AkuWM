@@ -54,6 +54,30 @@ public sealed class Watchdog : IDisposable
     /// <summary>Called from the window-manager loop, once per pass.</summary>
     public void Beat() => Interlocked.Exchange(ref _lastBeat, _clock().ToUnixTimeMilliseconds());
 
+    /// <summary>
+    /// The watchdog's own wait took far longer than asked: the whole process
+    /// was suspended (sleep, hibernation, a debugger), and so was the loop.
+    /// That is not a stall, and the clock is reset rather than believed.
+    /// </summary>
+    /// <remarks>
+    /// The beat is a wall-clock stamp, and every clock this process can read
+    /// keeps running while the machine sleeps. Without this, the first check
+    /// after a resume read the length of the sleep as silence, restored the
+    /// desk to its pre-AkuWM geometry and exited 3 -- on every resume.
+    /// </remarks>
+    /// <returns>True when the wait was forgiven.</returns>
+    public bool ForgiveSuspension(TimeSpan asked, TimeSpan slept)
+    {
+        if (slept - asked < _stallAfter)
+        {
+            return false;
+        }
+
+        Beat();
+        Log.Info($"the process was suspended for {slept.TotalSeconds:F0}s (asked for {asked.TotalSeconds:F0}s); not a stall");
+        return true;
+    }
+
     /// <summary>How long since the last beat.</summary>
     public TimeSpan Silence =>
         TimeSpan.FromMilliseconds(_clock().ToUnixTimeMilliseconds() - Interlocked.Read(ref _lastBeat));
@@ -105,7 +129,9 @@ public sealed class Watchdog : IDisposable
                     return;
                 }
 
+                long before = _clock().ToUnixTimeMilliseconds();
                 _stopping.Token.WaitHandle.WaitOne(interval);
+                ForgiveSuspension(interval, TimeSpan.FromMilliseconds(_clock().ToUnixTimeMilliseconds() - before));
             }
         })
         {

@@ -46,6 +46,7 @@ public readonly record struct StoredWindow(
 public sealed class RecordStore : IDisposable
 {
     private const int Magic = 0x414B5701; // AKW1
+    private const int Version = 1;
     private const int HeaderBytes = 16;
     private const int SlotBytes = 256;
     private const int ProcessChars = 32;
@@ -116,28 +117,34 @@ public sealed class RecordStore : IDisposable
     }
 
     /// <summary>Writes one record. Reuses the window's slot when it has one.</summary>
-    public void Put(in StoredWindow record)
+    /// <returns>
+    /// False when nothing was written -- the store is broken or full -- so
+    /// the caller can refuse the change the record was meant to survive.
+    /// </returns>
+    public bool Put(in StoredWindow record)
     {
         lock (_gate)
         {
             if (_view is null)
             {
-                return;
+                return false;
             }
 
-            if (!_slots.TryGetValue(record.Handle, out int slot))
+            if (!_slots.TryGetValue(record.Handle, out int slot)
+                || _view.ReadInt64(Offset(slot) + HandleOffset) != record.Handle)
             {
                 slot = FreeSlot();
                 if (slot < 0)
                 {
                     Log.Error($"the record store is full ({_capacity}); {record.Process} was not written down");
-                    return;
+                    return false;
                 }
 
                 _slots[record.Handle] = slot;
             }
 
             Write(slot, record);
+            return true;
         }
     }
 
@@ -150,8 +157,42 @@ public sealed class RecordStore : IDisposable
                 return false;
             }
 
-            _view.Write(Offset(slot) + StateOffset, 0);
+            // The slot is zeroed only if it still holds THIS window. Another
+            // mapping of the same file -- `akuwm rescue` beside a live daemon,
+            // the router's own reader -- can have freed the slot and handed it
+            // to a different window since this map was built, and zeroing it
+            // by the stale map erased that window's record while it was
+            // hidden.
+            if (_view.ReadInt64(Offset(slot) + HandleOffset) == handle)
+            {
+                _view.Write(Offset(slot) + StateOffset, 0);
+            }
+
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the slot map from the file, for a mapping that only reads
+    /// what another process writes.
+    /// </summary>
+    public void Rescan()
+    {
+        lock (_gate)
+        {
+            if (_view is null)
+            {
+                return;
+            }
+
+            _slots.Clear();
+            for (int slot = 0; slot < _capacity; slot++)
+            {
+                if (_view.ReadInt32(Offset(slot) + StateOffset) == 1)
+                {
+                    _slots[_view.ReadInt64(Offset(slot) + HandleOffset)] = slot;
+                }
+            }
         }
     }
 
@@ -194,7 +235,7 @@ public sealed class RecordStore : IDisposable
                 Directory.CreateDirectory(directory);
             }
 
-            bool fresh = !File.Exists(_file) || new FileInfo(_file).Length != length;
+            bool fresh = !File.Exists(_file);
 
             // Shared, because the point of these records is that a SECOND
             // process reads them: `akuwm rescue` while the daemon is alive, or
@@ -203,16 +244,28 @@ public sealed class RecordStore : IDisposable
             var stream = new FileStream(
                 _file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
 
+            // A file of another capacity is carried over, not wiped: a rescue
+            // run by the other installed binary after a capacity bump used to
+            // zero the very records it was about to read. The header's own
+            // capacity says how many slots the old layout had; a version other
+            // than this one is a layout this code cannot read, and is fresh.
+            List<StoredWindow>? carried = null;
+            if (!fresh && stream.Length != length && stream.Length >= HeaderBytes)
+            {
+                carried = ReadOldLayout(stream);
+            }
+
             if (stream.Length != length)
             {
                 stream.SetLength(length);
+                fresh = carried is null;
             }
 
             _map = MemoryMappedFile.CreateFromFile(
                 stream, null, length, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: false);
             _view = _map.CreateViewAccessor(0, length, MemoryMappedFileAccess.ReadWrite);
 
-            if (fresh || _view.ReadInt32(0) != Magic)
+            if (carried is not null)
             {
                 for (int slot = 0; slot < _capacity; slot++)
                 {
@@ -220,7 +273,26 @@ public sealed class RecordStore : IDisposable
                 }
 
                 _view.Write(0, Magic);
-                _view.Write(4, 1);
+                _view.Write(4, Version);
+                _view.Write(8, _capacity);
+                foreach (StoredWindow record in carried)
+                {
+                    Put(record);
+                }
+
+                Log.Info($"the record store changed capacity; {carried.Count} record(s) carried over");
+                return;
+            }
+
+            if (fresh || _view.ReadInt32(0) != Magic || _view.ReadInt32(4) != Version || _view.ReadInt32(8) != _capacity)
+            {
+                for (int slot = 0; slot < _capacity; slot++)
+                {
+                    _view.Write(Offset(slot) + StateOffset, 0);
+                }
+
+                _view.Write(0, Magic);
+                _view.Write(4, Version);
                 _view.Write(8, _capacity);
                 return;
             }
@@ -242,6 +314,52 @@ public sealed class RecordStore : IDisposable
             _view = null;
             _map = null;
         }
+    }
+
+    /// <summary>The live records of a file laid out for another capacity.</summary>
+    private static List<StoredWindow>? ReadOldLayout(FileStream stream)
+    {
+        using var old = MemoryMappedFile.CreateFromFile(
+            stream, null, stream.Length, MemoryMappedFileAccess.ReadWrite, HandleInheritability.None, leaveOpen: true);
+        using MemoryMappedViewAccessor view = old.CreateViewAccessor(0, stream.Length, MemoryMappedFileAccess.Read);
+
+        if (view.ReadInt32(0) != Magic || view.ReadInt32(4) != Version)
+        {
+            return null;
+        }
+
+        int capacity = view.ReadInt32(8);
+        if (capacity <= 0 || HeaderBytes + ((long)capacity * SlotBytes) > stream.Length)
+        {
+            return null;
+        }
+
+        var records = new List<StoredWindow>();
+        for (int slot = 0; slot < capacity; slot++)
+        {
+            long at = Offset(slot);
+            if (view.ReadInt32(at + StateOffset) != 1)
+            {
+                continue;
+            }
+
+            byte flags = view.ReadByte(at + FlagsOffset);
+            records.Add(new StoredWindow(
+                view.ReadInt64(at + HandleOffset),
+                ReadText(view, at + ProcessOffset, ProcessChars),
+                ReadText(view, at + TitleOffset, TitleChars),
+                view.ReadInt64(at + AtOffset),
+                new Rect(
+                    view.ReadInt32(at + RectOffset),
+                    view.ReadInt32(at + RectOffset + 4),
+                    view.ReadInt32(at + RectOffset + 8),
+                    view.ReadInt32(at + RectOffset + 12)),
+                (flags & 1) != 0,
+                (flags & 2) != 0,
+                (flags & 4) != 0));
+        }
+
+        return records;
     }
 
     private int FreeSlot()
@@ -312,19 +430,21 @@ public sealed class RecordStore : IDisposable
         }
     }
 
-    private string ReadText(long at, int max)
+    private string ReadText(long at, int max) => ReadText(_view!, at, max);
+
+    private static string ReadText(MemoryMappedViewAccessor view, long at, int max)
     {
-        int length = Math.Min(_view!.ReadChar(at), max - 1);
+        int length = Math.Min(view.ReadChar(at), max - 1);
         if (length <= 0)
         {
             return string.Empty;
         }
 
-        return string.Create(length, (_view, at), static (span, state) =>
+        return string.Create(length, (view, at), static (span, state) =>
         {
             for (int i = 0; i < span.Length; i++)
             {
-                span[i] = state._view.ReadChar(state.at + 2 + (i * 2));
+                span[i] = state.view.ReadChar(state.at + 2 + (i * 2));
             }
         });
     }

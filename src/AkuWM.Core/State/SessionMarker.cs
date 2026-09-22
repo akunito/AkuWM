@@ -32,8 +32,17 @@ public sealed class SessionMarker
     public const int SafeModeAfter = 2;
 
     private readonly string _file;
+    private readonly Func<long> _bootedAt;
 
-    public SessionMarker(string file) => _file = file;
+    /// <param name="bootedAt">
+    /// When the machine came up, in seconds since the epoch. Injected by the
+    /// tests; the real one is now minus the uptime.
+    /// </param>
+    public SessionMarker(string file, Func<long>? bootedAt = null)
+    {
+        _file = file;
+        _bootedAt = bootedAt ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (Environment.TickCount64 / 1000));
+    }
 
     public Session? Previous => AtomicJson.Read<Session>(_file, "the session marker");
 
@@ -41,7 +50,15 @@ public sealed class SessionMarker
     public SessionVerdict Begin()
     {
         Session? previous = Previous;
-        int unclean = previous is null || previous.CleanExit ? 0 : previous.UncleanInARow + 1;
+
+        // A run that started before this boot was ended by the machine going
+        // down, not by anything of its own: a reboot or a logoff kills the
+        // daemon before its exit path can write the marker, and two of those
+        // in a row would have put the third boot in safe mode, managing
+        // nothing. Windows does not run the exit handlers of a hidden console
+        // application at shutdown reliably enough to count on.
+        bool endedByTheMachine = previous is not null && previous.StartedAt < _bootedAt();
+        int unclean = previous is null || previous.CleanExit || endedByTheMachine ? 0 : previous.UncleanInARow + 1;
 
         AtomicJson.Write(
             _file,

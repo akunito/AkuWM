@@ -188,8 +188,11 @@ public static class Program
             TimeSpan.FromSeconds(10),
             () =>
             {
+                // The marker is left UNCLEAN on purpose: a loop that stalls
+                // at every start is exactly the pattern safe mode exists for,
+                // and marking it clean here made safe mode unreachable by the
+                // failure it was designed for.
                 GiveTheDeskBack("the window-manager loop stopped answering");
-                session.End(); // a stall the watchdog handled is not a crash to hold against the next run
                 Environment.Exit(3);
             });
 
@@ -210,17 +213,43 @@ public static class Program
         capture?.Watch(manager.Compat);
 
         var stopping = new ManualResetEventSlim(false);
-        var server = new PipeServer(Router(paths, manager));
+        var server = new PipeServer(Router(paths, manager, ledger));
         server.ExitRequested += () => stopping.Set();
 
         // wm-exit over the bar's socket is the same request as exit over the
         // pipe. It used to set a flag nothing read, so a script that stopped
         // AkuWM that way silently left it running -- two window managers.
         manager.ExitRequested += () => stopping.Set();
+
+        // Logoff or shutdown: Windows kills the process moments after this,
+        // and whether the exit handlers of a hidden console application run
+        // at all is not something to rely on. The marker is written NOW, so a
+        // reboot is not counted as a crash; the windows go with the session.
+        manager.SessionEnding += () =>
+        {
+            Log.Info("the session is ending; this run counts as a clean one");
+            session.End();
+        };
         server.Start();
 
         manager.Start();
         watchdog.Start();
+
+        // The configured startup list, which until now was validated and
+        // never run. Entries `after: "ipc"` wait for the bar's port, which on
+        // this desk can be minutes or a reboot away; the runner skips
+        // anything already running, so the Startup folder's own shortcuts
+        // and this list do not start a program twice.
+        var startup = new StartupRunner(loaded.Effective.Startup);
+        startup.Run("now");
+        if (manager.Compat.Listening)
+        {
+            startup.Run("ipc");
+        }
+        else
+        {
+            manager.Compat.Bound += () => startup.Run("ipc");
+        }
 
         // Proof rather than a promise: `akuwm daemon --stall-test 30` wedges
         // the loop on purpose, so the watchdog can be watched doing its job on
@@ -331,13 +360,17 @@ public static class Program
             : null;
     }
 
-    private static CommandRouter Router(ConfigPaths paths, WindowManager? manager = null)
+    private static CommandRouter Router(ConfigPaths paths, WindowManager? manager = null, CloakLedger? live = null)
     {
         var windows = new WindowsPlatform();
         IPlatform platform = windows;
         var query = new QueryCommands(platform, paths);
         query.ReadsVirtualDesktopWith(windows.VirtualDesktopOf);
-        var ledger = new CloakLedger(paths.CloakLedgerFile);
+
+        // In the daemon, the ledger the applier writes; a second mapping of
+        // the same file answered `doctor` with the snapshot it took at
+        // startup, "empty" however many windows were hidden.
+        CloakLedger ledger = live ?? new CloakLedger(paths.CloakLedgerFile);
 
         return new CommandRouter(
             new ConfigCommands(paths),
@@ -392,6 +425,37 @@ public static class Program
                       + $"{manager.Compat.Connections} client(s) connected"
                     : manager.Compat.Unavailable
                       ?? "not listening: the bar and the scripts cannot reach AkuWM"),
+        () =>
+        {
+            const int port = AkuWM.Core.Compat.GlazeProtocol.Port;
+            int? owner = Win32Ports.ListenerOf(port);
+            if (owner is null)
+            {
+                return new Check($"port {port} owner", CheckStatus.Info, "nobody is listening");
+            }
+
+            if (owner == Environment.ProcessId)
+            {
+                return new Check($"port {port} owner", CheckStatus.Ok, "this process");
+            }
+
+            try
+            {
+                using var process = System.Diagnostics.Process.GetProcessById(owner.Value);
+                return new Check(
+                    $"port {port} owner",
+                    CheckStatus.Warn,
+                    $"pid {owner} ({process.ProcessName}): stop it so the bar and the scripts can reach AkuWM");
+            }
+            catch (ArgumentException)
+            {
+                return new Check(
+                    $"port {port} owner",
+                    CheckStatus.Fail,
+                    $"pid {owner}, which no longer exists: an orphaned socket that nothing in user space frees. "
+                    + "AkuWM keeps trying the port; a reboot is what frees it.");
+            }
+        },
         () =>
         {
             bool granted = Win32Token.HasUiAccess();
