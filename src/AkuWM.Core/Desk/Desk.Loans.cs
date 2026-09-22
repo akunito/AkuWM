@@ -202,6 +202,9 @@ public sealed partial class Desk
                             rect, away.TilingArea, host.TilingArea, Across(window.State == WindowState.Tiling, dragged: false));
                     }
 
+                    // A change of screen: Windows rescales the window for the
+                    // new DPI a beat later, and that is not the person's size.
+                    window.CrossedAt = Now;
                     Place(window, hostWorkspace);
                 }
             }
@@ -217,6 +220,7 @@ public sealed partial class Desk
                     window.FloatingRect = AcrossMonitors.Map(r, away.TilingArea, host.TilingArea, Across(false, dragged: false));
                 }
 
+                window.CrossedAt = Now;
                 MakeSticky(window, host);
             }
         }
@@ -264,6 +268,7 @@ public sealed partial class Desk
                     window.FloatingRect = restore
                         ? floating ?? now
                         : host is null ? now : AcrossMonitors.Map(now, host.TilingArea, back.TilingArea, Across(false, dragged: false));
+                    window.CrossedAt = Now;
                 }
             }
 
@@ -295,6 +300,7 @@ public sealed partial class Desk
                     window.State = state;
                     window.PreviousState = previous;
                     window.FloatingRect = floating;
+                    window.CrossedAt = Now; // back across the seam: the DPI rescale that follows is not a resize
                 }
 
                 home.Tiling.Restore(item.Tree, h => Window(h) is { Managed: true } w && string.Equals(w.Workspace, home.Name, StringComparison.OrdinalIgnoreCase));
@@ -338,6 +344,7 @@ public sealed partial class Desk
                 window.FloatingRect = AcrossMonitors.Map(now, host.TilingArea, back.TilingArea, Across(false, dragged: false));
             }
 
+            window.CrossedAt = Now;
             MakeSticky(window, back);
         }
 

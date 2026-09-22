@@ -124,6 +124,30 @@ public class MonitorAwayTests
     }
 
     [Fact]
+    public void The_dpi_rescale_that_follows_the_return_is_undone_and_the_size_stands()
+    {
+        DeskFixture f = ArrangedOnBoth("move_windows", "restore");
+        f.Wait(5000);
+        Rect floating4 = f.Managed(4)!.FloatingRect!.Value;
+        Rect sticky5 = f.Managed(5)!.FloatingRect!.Value;
+        SecondGoesAway(f);
+        SecondComesBack(f);
+
+        // 140 ms later Windows scales both for the 125 % screen (live: 645x481
+        // came back as 581x400, 2026-09-22 14:59).
+        f.Wait(140);
+        f.Platform.ApplicationMoves(W(4), floating4 with { Width = floating4.Width * 5 / 6, Height = floating4.Height * 5 / 6 });
+        f.Platform.ApplicationMoves(W(5), sticky5 with { Width = sticky5.Width * 5 / 6, Height = sticky5.Height * 5 / 6 });
+        f.Sync();
+        f.Turn();
+        f.Wait(Desk.SettleMs + 1);
+        f.Turn();
+
+        Assert.Equal(floating4, f.FrameOf(4));
+        Assert.Equal(sticky5, f.FrameOf(5));
+    }
+
+    [Fact]
     public void Keep_leaves_the_windows_where_they_are_now()
     {
         DeskFixture f = ArrangedOnBoth("move_windows", "keep");
