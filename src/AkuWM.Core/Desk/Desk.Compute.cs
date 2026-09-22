@@ -40,6 +40,7 @@ public sealed partial class Desk
         var show = new List<WindowHandle>();
         var restore = new List<WindowHandle>();
         var unmaximize = new List<WindowHandle>();
+        var remaximize = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
         var behind = new List<(WindowHandle, WindowHandle)>();
         var raise = new List<WindowHandle>();
@@ -159,7 +160,11 @@ public sealed partial class Desk
                     // cover the monitor's bounds was refused on every desk
                     // with a bar (Zen on the vertical monitor, 35 px short,
                     // "will not go to", 2026-09-22).
-                    if (!covering.Snapshot.IsMaximized)
+                    if (covering.Snapshot.IsMaximized)
+                    {
+                        WantRemaximized(covering, monitor, remaximize);
+                    }
+                    else if (!RemaximizePending(covering))
                     {
                         WantPlaced(covering, monitor.FullArea, monitor, place);
                     }
@@ -367,6 +372,7 @@ public sealed partial class Desk
             Show = show,
             Restore = restore,
             Unmaximize = unmaximize,
+            Remaximize = remaximize,
             Band = band,
             Behind = behind,
             Raise = raise,
@@ -466,7 +472,12 @@ public sealed partial class Desk
     /// </remarks>
     public void Redecorate(WindowHandle handle)
     {
-        if (Window(handle) is { Managed: true } window)
+        // Never a fullscreen window: there is nothing to re-assert on it,
+        // and the forced re-send was three DWM attribute calls on the game
+        // after every focus change -- the calls the fullscreen rule exists
+        // to keep off a game (fliptest, 23:30, "decorate ... (forced)" at
+        // 0.3, 1.2 and 3 s after each restore).
+        if (Window(handle) is { Managed: true } window && window.State != WindowState.Fullscreen)
         {
             // The refusal is kept: it is what the outline (AkuWM's own
             // border) is drawn on, and clearing it for the 300 ms between
@@ -615,6 +626,24 @@ public sealed partial class Desk
 
         into.Add(window.Handle);
     }
+
+    /// <summary>
+    /// A maximised window covers its work area, overhanging by the frame. One
+    /// that does not is maximised where AkuWM's own placement left it
+    /// (Redraw.Remaximize); asked once, with patience, to maximise again.
+    /// </summary>
+    private void WantRemaximized(DeskWindow window, DeskMonitor monitor, List<WindowHandle> into)
+    {
+        if (window.Snapshot.FrameBounds.Contains(monitor.TilingArea) || RemaximizePending(window))
+        {
+            return;
+        }
+
+        into.Add(window.Handle);
+    }
+
+    private bool RemaximizePending(DeskWindow window) =>
+        window.RemaximizeAskedAt is { } asked && Now - asked < PlacementPatienceMs;
 
     private void WantPlaced(DeskWindow window, Rect frame, DeskMonitor monitor, List<Placement> into)
     {
@@ -1063,6 +1092,15 @@ public sealed partial class Desk
             if (Window(handle) is { } window)
             {
                 window.UnmaximizeAskedAt = Now;
+            }
+        }
+
+        foreach (WindowHandle handle in redraw.Remaximize)
+        {
+            if (Window(handle) is { } window)
+            {
+                window.RemaximizeAskedAt = Now;
+                window.Placed = null;
             }
         }
 

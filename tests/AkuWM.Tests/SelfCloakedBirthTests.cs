@@ -47,6 +47,32 @@ public class SelfCloakedBirthTests
         Assert.Contains(f.Turn().Place, p => p.Window == new WindowHandle(2));
     }
 
+    /// <summary>
+    /// The shell says "not on this virtual desktop" for a window it has not
+    /// registered yet; refused for that, a window born maximised (no move
+    /// event ever follows) stayed out of the desk for 40 s (tests/fullscreen
+    /// startmax, 2026-09-22 22:58). Any reason that can pass is re-read.
+    /// </summary>
+    [Fact]
+    public void A_window_born_off_the_virtual_desktop_is_re_read_on_the_clock_too()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Turn();
+        f.Platform.WindowList.Add(FakePlatform.Window(2, "fliptest", className: "FlipTestWnd", title: "fliptest", maximized: true, onCurrentDesktop: false));
+        f.Sync();
+        Assert.False(f.Managed(2)!.Managed);
+
+        var born = new List<WindowHandle>();
+        Assert.Equal(1, f.Desk.BirthCloaked(born));
+        Assert.Equal([new WindowHandle(2)], born);
+
+        f.Platform.WindowList[^1] = FakePlatform.Window(2, "fliptest", className: "FlipTestWnd", title: "fliptest", maximized: true);
+        f.Desk.Observe(f.Platform.WindowList[^1]);
+        Assert.True(f.Managed(2)!.Managed);
+        Assert.Equal(WindowState.Fullscreen, f.Desk.Window(new WindowHandle(2))!.State);
+    }
+
     private static WindowHandle W(long handle) => new(handle);
 
     [Fact]

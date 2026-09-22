@@ -147,6 +147,14 @@ public sealed class DeskApplier
             _actions.SetMaximized(redraw.Unmaximize[i], false);
         }
 
+        // Down and up again: SW_MAXIMIZE on a window that is already zoomed
+        // re-places nothing (measured 2026-09-22 23:16).
+        for (int i = 0; i < redraw.Remaximize.Count; i++)
+        {
+            _actions.SetMaximized(redraw.Remaximize[i], false);
+            _actions.SetMaximized(redraw.Remaximize[i], true);
+        }
+
         // Which window, which rectangle: the count alone could not say whose
         // placement a storm was made of.
         if (Log.DebugOn)
@@ -170,6 +178,14 @@ public sealed class DeskApplier
             for (int i = 0; i < redraw.Lower.Count; i++)
             {
                 Log.Debug($"  lower {redraw.Lower[i]} behind the tiles");
+            }
+
+            // Which window, and whether it is the re-assert: "1 to decorate"
+            // on every redraw of an evening said nothing about whose.
+            for (int i = 0; i < redraw.Decorate.Count; i++)
+            {
+                (WindowHandle window, Decoration how) = redraw.Decorate[i];
+                Log.Debug($"  decorate {window} {Look(window)?.ProcessName} {how}{(redraw.Forced.Contains(window) ? " (forced)" : string.Empty)}");
             }
         }
 

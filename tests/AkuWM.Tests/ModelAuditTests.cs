@@ -986,4 +986,32 @@ public class ForcedRedecorationTests
         Assert.False(fixture.Managed(1)!.RedecorateAsked);
         Assert.Empty(fixture.Turn().Forced);
     }
+
+    /// <summary>
+    /// The re-assert after a focus change was three forced DWM attribute
+    /// calls on a fullscreen window -- the calls the fullscreen rule keeps
+    /// off a game (fliptest, 2026-09-22 23:30).
+    /// </summary>
+    [Fact]
+    public void A_fullscreen_window_is_not_redecorated()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "none", Corners = "square" };
+        var fixture = new DeskFixture(config);
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Foreground(1);
+        fixture.Turn();
+        Assert.True(fixture.Desk.SetFullscreen(W(1), true));
+        fixture.Turn();
+        fixture.Turn();
+        fixture.Platform.Calls.Clear();
+
+        fixture.Desk.Redecorate(W(1));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Empty(redraw.Forced);
+        Assert.DoesNotContain(redraw.Decorate, d => d.Item1 == W(1));
+        Assert.DoesNotContain(fixture.Platform.Calls, c => c.StartsWith("decorate", StringComparison.Ordinal) && c.Contains(" 1 "));
+    }
 }

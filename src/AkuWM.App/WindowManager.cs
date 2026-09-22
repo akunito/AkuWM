@@ -294,6 +294,18 @@ public sealed class WindowManager : IAsyncDisposable
                 break;
 
             case EventResponse.TheFocusMoved:
+                // A window nobody has seen taking the foreground is a birth
+                // whose show event was gated out; a window born maximised
+                // never moves afterwards, so this was its last event and the
+                // desk never had it (fliptest startmax, absent from the query
+                // for its whole 7 s while a fresh enumeration listed it as
+                // manageable, 2026-09-22 23:07). Foreground changes are rare:
+                // the three cheap calls are affordable here.
+                if (_desk.Window(platformEvent.Handle) is null && Win32Windows.CouldBeManaged(platformEvent.Handle))
+                {
+                    _resync = true;
+                }
+
                 // Dirty either way: a focus change moves nothing, and the bar
                 // still has to be told. Desk.Focus has already asked for the
                 // keyboard back when it refused.

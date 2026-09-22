@@ -176,6 +176,12 @@ public sealed class DeskFixture
             Platform.SetMaximized(handle, false);
         }
 
+        foreach (WindowHandle handle in redraw.Remaximize)
+        {
+            Platform.SetMaximized(handle, false);
+            Platform.SetMaximized(handle, true);
+        }
+
         Platform.Place(redraw.Place);
 
         foreach (WindowHandle handle in redraw.Hide)

@@ -798,6 +798,7 @@ public sealed partial class Desk
     /// <summary>Decides a window again, now that the reason it was refused is gone.</summary>
     private void Reconsider(DeskWindow window, WindowSnapshot snapshot)
     {
+        UnmanagedReason was = window.Reason;
         ManagedWindow decision = Decide(snapshot);
 
         window.Managed = decision.Managed;
@@ -817,7 +818,7 @@ public sealed partial class Desk
         window.PreviousState = decision.State == WindowState.Fullscreen ? WindowState.Tiling : decision.State;
         window.Sticky = false;
 
-        Log.Info($"adopting {snapshot.ProcessName} \"{snapshot.Title}\" now that it is no longer cloaked");
+        Log.Info($"adopting {snapshot.ProcessName} \"{snapshot.Title}\" now that it is no longer {was}");
 
         if (TargetWorkspace(decision, snapshot) is { } workspace)
         {
@@ -860,6 +861,10 @@ public sealed partial class Desk
 
         if (!window.Managed)
         {
+            // Every refusal, with why: a window absent from the query for 40 s
+            // could not be told from a birth never seen (tests/fullscreen
+            // startmax, 2026-09-22 22:58).
+            Log.Debug(() => $"  refused {snapshot.Handle} {snapshot.ProcessName} \"{snapshot.Title}\": {window.Reason}{(window.ReasonDetail is { } d ? " " + d : string.Empty)} cloak={snapshot.Cloak} onDesktop={snapshot.OnCurrentVirtualDesktop}");
             return window;
         }
 
@@ -1376,8 +1381,12 @@ public sealed partial class Desk
         }
         else if (!coversTheScreen && window.State == WindowState.Fullscreen
                  && was.FrameBounds != snapshot.FrameBounds
-                 && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
+                 && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true
+                 && !RemaximizePending(window))
         {
+            // Nor while AkuWM has just asked it to maximise again: the
+            // un-maximised rectangle on the way is the transition, not the
+            // window leaving fullscreen (Redraw.Remaximize).
             // Only when it is somewhere AkuWM did not put it. A console asked
             // to cover the screen lands a character cell short, which is
             // within the slack and not the window leaving fullscreen.
@@ -1438,14 +1447,20 @@ public sealed partial class Desk
     /// </summary>
     public const int BirthCloakMs = 5000;
 
-    /// <summary>The handles of windows refused as self-cloaked less than <see cref="BirthCloakMs"/> ago.</summary>
+    /// <summary>
+    /// The handles of windows refused for a reason that can pass
+    /// (<see cref="Temporary"/>) less than <see cref="BirthCloakMs"/> ago.
+    /// Not only self-cloaked: the shell answers "not on this virtual desktop"
+    /// for a window it has not registered yet, and that refusal was never
+    /// looked at again either.
+    /// </summary>
     public int BirthCloaked(List<WindowHandle> into)
     {
         int count = 0;
         long now = Now;
         foreach (DeskWindow window in _windows.Values)
         {
-            if (!window.Managed && window.Reason == UnmanagedReason.SelfCloaked && now - window.AdoptedAt < BirthCloakMs)
+            if (!window.Managed && Temporary(window.Reason) && now - window.AdoptedAt < BirthCloakMs)
             {
                 into.Add(window.Handle);
                 count++;

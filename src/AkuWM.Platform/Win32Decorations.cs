@@ -177,7 +177,15 @@ internal static class Win32Decorations
                 return false;
             }
 
-            style = original;
+            // Only the caption bits from the saved style, on the style the
+            // window has NOW. Writing the saved dword back carried its
+            // WS_MINIMIZE / WS_MAXIMIZE bits from a moment ago: a maximised
+            // fliptest minimised and restored came back iconic at
+            // -10,-10 3860x2180 -- IsIconic true, IsZoomed false, for good --
+            // because the restore's decoration wrote the style saved while
+            // it was minimised (measured 2026-09-22 23:25; tests/fullscreen
+            // 8-startmax steps 2-5 "state=minimized" since 22:19).
+            style |= original & WsCaption;
         }
         else
         {

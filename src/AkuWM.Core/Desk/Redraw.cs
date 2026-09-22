@@ -55,6 +55,18 @@ public sealed record Redraw
     /// </summary>
     public IReadOnlyList<WindowHandle> Unmaximize { get; init; } = [];
 
+    /// <summary>
+    /// Maximised windows to un-maximise and maximise again, because they are
+    /// maximised somewhere a maximised window cannot be: a SetWindowPos of
+    /// AkuWM's that landed after the window maximised itself (a window
+    /// created WS_MAXIMIZE shows itself un-maximised first, is read and
+    /// tiled, and maximises 90 ms later; the batch that tiled it took 145
+    /// ms). The window keeps IsZoomed and the tile's rectangle, and
+    /// SW_MAXIMIZE alone on a zoomed window re-places nothing (measured
+    /// 2026-09-22 23:16; tests/fullscreen 8-startmax).
+    /// </summary>
+    public IReadOnlyList<WindowHandle> Remaximize { get; init; } = [];
+
     /// <summary>Windows entering or leaving the always-on-top band.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
@@ -115,7 +127,7 @@ public sealed record Redraw
     public bool Unfocus { get; init; }
 
     public bool IsNothing =>
-        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0 && Unmaximize.Count == 0
+        Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0 && Unmaximize.Count == 0 && Remaximize.Count == 0
         && Band.Count == 0 && Behind.Count == 0 && Raise.Count == 0 && Lower.Count == 0 && Outline.Count == 0
         && TaskbarMark.Count == 0 && Decorate.Count == 0
         && TaskbarButton.Count == 0 && Focus.IsNone && !Unfocus;
@@ -123,7 +135,7 @@ public sealed record Redraw
     public override string ToString() =>
         IsNothing
             ? "nothing to do"
-            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, {Unmaximize.Count} to unmaximize, "
+            : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, {Unmaximize.Count} to unmaximize, {Remaximize.Count} to remaximize, "
               + $"{Band.Count} to reband, {Behind.Count} behind a game, {Raise.Count} to raise, {Lower.Count} to lower, {Outline.Count} to outline, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
               + (Focus.IsNone ? string.Empty : $", focus {Focus}")
               + (Unfocus ? ", unfocus" : string.Empty);

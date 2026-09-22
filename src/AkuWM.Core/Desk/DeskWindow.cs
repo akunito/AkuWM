@@ -88,6 +88,13 @@ public sealed class DeskWindow
     /// </summary>
     public long? UnmaximizeAskedAt { get; set; }
 
+    /// <summary>
+    /// When AkuWM last asked Windows to maximise it again (Redraw.Remaximize),
+    /// so the un-maximised rectangle seen on the way is not read as the
+    /// window leaving fullscreen.
+    /// </summary>
+    public long? RemaximizeAskedAt { get; set; }
+
     /// <summary>When that was, in milliseconds, so a move that never lands is noticed.</summary>
     public long PlacedAt { get; set; }
 

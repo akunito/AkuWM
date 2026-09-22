@@ -59,6 +59,11 @@ public static class Win32Position
         foreach (Placement placement in placements)
         {
             var hwnd = new HWND((IntPtr)placement.Window.Value);
+            if (MaximisedSinceRead(hwnd, placement))
+            {
+                continue;
+            }
+
             Rect target = WithBorder(hwnd, placement);
 
             batch = PInvoke.DeferWindowPos(
@@ -112,6 +117,29 @@ public static class Win32Position
     public static int PlaceEachAsync(IReadOnlyList<Placement> placements, bool activate = false) =>
         PlaceOneByOne(placements, Flags(activate));
 
+    /// <summary>
+    /// A window that maximised itself between the model reading it and this
+    /// call is Windows' to place, and is left alone. Contrary to the note in
+    /// Compute (Zen ignored a move while maximised), a plain window takes the
+    /// SetWindowPos: fliptest, created WS_MAXIMIZE | WS_VISIBLE, showed itself
+    /// un-maximised, was read and tiled, maximised, and then took the tile's
+    /// rectangle while still zoomed -- 1290x2127 in the tile, IsZoomed true,
+    /// and SW_MAXIMIZE on a zoomed window re-places nothing (measured
+    /// 2026-09-22 23:16; tests/fullscreen 8-startmax steps 1-3). One
+    /// IsZoomed per placement, and the model's own un-maximise runs before
+    /// the placements, so a tile AkuWM restores is not zoomed here.
+    /// </summary>
+    private static bool MaximisedSinceRead(HWND hwnd, Placement placement)
+    {
+        if (!PInvoke.IsZoomed(hwnd))
+        {
+            return false;
+        }
+
+        Log.Debug(() => $"  {placement.Window} maximised itself since it was read; not moved to {placement.Frame}");
+        return true;
+    }
+
     private static SET_WINDOW_POS_FLAGS Flags(bool activate)
     {
         SET_WINDOW_POS_FLAGS flags =
@@ -128,6 +156,11 @@ public static class Win32Position
         foreach (Placement placement in placements)
         {
             var hwnd = new HWND((IntPtr)placement.Window.Value);
+            if (MaximisedSinceRead(hwnd, placement))
+            {
+                continue;
+            }
+
             Rect target = WithBorder(hwnd, placement);
 
             // Asynchronous here, where it is allowed: a window whose

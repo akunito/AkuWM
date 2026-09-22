@@ -56,10 +56,19 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
             return null;
         }
 
-        // Only a window nobody has enumerated yet costs the call.
-        if (_onThisDesktop.TryGetValue(handle, out bool known))
+        // Only a window nobody has enumerated yet costs the call -- and one
+        // the shell said was NOT here. The shell answers "not on this
+        // virtual desktop" for a window it has not registered yet, and that
+        // answer, cached from the enumeration that saw the birth, made every
+        // re-read of the window (the birth clock, its own events) refuse it
+        // again until the next full enumeration: fliptest, refused
+        // OtherVirtualDesktop with cloak=None, unmanaged for its whole life
+        // (tests/fullscreen cases 3-4, 2026-09-22 23:31). A window really on
+        // another desktop is cloaked and quiet; re-asking on its rare events
+        // is one COM call each.
+        if (_onThisDesktop.TryGetValue(handle, out bool known) && known)
         {
-            return window with { OnCurrentVirtualDesktop = known };
+            return window with { OnCurrentVirtualDesktop = true };
         }
 
         return WithDesktop(window);
