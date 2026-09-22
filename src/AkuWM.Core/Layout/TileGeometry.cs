@@ -71,7 +71,19 @@ public static class TileGeometry
         bool horizontal = tile.Direction == SplitDirection.Horizontal;
         int count = tile.Children.Count;
         int span = horizontal ? rect.Width : rect.Height;
-        int extent = Math.Max(count, span - (gaps.Inner * (count - 1)));
+
+        // A tile too narrow for its children AND the gaps between them drops
+        // the gaps: the positions still added the gap per child, so the
+        // children of a 10 px tile with a 12 px gap sat at 0, 13 and 26 --
+        // every one of them outside it. Sixteen windows on the portrait
+        // monitor reach this.
+        int gap = gaps.Inner;
+        if (span - (gap * (count - 1)) < count)
+        {
+            gap = Math.Max(0, (span - count) / Math.Max(1, count - 1));
+        }
+
+        int extent = Math.Max(count, span - (gap * (count - 1)));
         int start = horizontal ? rect.X : rect.Y;
 
         double accumulated = 0;
@@ -92,7 +104,7 @@ public static class TileGeometry
             int edge = i == count - 1 ? extent : (int)Math.Round(accumulated * extent);
             edge = Math.Clamp(edge, previousEdge + 1, extent - remaining);
 
-            int position = start + previousEdge + (i * gaps.Inner);
+            int position = start + previousEdge + (i * gap);
             int size = edge - previousEdge;
 
             Place(

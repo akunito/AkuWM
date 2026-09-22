@@ -562,9 +562,26 @@ public sealed partial class Desk
         // or the gap between two. An outline drawn over the whole work area
         // there would promise something that is not going to happen, which is
         // the exact complaint this whole gesture was rebuilt to answer.
-        if (target.NextTo.IsNone && workspace.Tiling.Windows.Any(w => w != handle))
+        if (target.NextTo == handle || (target.NextTo.IsNone && workspace.Tiling.Windows.Any(w => w != handle)))
         {
             return null;
+        }
+
+        // The rectangle the DROP will produce, from a copy of the tree with
+        // the drop made on it. Half of the target tile was the outline before,
+        // and it was not what the window got: a drop beside a tile whose
+        // parent already splits that way joins the row as a sibling and takes
+        // a third of it, not half of one tile. The plan recorded outline
+        // `2568,42 636x2118` against a landing at 1284 as a success.
+        if (!target.NextTo.IsNone)
+        {
+            TilingTree trial = workspace.Tiling.Clone();
+            trial.Remove(handle);
+            trial.Add(handle, target.NextTo, target.Direction, target.Before);
+            if (trial.Rects(monitor.TilingArea, GapsFor(monitor)).TryGetValue(handle, out Rect landing))
+            {
+                target = target with { Preview = landing };
+            }
         }
 
         return target;

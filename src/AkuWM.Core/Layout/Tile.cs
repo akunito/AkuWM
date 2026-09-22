@@ -161,6 +161,18 @@ public sealed class Tile
 
     public int IndexInParent => Parent?._children.IndexOf(this) ?? -1;
 
+    /// <summary>A deep copy, for asking "what if" without touching the layout.</summary>
+    public Tile Clone()
+    {
+        if (IsLeaf)
+        {
+            return new Tile(Window) { Share = Share };
+        }
+
+        var copy = new Tile(Direction, _children.Select(c => c.Clone())) { Share = Share };
+        return copy;
+    }
+
     // ---- changing the tree ------------------------------------------------
     // Every one of these keeps two things true: a split always has at least
     // two children, and the shares of a split always sum to one. A tree that

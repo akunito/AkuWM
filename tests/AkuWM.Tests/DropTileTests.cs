@@ -127,7 +127,14 @@ public class DropTileTests
         Assert.NotNull(preview);
         Assert.Equal(DeskFixture.W(1), preview!.Value.NextTo);
         Assert.True(preview.Value.Before);
-        Assert.Equal(first.Width / 2, preview.Value.Preview.Width);
+
+        // Beside a tile in a row of two, the window joins the row: a third of
+        // it, and that is what the outline shows. It used to show half of the
+        // tile, which is not a rectangle any window was going to get.
+        fixture.Desk.DropTile(DeskFixture.W(3), first.X + (first.Width / 4), first.Y + (first.Height / 2));
+        fixture.Turn();
+        fixture.Turn();
+        Assert.Equal(fixture.FrameOf(3), preview.Value.Preview);
     }
 
     [Fact]

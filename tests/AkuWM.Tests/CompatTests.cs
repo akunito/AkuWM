@@ -96,7 +96,11 @@ public class CompatTests
 
         JsonNode? target = result.Data?["dropTarget"];
         Assert.NotNull(target);
-        Assert.Equal(first.Width / 2, target!["width"]!.GetValue<int>());
+
+        // Window 3 leaves its column and rejoins the same row of three on the
+        // other side of 1: the rectangle the drop produces is a column of the
+        // same width, not half of window 1's tile.
+        Assert.Equal(first.Width, target!["width"]!.GetValue<int>());
         Assert.True(target["before"]!.GetValue<bool>());
         Assert.Equal("horizontal", target["direction"]!.GetValue<string>());
     }

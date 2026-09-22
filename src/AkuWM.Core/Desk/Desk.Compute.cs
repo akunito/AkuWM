@@ -95,7 +95,7 @@ public sealed partial class Desk
                     }
 
                     WantHidden(window, false, hide, show);
-                    WantPlaced(window, rect, place);
+                    WantPlaced(window, rect, monitor, place);
                     WantBanded(window, false, band);
                     WantBehind(window, fullscreen, behind);
                     WantMarked(window, false, mark);
@@ -109,7 +109,7 @@ public sealed partial class Desk
                     }
 
                     WantHidden(window, false, hide, show);
-                    WantPlaced(window, FloatingRectOf(window, monitor), place);
+                    WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
 
                     // A fullscreen window on this workspace takes everything
                     // else out of the always-on-top band: a window that is up
@@ -124,7 +124,7 @@ public sealed partial class Desk
                 if (!fullscreen.IsNone && Live(fullscreen) is { } covering)
                 {
                     WantHidden(covering, false, hide, show);
-                    WantPlaced(covering, monitor.FullArea, place);
+                    WantPlaced(covering, monitor.FullArea, monitor, place);
 
                     // The band is NOT touched, either way. A window that
                     // covers the screen owns it by being the foreground window
@@ -164,7 +164,7 @@ public sealed partial class Desk
                 }
 
                 WantHidden(window, false, hide, show);
-                WantPlaced(window, FloatingRectOf(window, monitor), place);
+                WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
                 WantBanded(window, !covered, band);
                 WantBehind(window, covered ? displayed!.Fullscreen : WindowHandle.None, behind);
 
@@ -394,7 +394,7 @@ public sealed partial class Desk
     /// </remarks>
     public const int PlacementSlack = 32;
 
-    private void WantPlaced(DeskWindow window, Rect frame, List<Placement> into)
+    private void WantPlaced(DeskWindow window, Rect frame, DeskMonitor monitor, List<Placement> into)
     {
         // Where it should be: the patience clock restarts, so a drag an hour
         // from now is a fresh request rather than a refusal that never was.
@@ -465,8 +465,19 @@ public sealed partial class Desk
         // The border travels with it: the model read both rectangles when the
         // window last changed, and the platform would otherwise ask Windows
         // for them again -- a GetWindowRect and a DWM round trip per window,
-        // inside the batch, on every redraw.
-        into.Add(new Placement(window.Handle, frame, window.Snapshot.BorderDelta));
+        // inside the batch, on every redraw. Not across a change of scale,
+        // and not from a maximised window: the invisible border is 9 px at
+        // 150 % and ~6 at 100 %, and a maximised window's outer rectangle
+        // overhangs on every side, so a delta read there is wrong here and
+        // the 32 px slack then accepted the miss for good.
+        (int Top, int Right, int Bottom, int Left)? border =
+            window.Snapshot.IsMaximized
+            || (MonitorByHandle(window.Snapshot.Monitor) is { } was
+                && was.Snapshot.ScaleFactor != monitor.Snapshot.ScaleFactor)
+                ? null
+                : window.Snapshot.BorderDelta;
+
+        into.Add(new Placement(window.Handle, frame, border));
     }
 
     private bool _saidItCannotHide;

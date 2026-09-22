@@ -36,6 +36,9 @@ public sealed class TilingTree
 
     public bool Contains(WindowHandle window) => Root?.Find(window) is not null;
 
+    /// <summary>A copy to try a change on. The drag outline asks it where a drop would land.</summary>
+    public TilingTree Clone() => new() { Root = Root?.Clone() };
+
     public Dictionary<WindowHandle, Rect> Rects(Rect area, Gaps gaps) =>
         TileGeometry.Compute(Root, area, gaps);
 
@@ -338,10 +341,14 @@ public sealed class TilingTree
                 Tile other = parent.Children[neighbourAt];
 
                 // Neither side may be squeezed out of existence, whichever way
-                // the edge is travelling.
+                // the edge is travelling -- and never past zero: a neighbour
+                // already under the minimum (a third window inserted into a
+                // 95/5 pair takes a third of each) turned "wider" into
+                // narrower, because the room to give was negative and was
+                // given anyway.
                 double give = by > 0
-                    ? Math.Min(by, other.Share - MinimumShare)
-                    : Math.Max(by, MinimumShare - node.Share);
+                    ? Math.Clamp(by, 0, Math.Max(0, other.Share - MinimumShare))
+                    : Math.Clamp(by, Math.Min(0, MinimumShare - node.Share), 0);
 
                 if (Math.Abs(give) < 1e-9)
                 {

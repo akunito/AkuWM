@@ -909,7 +909,17 @@ public sealed partial class Desk
             // Zero is "never crossed", not "crossed at time zero" -- the same
             // trap MovedAt has, and it silently stopped every floating window
             // from ever learning where the person put it.
-            if (window.CrossedAt == 0 || Now - window.CrossedAt >= CrossingMs)
+            // By SHAPE, not by time alone: the rescale changes the size and a
+            // drag changes the position, so a move that keeps the size is the
+            // person's however soon after the crossing it arrives. Time alone
+            // threw away every drag in the second after a crossing and yanked
+            // the window back to the point it crossed at.
+            bool rescaling = window.CrossedAt != 0
+                && Now - window.CrossedAt < CrossingMs
+                && (snapshot.FrameBounds.Width != was.FrameBounds.Width
+                    || snapshot.FrameBounds.Height != was.FrameBounds.Height);
+
+            if (!rescaling)
             {
                 window.FloatingRect = snapshot.FrameBounds;
                 Rehome(window, snapshot);
@@ -1164,6 +1174,20 @@ public sealed partial class Desk
             || (frame.Width <= named.TilingArea.Width && frame.Height <= named.TilingArea.Height))
         {
             return named;
+        }
+
+        // Too big for the screen Windows names: the hand decides. The top-left
+        // corner was the tie-breaker before, and it is the LAST part of a
+        // window to enter a screen to the right or below -- the terminal could
+        // be dropped on the BenQ to the left and never on the vertical monitor
+        // to the right.
+        if (_cursor is not null)
+        {
+            (int x, int y) = _cursor();
+            if (MonitorAtPoint(x, y) is { } underTheHand)
+            {
+                return underTheHand;
+            }
         }
 
         for (int at = 0; at < _monitors.Count; at++)
