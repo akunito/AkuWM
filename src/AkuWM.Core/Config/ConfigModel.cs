@@ -142,6 +142,17 @@ public sealed class EffectsConfig
     /// away by the compositor and cannot be clicked, so the floor is not zero.
     /// </remarks>
     public double? Opacity { get; set; }
+
+    /// <summary>
+    /// Milliseconds after a focus change to send the focused window's
+    /// decoration once more; 0 turns it off. Global block only.
+    /// </summary>
+    /// <remarks>
+    /// Windows Terminal and every Chromium window (VS Code) set their own
+    /// DWMWA_BORDER_COLOR on activation, a beat after AkuWM's: the border
+    /// showed for an instant and went (live desk 2026-09-22). Live on reload.
+    /// </remarks>
+    public int? ReassertMs { get; set; }
 }
 
 public sealed class LayoutConfig

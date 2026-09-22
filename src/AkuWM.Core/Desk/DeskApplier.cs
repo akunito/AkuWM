@@ -13,7 +13,9 @@ public readonly record struct ApplyResult(
     int Placed,
     IReadOnlySet<WindowHandle> Refused,
     TimeSpan Elapsed,
-    IReadOnlySet<WindowHandle>? Unmarked = null)
+    IReadOnlySet<WindowHandle>? Unmarked = null,
+    IReadOnlySet<WindowHandle>? Undecorated = null,
+    bool FocusRefused = false)
 {
     public override string ToString() =>
         $"{Placed} placed, {Refused.Count} refused, {Elapsed.TotalMilliseconds:F2} ms";
@@ -148,17 +150,28 @@ public sealed class DeskApplier
             _actions.SetTopmost(window, topmost);
         }
 
+        foreach ((WindowHandle window, WindowHandle game) in redraw.Behind)
+        {
+            _actions.PlaceBehind(window, game);
+        }
+
         // The shell can refuse, and does when explorer.exe has just restarted.
         // Recording the mark as applied anyway left the taskbar sitting over a
         // game for the rest of the session, with the model certain it had told
         // it otherwise. Allocated only when something actually fails.
         HashSet<WindowHandle>? unmarked = null;
+        HashSet<WindowHandle>? undecorated = null;
 
         // Last of the visible changes, and cheapest: two shell calls that
-        // change nothing a person could lose.
+        // change nothing a person could lose. A refusal is reported, not
+        // recorded as done: UIPI refuses an elevated window from a build
+        // without uiAccess, and the model believed the border was there.
         foreach ((WindowHandle window, Decoration how) in redraw.Decorate)
         {
-            _actions.Decorate(window, how);
+            if (!_actions.Decorate(window, how))
+            {
+                (undecorated ??= []).Add(window);
+            }
         }
 
         // Before the cloak would have been the wrong order: a button taken off
@@ -184,16 +197,21 @@ public sealed class DeskApplier
             Logging.Log.Info($"taskbar told {window} is {(fullscreen ? "fullscreen" : "not fullscreen")}");
         }
 
+        bool focusRefused = false;
         if (!redraw.Focus.IsNone)
         {
-            _actions.Focus(redraw.Focus);
+            focusRefused = !_actions.Focus(redraw.Focus);
+        }
+        else if (redraw.Unfocus)
+        {
+            _actions.Unfocus();
         }
 
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
         Log.Debug(() => $"redraw: {redraw} -> {placed} placed, {refused.Count} refused, "
             + $"{elapsed.TotalMilliseconds:F2} ms ({placeTook.TotalMilliseconds:F2} of it moving windows)");
 
-        return new ApplyResult(placed, refused, elapsed, unmarked);
+        return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused);
     }
 
     /// <summary>
@@ -247,13 +265,33 @@ public sealed class DeskApplier
     /// </remarks>
     private void ProveTheRoundTrip(WindowHandle handle)
     {
+        // The guinea pig is a hidden window like any other: recorded BEFORE
+        // the cloak, so that a daemon dying between the two calls, or a
+        // cloak that never comes off, leaves a record for `rescue` to act on.
+        // The proof ran for a day without one.
+        WindowSnapshot? before = Look(handle);
+        if (before is null)
+        {
+            return; // gone before it could be tried; the next hide proves it
+        }
+
+        _ledger.Record(before);
         _proof = Proof.OneWay; // until shown otherwise
 
         _actions.SetCloak(handle, true);
-        bool hid = _platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) == true;
-
-        if (!hid)
+        WindowSnapshot? after = _platform.Window(handle);
+        if (after is null)
         {
+            // Closed between the two calls. Nothing is known about the cloak
+            // on this machine yet, and nothing is hidden.
+            _ledger.Forget(handle);
+            _proof = Proof.Untried;
+            return;
+        }
+
+        if (!after.Cloak.HasFlag(CloakKind.Shell))
+        {
+            _ledger.Forget(handle);
             Log.Error("windows cannot be hidden on this machine: the cloak does not take. Workspaces will show everything.");
             return;
         }
@@ -263,6 +301,7 @@ public sealed class DeskApplier
 
         if (back)
         {
+            _ledger.Forget(handle);
             _proof = Proof.Good;
             Log.Info("hiding a window and bringing it back works on this machine");
             return;
@@ -274,12 +313,15 @@ public sealed class DeskApplier
         {
             if (_platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) != true)
             {
+                _ledger.Forget(handle);
                 Log.Warn($"it came back with {what}");
                 break;
             }
 
             Log.Debug(() => $"  {what}: {error ?? "no error, no effect"}");
         }
+
+        // Still hidden: the record stays, and `rescue` is what gives it back.
 
         Log.Error(
             "AkuWM will not hide any window this run: hiding one is a one-way door on this machine. "

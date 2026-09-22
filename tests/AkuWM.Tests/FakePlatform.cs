@@ -142,11 +142,35 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         return true;
     }
 
+    /// <summary>Windows that will not take the foreground (an elevated game holds it).</summary>
+    public HashSet<long> RefusesFocus { get; } = [];
+
     public bool Focus(WindowHandle window)
     {
         Calls.Add($"focus {window.Value}");
+
+        if (RefusesFocus.Contains(window.Value))
+        {
+            return false;
+        }
+
         ForegroundWindow = window;
         return true;
+    }
+
+    public void Unfocus()
+    {
+        Calls.Add("unfocus");
+        ForegroundWindow = WindowHandle.None;
+    }
+
+    /// <summary>Front to back, as far as the fake tracks it: only what PlaceBehind said.</summary>
+    public List<(WindowHandle Window, WindowHandle Behind)> Behinds { get; } = [];
+
+    public void PlaceBehind(WindowHandle window, WindowHandle behind)
+    {
+        Calls.Add($"behind {window.Value} {behind.Value}");
+        Behinds.Add((window, behind));
     }
 
     /// <summary>Windows letting go of a window it had cloaked while it started.</summary>

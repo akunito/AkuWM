@@ -149,12 +149,33 @@ public class DeskAuditTests
         _fixture.Platform.Cursor = (500, 500);
 
         // A second window arrives and the layout re-tiles: window 2 is placed
-        // where the pointer happens to be resting.
+        // where the pointer happens to be resting. Old enough not to be a
+        // window activating itself -- that case is taken, see below.
         _fixture.Open(2);
+        _fixture.Wait(Desk.NewWindowMs + 1);
         _fixture.Turn();
 
         Assert.False(Desk.Focus(W(2)));
         Assert.Equal(W(1), Desk.Focused);
+    }
+
+    [Fact]
+    public void A_window_just_born_that_activates_itself_is_believed()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.Focus(W(1));
+        _fixture.Platform.Cursor = (500, 500);
+
+        // The game is placed and takes the foreground in the same instant:
+        // its own activation, not hover focus. Refusing it sent the focus to
+        // the other monitor, and the next window opened there (tests/wm
+        // sticky 5, tiling 8).
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        Assert.True(_fixture.Foreground(2));
+        Assert.Equal(W(2), Desk.Focused);
     }
 
     [Fact]
@@ -164,6 +185,7 @@ public class DeskAuditTests
         _fixture.Turn();
         Desk.Focus(W(1));
         _fixture.Open(2);
+        _fixture.Wait(Desk.NewWindowMs + 1);
         _fixture.Turn();
 
         Desk.Focus(W(2));
@@ -389,14 +411,16 @@ public class DeskAuditTests
         _fixture.Turn();
 
         Desk.SetFullscreen(W(2), true);
-        _fixture.Turn();
+        Redraw redraw = _fixture.Turn();
 
         // The sticky window comes out of the band so it cannot sit over the
-        // game; the game is NOT put in it -- forcing WS_EX_TOPMOST on a window
-        // that has just taken a flip-model swapchain is what left Age of
-        // Empires II rendering nothing.
+        // game, and goes behind it; the game's band is not TOUCHED -- a
+        // SetWindowPos on a window that has just taken a flip-model swapchain,
+        // in either direction, is what left Age of Empires II rendering
+        // nothing.
         Assert.False(_fixture.Managed(1)!.Banded);
-        Assert.NotEqual(true, _fixture.Managed(2)!.Banded);
+        Assert.Contains((W(1), W(2)), redraw.Behind);
+        Assert.DoesNotContain(redraw.Band, b => b.Window == W(2));
     }
 
     // ---- a command that changes the state of a minimised window -----------

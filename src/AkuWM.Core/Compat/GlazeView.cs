@@ -134,7 +134,7 @@ public static class GlazeView
             ["height"] = area.Height,
             ["x"] = area.X,
             ["y"] = area.Y,
-            ["tilingDirection"] = Direction(workspace.Tiling.Root?.Direction ?? workspace.Direction),
+            ["tilingDirection"] = Direction(workspace.Tiling.Root?.Direction ?? desk.DirectionFor(workspace)),
         };
     }
 

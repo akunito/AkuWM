@@ -37,6 +37,7 @@ public sealed partial class Desk
         var show = new List<WindowHandle>();
         var restore = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
+        var behind = new List<(WindowHandle, WindowHandle)>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
         var button = new List<(WindowHandle, bool)>();
@@ -96,6 +97,7 @@ public sealed partial class Desk
                     WantHidden(window, false, hide, show);
                     WantPlaced(window, rect, place);
                     WantBanded(window, false, band);
+                    WantBehind(window, fullscreen, behind);
                     WantMarked(window, false, mark);
                 }
 
@@ -112,8 +114,10 @@ public sealed partial class Desk
                     // A fullscreen window on this workspace takes everything
                     // else out of the always-on-top band: a window that is up
                     // there cannot simply be put behind a normal one, it has
-                    // to leave the band first.
+                    // to leave the band first -- and then be put behind it,
+                    // because leaving the band lands it on top.
                     WantBanded(window, fullscreen.IsNone, band);
+                    WantBehind(window, fullscreen, behind);
                     WantMarked(window, false, mark);
                 }
 
@@ -122,18 +126,19 @@ public sealed partial class Desk
                     WantHidden(covering, false, hide, show);
                     WantPlaced(covering, monitor.FullArea, place);
 
-                    // NOT into the always-on-top band. A window that covers
-                    // the screen owns it by being the foreground window and by
-                    // the taskbar mark below; forcing WS_EX_TOPMOST on top of
-                    // that is a SetWindowPos from another process against a
-                    // game that has just taken a flip-model swapchain, and
-                    // Age of Empires II came up black -- menus invisible,
-                    // music playing -- with the band as the only thing AkuWM
-                    // had done to it (traces, live desk 2026-09-21: the
-                    // redraw was "0 to place, 1 to reband, 1 to mark"). The
-                    // windows AROUND it still leave the band, which is what
-                    // kept a chat window off a game in the first place.
-                    WantBanded(covering, false, band);
+                    // The band is NOT touched, either way. A window that
+                    // covers the screen owns it by being the foreground window
+                    // and by the taskbar mark below; a SetWindowPos from
+                    // another process against a game that has just taken a
+                    // flip-model swapchain is what turned Age of Empires II
+                    // black -- menus invisible, music playing -- with the
+                    // band as the only thing AkuWM had done to it (traces,
+                    // live desk 2026-09-21: "0 to place, 1 to reband, 1 to
+                    // mark"). Taking it OUT of a band it put itself in is the
+                    // same call, and every window used to get it on adoption
+                    // (Banded was null, not what Windows said). The windows
+                    // AROUND it still leave the band and go behind it, which
+                    // is what keeps a chat window off a game.
 
                     // The taskbar drops behind it, and is told again when it
                     // stops being fullscreen.
@@ -161,6 +166,11 @@ public sealed partial class Desk
                 WantHidden(window, false, hide, show);
                 WantPlaced(window, FloatingRectOf(window, monitor), place);
                 WantBanded(window, !covered, band);
+                WantBehind(window, covered ? displayed!.Fullscreen : WindowHandle.None, behind);
+
+                // A sticky window that was covering the screen when it was
+                // stuck keeps the mark otherwise, and the taskbar stays down.
+                WantMarked(window, false, mark);
             }
         }
 
@@ -212,8 +222,11 @@ public sealed partial class Desk
                 : Decoration.Untouched;
 
             // Null means AkuWM has never touched it, and Untouched means put it
-            // back: a window that was never decorated needs neither.
-            if (window.Decorated == want || (window.Decorated is null && want == Decoration.Untouched))
+            // back: a window that was never decorated needs neither. A
+            // decoration the shell refused is asked for once.
+            if (window.Decorated == want
+                || (window.Decorated is null && want == Decoration.Untouched)
+                || window.DecorationRefused == want)
             {
                 continue;
             }
@@ -267,6 +280,7 @@ public sealed partial class Desk
             Show = show,
             Restore = restore,
             Band = band,
+            Behind = behind,
             TaskbarMark = mark,
             Decorate = decorate,
             TaskbarButton = button,
@@ -275,7 +289,42 @@ public sealed partial class Desk
             // visible. Focusing a window that is still cloaked hands the
             // keyboard to something nobody can see.
             Focus = _wantFocus,
+
+            // And when nothing is to be focused while the focused window is
+            // going away, the keyboard must not stay on it.
+            Unfocus = _wantFocus.IsNone && !Focused.IsNone && hide.Contains(Focused),
         };
+    }
+
+    /// <summary>
+    /// Asks for a window to be put behind the fullscreen one, once per pair.
+    /// </summary>
+    private static void WantBehind(DeskWindow window, WindowHandle game, List<(WindowHandle, WindowHandle)> into)
+    {
+        if (game.IsNone || window.Behind == game || window.Handle == game)
+        {
+            return;
+        }
+
+        into.Add((window.Handle, game));
+    }
+
+    /// <summary>
+    /// Asks for the decoration of a window to be sent again next pass.
+    /// </summary>
+    /// <remarks>
+    /// Windows Terminal and VS Code (any Chromium) set their own
+    /// DWMWA_BORDER_COLOR on every activation, a beat after AkuWM's: the
+    /// purple border showed for an instant and went. Sent once more,
+    /// <c>effects.reassert_ms</c> after the focus lands.
+    /// </remarks>
+    public void Redecorate(WindowHandle handle)
+    {
+        if (Window(handle) is { Managed: true } window)
+        {
+            window.Decorated = null;
+            window.DecorationRefused = null;
+        }
     }
 
     /// <summary>A window AkuWM manages, is still there, and is not on the taskbar.</summary>
@@ -511,7 +560,9 @@ public sealed partial class Desk
     public void Applied(
         Redraw redraw,
         IReadOnlySet<WindowHandle>? refused = null,
-        IReadOnlySet<WindowHandle>? unmarked = null)
+        IReadOnlySet<WindowHandle>? unmarked = null,
+        IReadOnlySet<WindowHandle>? undecorated = null,
+        bool focusRefused = false)
     {
 
         if (redraw.Place.Count > 0)
@@ -569,15 +620,47 @@ public sealed partial class Desk
             if (Window(handle) is { } window)
             {
                 window.Banded = topmost;
+
+                // Back in the band is above everything; the insert-behind is
+                // owed again the next time it leaves.
+                if (topmost)
+                {
+                    window.Behind = WindowHandle.None;
+                }
+            }
+        }
+
+        foreach ((WindowHandle handle, WindowHandle game) in redraw.Behind)
+        {
+            if (Window(handle) is { } window)
+            {
+                window.Behind = game;
             }
         }
 
         foreach ((WindowHandle handle, Decoration how) in redraw.Decorate)
         {
-            if (Window(handle) is { } decorated)
+            if (Window(handle) is not { } decorated)
             {
-                decorated.Decorated = how == Decoration.Untouched ? null : how;
+                continue;
             }
+
+            if (undecorated?.Contains(handle) == true)
+            {
+                decorated.DecorationRefused = how;
+                continue;
+            }
+
+            decorated.DecorationRefused = null;
+            decorated.Decorated = how == Decoration.Untouched ? null : how;
+        }
+
+        // The focused window has just been hidden: what the model calls
+        // focused must not be a window nobody can see, or the next chord with
+        // no --id acts on it and the bar says the wrong workspace has focus.
+        if (Window(Focused) is { Hidden: true })
+        {
+            Focused = WindowHandle.None;
         }
 
         foreach ((WindowHandle handle, bool shown) in redraw.TaskbarButton)
@@ -609,7 +692,14 @@ public sealed partial class Desk
                 _wantFocus = WindowHandle.None;
             }
 
-            Focus(redraw.Focus, fromTheDesk: true);
+            // Only when the platform managed it. Recording the target
+            // regardless had the model certain the chat window was in front
+            // while an elevated game still held the foreground, and no
+            // foreground event was ever going to correct it.
+            if (!focusRefused && Window(redraw.Focus) is not null)
+            {
+                Focus(redraw.Focus, fromTheDesk: true);
+            }
         }
     }
 }

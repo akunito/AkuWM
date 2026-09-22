@@ -59,6 +59,16 @@ public sealed class DeskWindow
     /// <summary>AkuWM has the shell's cloak on this window.</summary>
     public bool Hidden { get; set; }
 
+    /// <summary>When AkuWM first saw it, in milliseconds of the desk's clock.</summary>
+    /// <remarks>
+    /// A window that takes the foreground within a moment of being adopted is
+    /// an application activating the window it just created, not hover focus
+    /// from a layout change -- and the hold-still guard refused it (tests/wm:
+    /// a game placed and then "refused the focus for the hidden window", the
+    /// focus went to the other monitor, and the next window opened there).
+    /// </remarks>
+    public long AdoptedAt { get; set; }
+
     /// <summary>Where AkuWM last put it, so an unchanged rectangle is not sent again.</summary>
     public Rect? Placed { get; set; }
 
@@ -114,6 +124,41 @@ public sealed class DeskWindow
 
     /// <summary>Whether AkuWM last put it in the always-on-top band.</summary>
     public bool? Banded { get; set; }
+
+    /// <summary>
+    /// The fullscreen window AkuWM last put this one behind, or None.
+    /// </summary>
+    /// <remarks>
+    /// Leaving the always-on-top band is HWND_NOTOPMOST, and that puts a
+    /// window at the TOP of the ordinary band -- above the game it was meant
+    /// to get out of the way of. The insert-behind is the second half of
+    /// de-banding, sent once per (window, game) pair.
+    /// </remarks>
+    public WindowHandle Behind { get; set; } = WindowHandle.None;
+
+    /// <summary>
+    /// It was covering its monitor when it went to the taskbar, and comes back
+    /// covering it, whatever it was before that.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="PreviousState"/>: minimising a fullscreen
+    /// window used to overwrite the state it had BEFORE fullscreen, so a
+    /// floating game that minimised on focus loss came back, left fullscreen,
+    /// and was dropped into the tiling tree.
+    /// </remarks>
+    public bool WasFullscreen { get; set; }
+
+    /// <summary>
+    /// A decoration the shell would not take, so it is not asked for again
+    /// until a different one is wanted.
+    /// </summary>
+    /// <remarks>
+    /// UIPI refuses DWM attributes on a higher-integrity window from a
+    /// process without uiAccess; recording it as done left the model certain
+    /// the border was there, and re-sending it on every redraw is two DWM
+    /// calls per pass for nothing.
+    /// </remarks>
+    public Decoration? DecorationRefused { get; set; }
 
     /// <summary>Whether the taskbar has been told this window is fullscreen.</summary>
     public bool Marked { get; set; }

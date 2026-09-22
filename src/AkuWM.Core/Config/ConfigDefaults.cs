@@ -40,6 +40,7 @@ public static class ConfigDefaults
             FocusedBorder = "#c4a7e7",
             OtherBorder = "none",
             Corners = "square",
+            ReassertMs = 300,
         },
         Layout = new LayoutConfig
         {

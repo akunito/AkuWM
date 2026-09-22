@@ -111,6 +111,10 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
 
+    public void PlaceBehind(WindowHandle window, WindowHandle behind) => Win32Position.PlaceBehind(window, behind);
+
+    public void Unfocus() => Win32Focus.Unfocus();
+
     public bool Decorate(WindowHandle window, Decoration decoration) =>
         Win32Decorations.Apply(new Windows.Win32.Foundation.HWND((IntPtr)window.Value), decoration);
 

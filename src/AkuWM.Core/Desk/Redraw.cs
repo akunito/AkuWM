@@ -49,6 +49,17 @@ public sealed record Redraw
     /// <summary>Windows entering or leaving the always-on-top band.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
+    /// <summary>
+    /// Windows to put directly behind a fullscreen one, in the ordinary band.
+    /// </summary>
+    /// <remarks>
+    /// Leaving the always-on-top band (HWND_NOTOPMOST) lands a window at the
+    /// TOP of the ordinary band, above the game it was taken out for. The
+    /// call is made on the sibling, never on the game, so the game's
+    /// swapchain is never touched.
+    /// </remarks>
+    public IReadOnlyList<(WindowHandle Window, WindowHandle Behind)> Behind { get; init; } = [];
+
     /// <summary>Windows the taskbar must be told about, so it drops behind a game.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Fullscreen)> TaskbarMark { get; init; } = [];
 
@@ -61,15 +72,26 @@ public sealed record Redraw
     /// <summary>Where the focus should end up, or none to leave it alone.</summary>
     public WindowHandle Focus { get; init; } = WindowHandle.None;
 
+    /// <summary>
+    /// Take the keyboard off the focused window, because it has just been
+    /// hidden and nothing is taking its place.
+    /// </summary>
+    /// <remarks>
+    /// Cloaking does not move the foreground. A switch to an EMPTY workspace
+    /// left every keystroke going to the window that had just vanished.
+    /// </remarks>
+    public bool Unfocus { get; init; }
+
     public bool IsNothing =>
         Place.Count == 0 && Hide.Count == 0 && Show.Count == 0 && Restore.Count == 0
-        && Band.Count == 0 && TaskbarMark.Count == 0 && Decorate.Count == 0
-        && TaskbarButton.Count == 0 && Focus.IsNone;
+        && Band.Count == 0 && Behind.Count == 0 && TaskbarMark.Count == 0 && Decorate.Count == 0
+        && TaskbarButton.Count == 0 && Focus.IsNone && !Unfocus;
 
     public override string ToString() =>
         IsNothing
             ? "nothing to do"
             : $"{Place.Count} to place, {Hide.Count} to hide, {Show.Count} to show, {Restore.Count} to restore, "
-              + $"{Band.Count} to reband, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
-              + (Focus.IsNone ? string.Empty : $", focus {Focus}");
+              + $"{Band.Count} to reband, {Behind.Count} behind a game, {TaskbarMark.Count} to mark, {Decorate.Count} to decorate, {TaskbarButton.Count} to (un)button"
+              + (Focus.IsNone ? string.Empty : $", focus {Focus}")
+              + (Unfocus ? ", unfocus" : string.Empty);
 }

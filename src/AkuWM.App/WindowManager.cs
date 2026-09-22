@@ -79,6 +79,12 @@ public sealed class WindowManager : IAsyncDisposable
 
         _applier.ReadsFrom(h => _desk.Window(h)?.Snapshot);
 
+        // The anti-cheat policy's one hook into the platform: no attach, no
+        // injection while the foreground is a window covering its screen.
+        // Read on the wm thread, which is where the applier calls Focus from.
+        // It was declared and never assigned, so the F24 route ran regardless.
+        Win32Focus.GameInFront = () => _desk.Window(_platform.Foreground()) is { State: WindowState.Fullscreen };
+
         // A window that has closed is not one AkuWM has to put back.
         _desk.Forgotten += journal.Forget;
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
@@ -248,7 +254,11 @@ public sealed class WindowManager : IAsyncDisposable
                 // keyboard back when it refused.
                 if (!_desk.Focus(platformEvent.Handle))
                 {
-                    Log.Debug(() => $"refused the focus for the hidden window {platformEvent.Handle}");
+                    Log.Debug(() => $"refused the focus for {platformEvent.Handle} (hidden, or a window moved under a still pointer)");
+                }
+                else
+                {
+                    ReassertDecorationLater();
                 }
 
                 _dirty = true;
@@ -297,6 +307,38 @@ public sealed class WindowManager : IAsyncDisposable
     /// nothing said so.
     /// </summary>
     private readonly ScreenWatch _screens = new();
+
+    /// <summary>
+    /// Sends the focused window's decoration once more, a beat after the
+    /// focus landed, for the applications that paint over it on activation.
+    /// </summary>
+    /// <remarks>
+    /// One timer, re-armed on every focus change, so a burst of focus events
+    /// costs one re-send. The work runs on the wm thread like everything that
+    /// touches the model.
+    /// </remarks>
+    private void ReassertDecorationLater()
+    {
+        int after = _desk.Config.Effects?.ReassertMs ?? 0;
+        if (after <= 0)
+        {
+            return;
+        }
+
+        _reassert ??= new Timer(
+            _ => _loop.Post("reassert decoration", () =>
+            {
+                _desk.Redecorate(_desk.Focused);
+                _dirty = true;
+                Redraw();
+            }),
+            null,
+            Timeout.Infinite,
+            Timeout.Infinite);
+        _reassert.Change(after, Timeout.Infinite);
+    }
+
+    private Timer? _reassert;
 
     /// <summary>Once per burst: look if anything appeared, decide, apply.</summary>
     private void Redraw()
@@ -428,6 +470,7 @@ public sealed class WindowManager : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _reassert?.Dispose();
         _hooks.Dispose();
         await _server.DisposeAsync().ConfigureAwait(false);
         await _loop.DisposeAsync().ConfigureAwait(false);

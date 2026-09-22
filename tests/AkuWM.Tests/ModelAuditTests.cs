@@ -1,0 +1,406 @@
+using AkuWM.Core.Compat;
+using AkuWM.Core.Config;
+using AkuWM.Core.Desk;
+using AkuWM.Core.Layout;
+using AkuWM.Core.Model;
+using Xunit;
+
+namespace AkuWM.Tests;
+
+/// <summary>
+/// The second adversarial pass over the model (2026-09-22): what the model
+/// remembered that Windows had undone, and what it forgot to tell Windows.
+/// </summary>
+public class ModelAuditTests
+{
+    private readonly DeskFixture _fixture = new();
+
+    private Desk Desk => _fixture.Desk;
+
+    private static WindowHandle W(long handle) => new(handle);
+
+    // ---- the focus after a switch to an empty workspace ---------------------
+
+    [Fact]
+    public void Switching_to_an_empty_workspace_leaves_nothing_focused_and_takes_the_keyboard_away()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        _fixture.Foreground(1);
+
+        Desk.WantFocus(Desk.FocusWorkspace("13"));
+        Redraw redraw = _fixture.Turn();
+
+        Assert.True(redraw.Unfocus);
+        Assert.Contains("unfocus", _fixture.Platform.Calls);
+        Assert.Equal(WindowHandle.None, Desk.Focused);
+        Assert.True(_fixture.IsHidden(1));
+
+        DeskMonitor main = Desk.MonitorByRole("main")!;
+        Assert.False(GlazeView.Workspace(Desk, main, Desk.Workspace("11")!)["hasFocus"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void A_chord_with_no_subject_never_acts_on_a_hidden_window()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        _fixture.Foreground(1);
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+
+        Desk.WantFocus(Desk.FocusWorkspace("13"));
+        _fixture.Turn();
+
+        ExecResult result = executor.Command("toggle-floating");
+
+        Assert.False(result.Success);
+        Assert.Equal(WindowState.Tiling, _fixture.Managed(1)!.State);
+    }
+
+    // ---- a minimised window brought back on a hidden workspace ---------------
+
+    [Fact]
+    public void Restoring_a_window_from_the_taskbar_shows_its_workspace_instead_of_hiding_the_window()
+    {
+        _fixture.Open(1);
+        Desk.FocusWorkspace("12");
+        _fixture.Open(2, resizable: false);
+        _fixture.Turn();
+        _fixture.Foreground(2);
+        _fixture.Platform.SetMinimized(W(2), true);
+        _fixture.Sync();
+
+        Desk.WantFocus(Desk.FocusWorkspace("11"));
+        _fixture.Turn();
+
+        // The taskbar button is clicked.
+        _fixture.Platform.SetMinimized(W(2), false);
+        _fixture.Sync();
+        Redraw redraw = _fixture.Turn();
+
+        Assert.DoesNotContain(W(2), redraw.Hide);
+        Assert.True(Desk.Workspace("12")!.Displayed);
+        Assert.False(_fixture.IsHidden(2));
+        Assert.Equal(W(2), Desk.Focused);
+    }
+
+    // ---- sticky over fullscreen -------------------------------------------
+
+    [Fact]
+    public void Sticking_a_fullscreen_window_takes_it_out_of_fullscreen_and_releases_the_taskbar()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+        _fixture.Turn();
+
+        Desk.SetSticky(W(1), true);
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Equal(WindowState.Floating, _fixture.Managed(1)!.State);
+        Assert.Contains((W(1), false), redraw.TaskbarMark);
+        Assert.True(Desk.Workspace("11")!.Fullscreen.IsNone);
+        Assert.True(Desk.SetFullscreen(W(1), true), "a sticky window can be asked to cover the screen again");
+    }
+
+    // ---- minimised windows and the focus order -----------------------------
+
+    [Fact]
+    public void Returning_to_a_workspace_focuses_a_visible_window_not_the_minimised_one()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2, resizable: false);
+        _fixture.Turn();
+        _fixture.Foreground(2);
+        _fixture.Platform.SetMinimized(W(2), true);
+        _fixture.Sync();
+
+        Desk.WantFocus(Desk.FocusWorkspace("12"));
+        _fixture.Turn();
+
+        Assert.Equal(W(1), Desk.FocusWorkspace("11"));
+    }
+
+    [Fact]
+    public void Crossing_a_monitor_edge_never_lands_on_a_minimised_window()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("21");
+        _fixture.Open(2, monitor: new MonitorHandle(2), resizable: false);
+        _fixture.Open(3, monitor: new MonitorHandle(2));
+        _fixture.Turn();
+        _fixture.Foreground(2);
+        _fixture.Platform.SetMinimized(W(2), true);
+        _fixture.Sync();
+        _fixture.Foreground(1);
+
+        Assert.Equal(W(3), Desk.InDirection(Direction.Right));
+    }
+
+    // ---- fullscreen across the taskbar -------------------------------------
+
+    [Fact]
+    public void A_floating_window_that_went_fullscreen_and_minimised_comes_back_floating_when_it_leaves_fullscreen()
+    {
+        _fixture.Open(1, resizable: false);
+        _fixture.Turn();
+        Assert.Equal(WindowState.Floating, _fixture.Managed(1)!.State);
+
+        Desk.SetFullscreen(W(1), true);
+        _fixture.Turn();
+        _fixture.Platform.SetMinimized(W(1), true);
+        _fixture.Sync();
+        _fixture.Platform.SetMinimized(W(1), false);
+        _fixture.Sync();
+
+        Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
+        Assert.Equal(W(1), Desk.Workspace("11")!.Fullscreen);
+
+        Desk.SetFullscreen(W(1), false);
+        Assert.Equal(WindowState.Floating, _fixture.Managed(1)!.State);
+    }
+
+    [Fact]
+    public void A_fullscreen_console_that_rounds_to_its_cells_stays_fullscreen()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+        _fixture.Turn();
+
+        // A character cell short of the monitor, which is where a console lands.
+        _fixture.Platform.ApplicationMoves(W(1), new Rect(0, 0, 3839, 2160));
+        _fixture.Sync();
+
+        Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
+    }
+
+    [Fact]
+    public void A_game_that_leaves_fullscreen_by_itself_is_still_noticed()
+    {
+        _fixture.Open(1, resizable: false);
+        _fixture.Turn();
+        Desk.SetFullscreen(W(1), true);
+        _fixture.Turn();
+
+        _fixture.Platform.ApplicationMoves(W(1), new Rect(100, 100, 1280, 720));
+        _fixture.Sync();
+
+        Assert.Equal(WindowState.Floating, _fixture.Managed(1)!.State);
+    }
+
+    // ---- a focus the platform refused ---------------------------------------
+
+    [Fact]
+    public void A_refused_focus_is_not_recorded_as_taken()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        _fixture.Foreground(1);
+
+        _fixture.Platform.RefusesFocus.Add(2);
+        Desk.WantFocus(W(2));
+        _fixture.Turn();
+
+        Assert.Equal(W(1), Desk.Focused);
+        Assert.True(Desk.Compute().Focus.IsNone, "and it is not asked for again on every redraw");
+    }
+
+    [Fact]
+    public void A_window_that_closes_before_the_focus_reaches_it_is_not_focused()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2);
+        _fixture.Turn();
+        _fixture.Foreground(1);
+
+        Desk.WantFocus(W(2));
+        _fixture.Close(2);
+        _fixture.Turn();
+
+        Assert.NotEqual(W(2), Desk.Focused);
+    }
+
+    // ---- reload moving a displayed workspace --------------------------------
+
+    [Fact]
+    public void A_reload_that_moves_the_displayed_workspace_leaves_one_displayed_per_monitor()
+    {
+        _fixture.Open(1);
+        Desk.FocusWorkspace("12");
+        _fixture.Open(2);
+        _fixture.Turn();
+
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Workspaces!.First(w => w.Name == "12").Monitor = "second";
+        Desk.Reload(config);
+        _fixture.Turn();
+
+        Assert.Equal(1, Desk.MonitorByRole("second")!.Workspaces.Count(w => w.Displayed));
+        Assert.Equal(1, Desk.MonitorByRole("main")!.Workspaces.Count(w => w.Displayed));
+    }
+
+    [Fact]
+    public void Back_and_forth_never_goes_to_a_workspace_that_moved_to_another_monitor()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        Desk.FocusWorkspace("12");
+        _fixture.Turn();
+
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Workspaces!.First(w => w.Name == "11").Monitor = "second";
+        Desk.Reload(config);
+        _fixture.Turn();
+
+        Desk.FocusWorkspace("12");
+        _fixture.Turn();
+
+        Assert.NotNull(Desk.MonitorByRole("main")!.Displayed);
+        Assert.False(_fixture.IsHidden(1) && Desk.MonitorByRole("main")!.Displayed is null);
+    }
+
+    // ---- behind the game ----------------------------------------------------
+
+    [Fact]
+    public void Windows_leaving_the_band_for_a_game_are_put_behind_it()
+    {
+        _fixture.Open(1);
+        _fixture.Open(2, resizable: false);
+        _fixture.Turn();
+        Desk.SetSticky(W(2), true);
+        _fixture.Turn();
+        Assert.True(_fixture.Managed(2)!.Banded);
+
+        Desk.SetFullscreen(W(1), true);
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Contains((W(2), false), redraw.Band);
+        Assert.Contains((W(2), W(1)), redraw.Behind);
+        Assert.Equal(W(1), _fixture.Managed(2)!.Behind);
+
+        // Once per pair: the next pass does not send it again.
+        Assert.Empty(_fixture.Turn().Behind);
+
+        // Back in the band when the game goes, and owed again next time.
+        Desk.SetFullscreen(W(1), false);
+        Redraw back = _fixture.Turn();
+        Assert.Contains((W(2), true), back.Band);
+        Assert.True(_fixture.Managed(2)!.Behind.IsNone);
+    }
+
+    [Fact]
+    public void The_fullscreen_window_itself_is_never_sent_a_band_change()
+    {
+        WindowSnapshot topmostGame = FakePlatform.Window(1, "game", frame: new Rect(0, 0, 3840, 2160)) with { IsTopmost = true };
+        _fixture.Platform.WindowList.Add(topmostGame);
+        _fixture.Sync();
+
+        Redraw redraw = _fixture.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, _fixture.Managed(1)!.State);
+        Assert.DoesNotContain(redraw.Band, b => b.Window == W(1));
+        Assert.Equal(true, _fixture.Managed(1)!.Banded);
+    }
+
+    [Fact]
+    public void A_window_adopted_outside_the_band_is_not_sent_out_of_it()
+    {
+        _fixture.Open(1);
+        Redraw redraw = _fixture.Turn();
+
+        Assert.DoesNotContain(redraw.Band, b => b.Window == W(1));
+    }
+
+    // ---- decoration ---------------------------------------------------------
+
+    private static DeskFixture Decorated()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "none", Corners = "square" };
+        return new DeskFixture(config);
+    }
+
+    [Fact]
+    public void A_decoration_the_shell_refuses_is_asked_for_once()
+    {
+        DeskFixture fixture = Decorated();
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Foreground(1);
+        fixture.Platform.RefusesDecoration = true;
+
+        Redraw first = fixture.Turn();
+        Assert.Contains(first.Decorate, d => d.Window == W(1));
+        Assert.NotNull(fixture.Managed(1)!.DecorationRefused);
+
+        Assert.DoesNotContain(fixture.Turn().Decorate, d => d.Window == W(1));
+
+        // Asking again is a fresh question.
+        fixture.Desk.Redecorate(W(1));
+        Assert.Contains(fixture.Turn().Decorate, d => d.Window == W(1));
+    }
+
+    [Fact]
+    public void Redecorating_sends_the_same_decoration_again()
+    {
+        DeskFixture fixture = Decorated();
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Foreground(1);
+        fixture.Turn();
+        Assert.NotNull(fixture.Managed(1)!.Decorated);
+        Assert.Empty(fixture.Turn().Decorate);
+
+        fixture.Desk.Redecorate(W(1));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains(redraw.Decorate, d => d.Window == W(1));
+    }
+
+    // ---- direction ----------------------------------------------------------
+
+    [Fact]
+    public void A_workspace_direction_in_the_configuration_beats_the_shape_of_the_screen()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Workspaces!.First(w => w.Name == "21").Direction = "horizontal";
+        var fixture = new DeskFixture(config);
+
+        fixture.Desk.FocusWorkspace("21");
+        fixture.Open(1, monitor: new MonitorHandle(2));
+        fixture.Open(2, monitor: new MonitorHandle(2));
+        fixture.Turn();
+
+        Assert.Equal(fixture.FrameOf(1).Top, fixture.FrameOf(2).Top);
+        Assert.True(fixture.FrameOf(2).Left > fixture.FrameOf(1).Left);
+    }
+
+    [Fact]
+    public void An_empty_workspace_reports_the_direction_its_next_window_will_take()
+    {
+        DeskMonitor second = Desk.MonitorByRole("second")!;
+        Workspace workspace = Desk.Workspace("21")!;
+
+        Assert.Equal("vertical", GlazeView.Workspace(Desk, second, workspace)["tilingDirection"]!.GetValue<string>());
+    }
+
+    // ---- naming a monitor -----------------------------------------------------
+
+    [Fact]
+    public void Focusing_an_empty_monitor_by_name_is_where_the_next_window_opens()
+    {
+        _fixture.Open(1);
+        _fixture.Turn();
+        _fixture.Foreground(1);
+        var executor = new GlazeExecutor(Desk, new FakeDeskPlatform());
+
+        Assert.True(executor.Command("focus --monitor 1").Success);
+        _fixture.Turn();
+        _fixture.Open(2);
+
+        Assert.Equal("21", _fixture.Managed(2)!.Workspace);
+    }
+}

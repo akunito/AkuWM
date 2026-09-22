@@ -163,14 +163,26 @@ public sealed class ImmersiveShell : IDisposable
         }
     }
 
+    /// <remarks>
+    /// Only the UNcloaking spellings, the reversible one first. This runs
+    /// against a window that is already hidden and will not come back; a
+    /// flag=1 call here can only cloak it again, and (Shell, 1) is the
+    /// spelling nothing undoes (spike S8). The earlier version tried all
+    /// eight, and the sixth was that one.
+    /// </remarks>
+    public static readonly (ApplicationViewCloakType Type, int Flag)[] UncloakSpellings =
+    [
+        (ApplicationViewCloakType.Default, 0),
+        (ApplicationViewCloakType.None, 0),
+        (ApplicationViewCloakType.Inherited, 0),
+        (ApplicationViewCloakType.Shell, 0),
+    ];
+
     public IEnumerable<(string What, string? Error)> TryEveryUncloak(WindowHandle window)
     {
-        foreach (ApplicationViewCloakType type in Enum.GetValues<ApplicationViewCloakType>())
+        foreach ((ApplicationViewCloakType type, int flag) in UncloakSpellings)
         {
-            foreach (int flag in new[] { 0, 1 })
-            {
-                yield return ($"type={type}({(int)type}) flag={flag}", Call(window, type, flag));
-            }
+            yield return ($"type={type}({(int)type}) flag={flag}", Call(window, type, flag));
         }
     }
 
@@ -205,7 +217,7 @@ public sealed class ImmersiveShell : IDisposable
         }
     }
 
-    private enum ApplicationViewCloakType
+    public enum ApplicationViewCloakType
     {
         None = 0,
         Default = 1,

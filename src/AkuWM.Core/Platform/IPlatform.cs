@@ -74,9 +74,21 @@ public interface IPlatformActions
     /// <summary>Puts a window in the always-on-top band, or takes it out.</summary>
     void SetTopmost(WindowHandle window, bool topmost);
 
+    /// <summary>
+    /// Puts a window directly behind another in the z-order, touching only
+    /// the first.
+    /// </summary>
+    void PlaceBehind(WindowHandle window, WindowHandle behind);
+
     /// <summary>Gives a window the keyboard focus.</summary>
     /// <returns>True when the foreground window is this one afterwards.</returns>
     bool Focus(WindowHandle window);
+
+    /// <summary>
+    /// Takes the keyboard off whatever has it, without giving it to any
+    /// managed window.
+    /// </summary>
+    void Unfocus();
 
     /// <summary>
     /// Asks the shell for a border colour and a corner shape.

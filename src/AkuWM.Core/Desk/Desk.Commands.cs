@@ -43,11 +43,15 @@ public sealed partial class Desk
         // choosing, and is taken. PlacedAt is stamped only when the rectangle
         // asked for CHANGES, so a window being re-asked for the place it is
         // already in does not keep the guard alive.
+        // And never for a window that has just been born: an application
+        // activates the window it creates, and AkuWM has usually just placed
+        // it, which made it look exactly like hover focus.
         if (!fromTheDesk
             && handle != Focused
             && !Focused.IsNone
             && Window(handle) is { } arriving
             && Now - arriving.PlacedAt <= FocusHoldMs
+            && Now - arriving.AdoptedAt > NewWindowMs
             && WindowsMovedUnderAStillPointer()
             && Window(Focused) is { Managed: true, Hidden: false })
         {
@@ -106,16 +110,19 @@ public sealed partial class Desk
     public bool FocusSomethingVisible()
     {
         DeskMonitor? monitor = FocusedMonitor;
-        WindowHandle target = monitor?.Displayed?.LastFocused ?? WindowHandle.None;
+        WindowHandle target = monitor?.Displayed is { } displayed
+            ? VisibleLastFocused(displayed)
+            : WindowHandle.None;
 
         if (target.IsNone || Window(target) is not { Managed: true, Hidden: false })
         {
             for (int i = 0; i < _monitors.Count; i++)
             {
-                if (_monitors[i].Displayed?.LastFocused is { IsNone: false } other
-                    && Window(other) is { Managed: true, Hidden: false })
+                if (_monitors[i].Displayed is { } other
+                    && VisibleLastFocused(other) is { IsNone: false } candidate
+                    && Window(candidate) is { Managed: true, Hidden: false })
                 {
-                    target = other;
+                    target = candidate;
                     break;
                 }
             }
@@ -162,9 +169,13 @@ public sealed partial class Desk
             if (Config.General?.ToggleWorkspaceOnRefocus != true
                 || monitor.Previous is not { } previous
                 || Workspace(previous) is not { } back
-                || ReferenceEquals(back, workspace))
+                || ReferenceEquals(back, workspace)
+                || !ReferenceEquals(MonitorOf(back), monitor))
             {
-                return workspace.LastFocused;
+                // The last guard: a reload can move the previous workspace to
+                // another screen, and going "back" to it here hid this
+                // monitor's workspace and displayed nothing in its place.
+                return VisibleLastFocused(workspace);
             }
 
             workspace = back;
@@ -181,7 +192,39 @@ public sealed partial class Desk
             other.Displayed = ReferenceEquals(other, workspace);
         }
 
-        return workspace.LastFocused;
+        return VisibleLastFocused(workspace);
+    }
+
+    /// <summary>
+    /// The window a workspace hands the focus to: the last focused one that
+    /// is not on the taskbar, or any that is not.
+    /// </summary>
+    /// <remarks>
+    /// The workspace's own answer counts minimised windows, because it does
+    /// not know states. Returning to a workspace used to focus a floating
+    /// window sitting minimised on the taskbar -- SetForegroundWindow on an
+    /// iconic window -- and every chord after that acted on it.
+    /// </remarks>
+    public WindowHandle VisibleLastFocused(Workspace workspace)
+    {
+        List<WindowHandle> order = workspace.FocusOrder;
+        for (int i = 0; i < order.Count; i++)
+        {
+            if (workspace.Contains(order[i]) && Live(order[i]) is not null)
+            {
+                return order[i];
+            }
+        }
+
+        foreach (WindowHandle handle in workspace.Windows)
+        {
+            if (Live(handle) is not null)
+            {
+                return handle;
+            }
+        }
+
+        return WindowHandle.None;
     }
 
     /// <summary>Moves a window to another workspace, wherever that workspace lives.</summary>
@@ -226,7 +269,9 @@ public sealed partial class Desk
         }
 
         // Off the edge of this workspace: sway's `focus output`.
-        return MonitorInDirection(monitor, direction)?.Displayed?.LastFocused ?? WindowHandle.None;
+        return MonitorInDirection(monitor, direction)?.Displayed is { } next
+            ? VisibleLastFocused(next)
+            : WindowHandle.None;
     }
 
     /// <summary>Moves the focused window one place, or onto the next monitor.</summary>
@@ -692,12 +737,26 @@ public sealed partial class Desk
     /// <summary>Brings a window back from the taskbar, into the state it left from.</summary>
     private void Restore(DeskWindow window)
     {
-        window.State = window.PreviousState == WindowState.Minimized
-            ? WindowState.Tiling
-            : window.PreviousState;
+        window.State = window.WasFullscreen
+            ? WindowState.Fullscreen
+            : window.PreviousState == WindowState.Minimized
+                ? WindowState.Tiling
+                : window.PreviousState;
+        window.WasFullscreen = false;
 
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
+            // Somebody brought it back -- a taskbar click, the application
+            // itself -- and it belongs to a workspace that is not on screen.
+            // Placing it there had the next pass cloak it in the same breath:
+            // the click restored a window that vanished. The workspace comes
+            // into view with it, which is what the click meant.
+            if (!workspace.Displayed && MonitorOf(workspace) is not null)
+            {
+                FocusWorkspace(workspace.Name);
+                WantFocus(window.Handle);
+            }
+
             Place(window, workspace);
         }
         else if (window.Sticky)

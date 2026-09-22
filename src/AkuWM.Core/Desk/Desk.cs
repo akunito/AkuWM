@@ -73,6 +73,9 @@ public sealed partial class Desk
     /// the person meant.
     internal const int FocusHoldMs = 250;
 
+    /// <summary>How long after adoption a window's own activation is believed.</summary>
+    internal const int NewWindowMs = 1500;
+
     /// <summary>
     /// How long after a crossing a resize belongs to Windows, not the person.
     /// </summary>
@@ -266,14 +269,20 @@ public sealed partial class Desk
                 // one from the second monitor to the first, and without this
                 // it stayed where it was: the screen it had left kept it, and
                 // the one that should have had it was a workspace short.
-                existing.MonitorRole = configured.Monitor ?? existing.MonitorRole;
+                string role = configured.Monitor ?? existing.MonitorRole;
+                if (!string.Equals(existing.MonitorRole, role, StringComparison.OrdinalIgnoreCase))
+                {
+                    // It leaves its screen as a workspace, not as the one on
+                    // show: the target already has one displayed, and two
+                    // displayed workspaces on one monitor answered isDisplayed
+                    // for both while only one was drawn.
+                    existing.Displayed = false;
+                }
+
+                existing.MonitorRole = role;
                 existing.DisplayName = configured.DisplayName;
                 existing.KeepAlive = configured.KeepAlive == true;
-
-                if (ParseDirection(configured.Direction) is { } direction)
-                {
-                    existing.Direction = direction;
-                }
+                existing.Direction = ParseDirection(configured.Direction);
 
                 continue;
             }
@@ -281,7 +290,7 @@ public sealed partial class Desk
             _workspaces[name] = new Workspace(
                 name,
                 configured.Monitor ?? "main",
-                ParseDirection(configured.Direction) ?? SplitDirection.Horizontal)
+                ParseDirection(configured.Direction))
             {
                 DisplayName = configured.DisplayName,
                 KeepAlive = configured.KeepAlive == true,
@@ -421,6 +430,9 @@ public sealed partial class Desk
         }
     }
 
+    /// <summary>Says which screen the person is on, from a command that named it.</summary>
+    public void LookAt(DeskMonitor monitor) => LookingAt(monitor);
+
     /// <summary>Records which screen the person is on; whichever happened last wins.</summary>
     private void LookingAt(DeskMonitor? monitor)
     {
@@ -445,7 +457,7 @@ public sealed partial class Desk
             }
 
             string role = configured.Monitor ?? "main";
-            var workspace = new Workspace(name, role, ParseDirection(configured.Direction) ?? SplitDirection.Horizontal)
+            var workspace = new Workspace(name, role, ParseDirection(configured.Direction))
             {
                 DisplayName = configured.DisplayName,
                 KeepAlive = configured.KeepAlive == true,
@@ -740,6 +752,14 @@ public sealed partial class Desk
             Sticky = decision.Sticky,
             Rules = decision.Rules,
             Effects = EffectsFor(decision.Rules),
+
+            // What Windows says, not "unknown": null differed from false, so
+            // every window adopted was sent a synchronous SetWindowPos to leave
+            // a band it was not in -- including a game that had put ITSELF in
+            // the band, which is the swapchain-breaking call the band rule
+            // exists to avoid.
+            Banded = snapshot.IsTopmost,
+            AdoptedAt = Now,
         };
 
         _windows[snapshot.Handle] = window;
@@ -811,7 +831,15 @@ public sealed partial class Desk
 
         if (snapshot.IsMinimized && window.State != WindowState.Minimized)
         {
-            window.PreviousState = window.State;
+            // Fullscreen is not a state to come back FROM: what the window was
+            // before it covered the screen is what it goes back to when it
+            // stops, and that is kept across the taskbar.
+            window.WasFullscreen = window.State == WindowState.Fullscreen;
+            if (!window.WasFullscreen)
+            {
+                window.PreviousState = window.State;
+            }
+
             window.State = WindowState.Minimized;
 
             // The shell lets the taskbar back up the moment a window it was
@@ -893,8 +921,12 @@ public sealed partial class Desk
             SetFullscreen(window, true);
         }
         else if (!coversTheScreen && window.State == WindowState.Fullscreen
-                 && was.FrameBounds != snapshot.FrameBounds)
+                 && was.FrameBounds != snapshot.FrameBounds
+                 && window.Placed?.CloseTo(snapshot.FrameBounds, PlacementSlack) != true)
         {
+            // Only when it is somewhere AkuWM did not put it. A console asked
+            // to cover the screen lands a character cell short, which is
+            // within the slack and not the window leaving fullscreen.
             SetFullscreen(window, false);
         }
     }
@@ -923,6 +955,11 @@ public sealed partial class Desk
         Forgotten?.Invoke(handle);
         _hidden.Remove(handle);
         _asked.Remove(handle);
+
+        if (_wantFocus == handle)
+        {
+            _wantFocus = WindowHandle.None;
+        }
 
         if (window.Workspace is { } name)
         {
@@ -986,6 +1023,15 @@ public sealed partial class Desk
         window.Sticky = true;
         window.StickyMonitor = monitor.Role;
         window.FloatingRect ??= window.Snapshot.FrameBounds;
+
+        if (window.State == WindowState.Fullscreen)
+        {
+            // Covering the screen is a workspace's, and it has just left its
+            // workspace: the slot was released above, and a window left in
+            // this state kept the taskbar mark and refused every toggle.
+            window.State = WindowState.Floating;
+            window.PreviousState = WindowState.Floating;
+        }
 
         if (window.State == WindowState.Tiling)
         {
@@ -1295,8 +1341,17 @@ public sealed partial class Desk
         return resolved;
     }
 
-    private SplitDirection DirectionFor(Workspace workspace)
+    /// <summary>
+    /// Which way the next window on a workspace splits: the workspace's own
+    /// setting, then the layout default, then the shape of its screen.
+    /// </summary>
+    public SplitDirection DirectionFor(Workspace workspace)
     {
+        if (workspace.Direction is { } own)
+        {
+            return own;
+        }
+
         if (Config.Layout?.DefaultDirection is { Length: > 0 } configured
             && ParseDirection(configured) is { } explicitDirection)
         {
@@ -1305,7 +1360,7 @@ public sealed partial class Desk
 
         // "auto": the shape of the screen decides, so the portrait monitor
         // stacks and the wide one puts windows side by side.
-        return MonitorOf(workspace)?.NaturalDirection ?? workspace.Direction;
+        return MonitorOf(workspace)?.NaturalDirection ?? SplitDirection.Horizontal;
     }
 
     // ---- gaps -------------------------------------------------------------

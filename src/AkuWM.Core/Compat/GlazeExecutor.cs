@@ -349,7 +349,11 @@ public sealed class GlazeExecutor
             }
 
             DeskMonitor monitor = _desk.Monitors[index];
-            _desk.WantFocus(monitor.Displayed?.LastFocused ?? WindowHandle.None);
+
+            // Naming a monitor is saying where you are, whether or not it has
+            // a window to focus: the next window opens there.
+            _desk.LookAt(monitor);
+            _desk.WantFocus(monitor.Displayed is { } shown ? _desk.VisibleLastFocused(shown) : WindowHandle.None);
             return ExecResult.Ok(monitor.Id);
         }
 
@@ -590,7 +594,9 @@ public sealed class GlazeExecutor
             return _desk.Windows.FirstOrDefault(w => w.Id == id);
         }
 
-        return _desk.Window(_desk.Focused) is { Managed: true } focused ? focused : null;
+        // Never a hidden one: a chord with no --id after a switch to an empty
+        // workspace used to float, move or close the window just put away.
+        return _desk.Window(_desk.Focused) is { Managed: true, Hidden: false } focused ? focused : null;
     }
 
     /// <summary>Brings the workspace a window lives on into view, if it is not.</summary>
@@ -622,8 +628,7 @@ public sealed class GlazeExecutor
             : _desk.FocusedMonitor?.Displayed;
 
         SplitDirection direction = workspace?.Tiling.Root?.Direction
-                                   ?? workspace?.Direction
-                                   ?? SplitDirection.Horizontal;
+                                   ?? (workspace is null ? SplitDirection.Horizontal : _desk.DirectionFor(workspace));
 
         return ExecResult.Ok(data: new JsonObject
         {

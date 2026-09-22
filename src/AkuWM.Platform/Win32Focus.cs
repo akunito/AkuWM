@@ -105,20 +105,21 @@ public static class Win32Focus
             return new FocusResult(FocusRoute.Direct, "a plain SetForegroundWindow did it");
         }
 
-        if (WithAttachedInput(hwnd))
-        {
-            return new FocusResult(FocusRoute.AttachedInput, "attaching the input queues did it");
-        }
-
-        // The last route fabricates a keystroke. That is exactly the shape of
-        // input an anti-cheat is built to notice, and a window manager has no
-        // business making one while a game is in front. Giving up on the focus
-        // is the cheaper mistake by a wide margin.
+        // Before the attach route, not only before the injection: attaching
+        // this thread's input queue to a game's is coupling to the thing the
+        // anti-cheat policy says never to touch (docs/input-and-anticheat.md),
+        // and with uiAccess the attach is no longer refused by integrity. Both
+        // fallbacks also cost up to SettleMs each on the wm thread.
         if (GameInFront?.Invoke() == true)
         {
             return new FocusResult(
                 FocusRoute.RefusedNearGame,
-                "refused: the remaining route injects a keystroke, and a game has the foreground");
+                "refused: the remaining routes attach to or inject into the foreground, and a game has it");
+        }
+
+        if (WithAttachedInput(hwnd))
+        {
+            return new FocusResult(FocusRoute.AttachedInput, "attaching the input queues did it");
         }
 
         if (WithInjectedInput(hwnd))
@@ -130,6 +131,27 @@ public static class Win32Focus
         return new FocusResult(
             FocusRoute.Refused,
             $"refused by all three routes; the foreground is {Describe(PInvoke.GetForegroundWindow())}");
+    }
+
+    /// <summary>
+    /// Takes the keyboard off the foreground window by handing it to the
+    /// shell's own desktop window. Direct route only: no attach, no injection.
+    /// </summary>
+    /// <remarks>
+    /// Cloaking never moves the foreground, so a switch to an empty workspace
+    /// left every keystroke going to the window that had just been hidden.
+    /// </remarks>
+    public static bool Unfocus()
+    {
+        HWND was = PInvoke.GetForegroundWindow();
+        HWND desktop = PInvoke.GetShellWindow();
+        if (desktop.IsNull)
+        {
+            desktop = PInvoke.GetDesktopWindow();
+        }
+
+        PInvoke.SetForegroundWindow(desktop);
+        return PInvoke.GetForegroundWindow() != was;
     }
 
     /// <summary>

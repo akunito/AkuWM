@@ -14,7 +14,7 @@ namespace AkuWM.Core.Desk;
 /// </remarks>
 public sealed class Workspace
 {
-    public Workspace(string name, string monitorRole, SplitDirection direction)
+    public Workspace(string name, string monitorRole, SplitDirection? direction = null)
     {
         Name = name;
         MonitorRole = monitorRole;
@@ -49,8 +49,18 @@ public sealed class Workspace
     /// </remarks>
     public string MonitorRole { get; internal set; }
 
-    /// <summary>Which way a new window splits the focused container.</summary>
-    public SplitDirection Direction { get; set; }
+    /// <summary>
+    /// Which way a new window splits the focused container, when the
+    /// configuration says so for this workspace; null leaves it to the layout
+    /// default and the monitor's shape (<c>Desk.DirectionFor</c>).
+    /// </summary>
+    /// <remarks>
+    /// It was a plain Horizontal for every workspace without a setting, and
+    /// the monitor's natural direction was consulted FIRST -- so the setting
+    /// was dead, and an empty workspace on the portrait monitor answered
+    /// "horizontal" to the bar while the next window would stack.
+    /// </remarks>
+    public SplitDirection? Direction { get; set; }
 
     /// <summary>Kept in the bar even when it is empty.</summary>
     public bool KeepAlive { get; set; }
@@ -78,8 +88,11 @@ public sealed class Workspace
 
     // Straight at the three containers: the Concat/Distinct chain allocated a
     // kilobyte per call, and Compute calls it for every workspace.
+    // None is in no workspace: an empty Fullscreen slot compared equal to it,
+    // so a workspace with nothing covering it "contained" the absent focus and
+    // told the bar it had it.
     public bool Contains(WindowHandle window) =>
-        Fullscreen == window || Floating.Contains(window) || Tiling.Contains(window);
+        !window.IsNone && (Fullscreen == window || Floating.Contains(window) || Tiling.Contains(window));
 
     /// <summary>Puts a window at the front of the focus order.</summary>
     public void Touch(WindowHandle window)

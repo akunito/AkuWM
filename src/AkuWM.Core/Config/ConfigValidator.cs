@@ -231,6 +231,11 @@ public static class ConfigValidator
             issues.Add(ValidationIssue.Error(
                 at + ".opacity", $"{opacity} is outside 0.05 to 1"));
         }
+
+        if (effects.ReassertMs is { } reassert && reassert is < 0 or > 5000)
+        {
+            issues.Add(ValidationIssue.Error(at + ".reassert_ms", $"{reassert} is outside 0 to 5000"));
+        }
     }
 
     private static void CheckColour(string? value, string path, List<ValidationIssue> issues)

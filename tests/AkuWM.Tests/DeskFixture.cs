@@ -178,14 +178,44 @@ public sealed class DeskFixture
             Platform.SetTopmost(handle, topmost);
         }
 
+        HashSet<WindowHandle>? undecorated = null;
         foreach ((WindowHandle handle, Decoration how) in redraw.Decorate)
         {
-            Platform.Decorate(handle, how);
+            if (!Platform.Decorate(handle, how))
+            {
+                (undecorated ??= []).Add(handle);
+            }
         }
 
-        Desk.Applied(redraw);
+        foreach ((WindowHandle handle, WindowHandle behind) in redraw.Behind)
+        {
+            Platform.PlaceBehind(handle, behind);
+        }
+
+        // The focus half of the applier, which this fixture used to skip: the
+        // model then only ever learned the focus from direct calls, and the
+        // whole class of "where does the next window open" faults the desk
+        // showed could not be written down here.
+        bool focusRefused = false;
+        if (!redraw.Focus.IsNone)
+        {
+            focusRefused = !Platform.Focus(redraw.Focus);
+        }
+        else if (redraw.Unfocus)
+        {
+            Platform.Unfocus();
+        }
+
+        Desk.Applied(redraw, undecorated: undecorated, focusRefused: focusRefused);
         Sync();
         return redraw;
+    }
+
+    /// <summary>Windows hands the foreground to a window: what the hook reports.</summary>
+    public bool Foreground(long handle)
+    {
+        Platform.ForegroundWindow = W(handle);
+        return Desk.Focus(W(handle));
     }
 
     public Rect FrameOf(long handle) => Platform.Window(new WindowHandle(handle))!.FrameBounds;

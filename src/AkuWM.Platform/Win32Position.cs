@@ -189,6 +189,21 @@ public static class Win32Position
             | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
 
     /// <summary>
+    /// Puts a window directly behind another. The call lands on the window
+    /// being moved, never on the one it goes behind, so a game's swapchain is
+    /// not touched by it.
+    /// </summary>
+    public static bool PlaceBehind(WindowHandle window, WindowHandle behind) =>
+        PInvoke.SetWindowPos(
+            new HWND((IntPtr)window.Value),
+            new HWND((IntPtr)behind.Value),
+            0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE
+            | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
+            | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE
+            | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER);
+
+    /// <summary>
     /// Turns a visible-frame rectangle into the outer rectangle
     /// <c>SetWindowPos</c> expects.
     /// </summary>
