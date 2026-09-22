@@ -299,7 +299,10 @@ public sealed class WindowManager : IAsyncDisposable
                 return;
 
             case EventResponse.TheScreensChanged:
-                _desk.SetMonitors(_platform.Monitors());
+                IReadOnlyList<MonitorSnapshot> now = _platform.Monitors();
+                _desk.SetMonitors(now);
+                _screens.Prime(now);
+                Log.Info($"the screens changed (notified); {Describe(now)}");
                 _resync = true;
                 break;
 
@@ -349,6 +352,23 @@ public sealed class WindowManager : IAsyncDisposable
     /// nothing said so.
     /// </summary>
     private readonly ScreenWatch _screens = new();
+
+    // Work area is the bar-aware rectangle: a taskbar or app bar that moved,
+    // grew or hid shows up here as the only difference (measured 2026-09-22:
+    // an 80 px app bar on the left made the main work area 80,42 3760x2118
+    // within 0.7 s, through the broadcast).
+    private static string Describe(IReadOnlyList<MonitorSnapshot> screens)
+    {
+        var text = new System.Text.StringBuilder(screens.Count * 48);
+        text.Append(screens.Count).Append(" now:");
+        for (int i = 0; i < screens.Count; i++)
+        {
+            MonitorSnapshot s = screens[i];
+            text.Append(' ').Append(s.HardwareId).Append(" work ").Append(s.WorkArea).Append(" of ").Append(s.Bounds);
+        }
+
+        return text.ToString();
+    }
 
     /// <summary>
     /// Sends the focused window's decoration once more, a beat after the
@@ -405,7 +425,7 @@ public sealed class WindowManager : IAsyncDisposable
         // plugged in, and an idle pass is the only thing running then.
         if (_screens.Changed(_platform.Monitors))
         {
-            Log.Info($"the screens changed without a notification; {_screens.Last.Count} now");
+            Log.Info($"the screens changed without a notification; {Describe(_screens.Last)}");
             _desk.SetMonitors(_screens.Last);
             _resync = true;
             _dirty = true;
