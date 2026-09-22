@@ -62,6 +62,9 @@ public sealed class ConfigPaths
     /// <summary>Where each window is, in AkuWM's terms, for the next start.</summary>
     public string PlacementsFile => Path.Combine(RuntimeDir, "placements.bin");
 
+    /// <summary>How each application's window was last closed, for the next one.</summary>
+    public string AppMemoryFile => Path.Combine(RuntimeDir, "apps.tsv");
+
     /// <summary>How the last run ended. Two bad endings in a row means safe mode.</summary>
     public string SessionFile => Path.Combine(RuntimeDir, "session.json");
 

@@ -272,3 +272,78 @@ public class ScreensMovingThingsTests
         Assert.Contains(W(1), f.Turn().Restore);
     }
 }
+
+public class ParkedTilesKeepTheirSlotTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void Two_parked_tiles_come_back_in_the_same_order()
+    {
+        var f = new DeskFixture();
+        f.Open(1);
+        f.Open(2);
+        f.Turn();
+        Rect a = f.FrameOf(1);
+        Rect b = f.FrameOf(2);
+
+        MonitorSnapshot main = f.Platform.MonitorList[0];
+        f.Platform.MonitorList[0] = main with { Bounds = new Rect(0, 0, 2560, 1440), WorkArea = new Rect(0, 42, 2560, 1398) };
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Wait(500);
+        // Windows parks them in the other order.
+        f.Platform.SetMinimized(W(2), true);
+        f.Move(2, new Rect(-32000, -32000, 237, 39));
+        f.Platform.SetMinimized(W(1), true);
+        f.Move(1, new Rect(-32000, -32000, 237, 39));
+        Assert.True(f.Desk.Workspace("11")!.Tiling.Contains(W(1)), "the slot is kept while parked");
+
+        f.Platform.MonitorList[0] = main;
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Wait(AkuWM.Core.Desk.Desk.MonitorSettleMs);
+        f.Turn();
+        f.Turn();
+        f.Turn();
+
+        Assert.Equal(a, f.FrameOf(1));
+        Assert.Equal(b, f.FrameOf(2));
+    }
+}
+
+public class PointerOnTheWindowTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_move_with_the_pointer_elsewhere_is_not_the_persons_and_is_put_back()
+    {
+        var f = new DeskFixture();
+        f.Open(1, frame: new Rect(1000, 500, 900, 700));
+        Assert.True(f.Desk.SetFloating(W(1), true));
+        f.Turn();
+        Rect chosen = f.Managed(1)!.FloatingRect!.Value;
+
+        // Windows (or the application) moves it while the pointer is far away.
+        f.Move(1, new Rect(3900, 100, 900, 700), hand: (200, 2000));
+        f.Wait(AkuWM.Core.Desk.Desk.SettleMs + 1);
+        f.Turn();
+        f.Turn();
+
+        Assert.Equal(chosen, f.Managed(1)!.FloatingRect);
+        Assert.Equal(chosen, f.FrameOf(1));
+        Assert.Equal("11", f.Managed(1)!.Workspace);
+    }
+
+    [Fact]
+    public void A_drag_with_the_hand_on_it_is()
+    {
+        var f = new DeskFixture();
+        f.Open(1, frame: new Rect(1000, 500, 900, 700));
+        Assert.True(f.Desk.SetFloating(W(1), true));
+        f.Turn();
+
+        f.Move(1, new Rect(1500, 600, 900, 700));
+        f.Turn();
+        Assert.Equal(new Rect(1500, 600, 900, 700), f.Managed(1)!.FloatingRect);
+    }
+}

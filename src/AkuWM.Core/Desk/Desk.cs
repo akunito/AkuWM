@@ -876,6 +876,15 @@ public sealed partial class Desk
         }
 
         Workspace? workspace = TargetWorkspace(decision, snapshot);
+
+        // The second level of rules: what the person did to the last window
+        // of this application, when no rule of theirs speaks. Not during the
+        // first sync -- those windows are where they are.
+        if (Settled && workspace is not null && MonitorOf(workspace) is { } on)
+        {
+            RecallApp(window, snapshot, on);
+        }
+
         if (workspace is not null)
         {
             Place(window, workspace);
@@ -888,6 +897,100 @@ public sealed partial class Desk
 
     /// <summary>Lets the desk remember where every window is across a restart.</summary>
     public void RemembersPlacementsWith(State.PlacementJournal journal) => _placements = journal;
+
+    private State.AppMemory? _apps;
+
+    /// <summary>Lets the desk open a window as the last one of its application was closed.</summary>
+    public void RemembersAppsWith(State.AppMemory memory) => _apps = memory;
+
+    private bool RemembersApps => _apps is not null && Config.General?.RememberApps != false;
+
+    /// <summary>Whether the pointer is on (or within a hand's reach of) a rectangle; true when the desk cannot read it.</summary>
+    private bool PointerOn(Rect frame)
+    {
+        if (_cursor is null)
+        {
+            return true;
+        }
+
+        (int x, int y) = _cursor();
+        return frame.Inflate(64).Contains(x, y);
+    }
+
+    /// <summary>The screen the pointer is on, when the desk can read it and the person wants windows there.</summary>
+    private DeskMonitor? MonitorUnderPointer()
+    {
+        if (Config.General?.OpenUnderPointer == false || _cursor is null)
+        {
+            return null;
+        }
+
+        (int x, int y) = _cursor();
+        for (int i = 0; i < _monitors.Count; i++)
+        {
+            if (_monitors[i].FullArea.Contains(x, y))
+            {
+                return _monitors[i];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Opens a window the way the last one of its application was closed,
+    /// on the given screen. False when there is nothing remembered.
+    /// </summary>
+    private bool RecallApp(DeskWindow window, WindowSnapshot snapshot, DeskMonitor on)
+    {
+        if (!RemembersApps || snapshot.IsElevated || window.Rules.Count > 0
+            || _apps!.Recall(State.AppMemory.KeyOf(snapshot)) is not { } memory)
+        {
+            return false;
+        }
+
+        if (memory.Floating)
+        {
+            Rect work = on.TilingArea;
+            int width = Math.Min(memory.Width, work.Width);
+            int height = Math.Min(memory.Height, work.Height);
+            window.FloatingRect = new Rect(
+                Math.Clamp(work.X + memory.OffsetX, work.Left, work.Right - width),
+                Math.Clamp(work.Y + memory.OffsetY, work.Top, work.Bottom - height),
+                width,
+                height);
+            window.State = WindowState.Floating;
+            window.PreviousState = WindowState.Floating;
+        }
+        else
+        {
+            window.State = WindowState.Tiling;
+            window.PreviousState = WindowState.Tiling;
+        }
+
+        return true;
+    }
+
+    /// <summary>Writes down how a window was when it closed, for the next one of its application.</summary>
+    private void RememberApp(DeskWindow window)
+    {
+        if (!RemembersApps || !window.Managed || window.Sticky || window.Snapshot.IsElevated
+            || window.Rules.Count > 0 || window.State == WindowState.Fullscreen)
+        {
+            return;
+        }
+
+        bool floating = window.State == WindowState.Floating
+            || (window.State == WindowState.Minimized && window.PreviousState == WindowState.Floating);
+        Rect frame = window.FloatingRect ?? window.Snapshot.FrameBounds;
+        Rect work = (window.Workspace is { } name && Workspace(name) is { } workspace ? MonitorOf(workspace) : null)?.TilingArea
+            ?? MonitorByHandle(window.Snapshot.Monitor)?.TilingArea
+            ?? default;
+
+        _apps!.Remember(
+            State.AppMemory.KeyOf(window.Snapshot),
+            new State.AppRecord(floating, frame.Width, frame.Height, frame.X - work.X, frame.Y - work.Y));
+    }
 
     /// <summary>Puts an adopted window back where the last run had it. False when that place is gone.</summary>
     private bool Recall(DeskWindow window, in State.Placed remembered)
@@ -1099,7 +1202,13 @@ public sealed partial class Desk
                 // other window behind a window nobody can see. Its place in
                 // the floating band is kept, because that is where it goes
                 // back to.
-                leaving.Tiling.Remove(window.Handle);
+                // A window Windows parked keeps its slot in the tree: put
+                // back at the end of the tree, the two Zen tiles came back
+                // swapped (2026-09-22 19:13). Compute skips a minimised tile.
+                if (!window.Parked)
+                {
+                    leaving.Tiling.Remove(window.Handle);
+                }
 
                 if (leaving.Fullscreen == window.Handle)
                 {
@@ -1183,9 +1292,15 @@ public sealed partial class Desk
         // landscape screen it passed through); learned, that became where
         // the person put them. The rectangle the model has is put back once
         // the screens settle.
+        // And only with the pointer on the window: a drag or an Alt+drag has
+        // the hand on it, and every move Windows makes -- a screen change
+        // it had not even reported yet sent Explorer to the vertical screen
+        // (19:13) -- has the pointer somewhere else. An application moving
+        // itself is not learned either; the placement puts it back.
         if ((window.State == WindowState.Floating || window.Sticky)
             && !window.Hidden
             && !ScreensMovingThings
+            && PointerOn(snapshot.FrameBounds)
             && was.FrameBounds != snapshot.FrameBounds
             && !arriving
             && !rounding)
@@ -1282,6 +1397,8 @@ public sealed partial class Desk
         {
             (_outlinedGone ??= []).Add(handle);
         }
+
+        RememberApp(window);
 
         // Said out loud: a window closing while AkuWM had it hidden is a
         // window the person may not know is gone.
@@ -1417,6 +1534,13 @@ public sealed partial class Desk
         //
         // Not during the first sync. Every window on the desk is new then, and
         // they belong where they already are, not piled onto one workspace.
+        // The screen the pointer is on first (Diego: a window opens where the
+        // mouse is), then the one with the focus.
+        if (Settled && MonitorUnderPointer()?.Displayed is { } underPointer)
+        {
+            return underPointer;
+        }
+
         if (Settled && FocusedMonitor?.Displayed is { } here)
         {
             return here;
@@ -1671,9 +1795,14 @@ public sealed partial class Desk
                     SetFullscreen(covering, false);
                 }
 
-                WindowHandle beside = workspace.FocusOrder
-                    .FirstOrDefault(h => workspace.Tiling.Contains(h));
-                workspace.Tiling.Add(window.Handle, beside, DirectionFor(workspace));
+                // A parked window kept its slot; it is simply back in it.
+                if (!workspace.Tiling.Contains(window.Handle))
+                {
+                    WindowHandle beside = workspace.FocusOrder
+                        .FirstOrDefault(h => workspace.Tiling.Contains(h));
+                    workspace.Tiling.Add(window.Handle, beside, DirectionFor(workspace));
+                }
+
                 break;
         }
 

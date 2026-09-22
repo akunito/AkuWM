@@ -100,6 +100,11 @@ public sealed class WindowManager : IAsyncDisposable
             _desk.RemembersPlacementsWith(placements);
             _desk.Forgotten += placements.Forget;
         }
+
+        if (paths is not null)
+        {
+            _desk.RemembersAppsWith(new AppMemory(paths.AppMemoryFile));
+        }
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
         _desk.ReadsTheCursorWith(() => _platform.CursorPosition());
 

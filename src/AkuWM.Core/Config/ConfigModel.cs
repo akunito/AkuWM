@@ -73,6 +73,20 @@ public sealed class GeneralConfig
     public bool? RememberPlacements { get; set; }
 
     /// <summary>
+    /// A window with no rule of its own opens as the last window of that
+    /// application was closed: floating or tiled, the same size, at the same
+    /// place on the screen it opens on. Default true. Elevated windows are
+    /// left out.
+    /// </summary>
+    public bool? RememberApps { get; set; }
+
+    /// <summary>
+    /// A window with no rule of its own opens on the screen the pointer is
+    /// on, not the one that has the focus. Default true.
+    /// </summary>
+    public bool? OpenUnderPointer { get; set; }
+
+    /// <summary>
     /// Whether the bar lists a workspace that has no windows in it.
     /// </summary>
     /// <remarks>

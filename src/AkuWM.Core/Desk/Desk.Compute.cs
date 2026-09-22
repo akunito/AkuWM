@@ -114,6 +114,12 @@ public sealed partial class Desk
                         continue;
                     }
 
+                    // Parked by Windows, slot kept: nothing to place until it is back.
+                    if (window.State == WindowState.Minimized)
+                    {
+                        continue;
+                    }
+
                     WantHidden(window, false, hide, show);
                     WantUnmaximized(window, unmaximize);
                     WantPlaced(window, rect, monitor, place);

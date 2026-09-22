@@ -65,7 +65,10 @@ public sealed class DeskFixture
     /// <summary>The two monitors of this machine and ten workspaces, as the imported configuration has them.</summary>
     public static AkuWmConfig Configuration() => new()
     {
-        General = new GeneralConfig { ToggleWorkspaceOnRefocus = true },
+        // The pointer sits at 0,0 in this fixture unless a test moves it, so
+        // "open under the pointer" (the desk's default) would put every new
+        // window on the main screen; the tests that want it turn it on.
+        General = new GeneralConfig { ToggleWorkspaceOnRefocus = true, OpenUnderPointer = false },
         Gaps = new GapsConfig { Inner = 8, Outer = [0, 0, 0, 0], ScaleWithDpi = true },
         Layout = new LayoutConfig { DefaultDirection = "auto", FloatUnresizable = true },
         Monitors =
