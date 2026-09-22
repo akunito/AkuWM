@@ -766,6 +766,7 @@ public sealed partial class Desk
             }
 
             window.Placed = placement.Frame;
+            window.SteadySize = null; // put down: whatever Windows does next is fresh
         }
 
         foreach (WindowHandle handle in redraw.Unmaximize)

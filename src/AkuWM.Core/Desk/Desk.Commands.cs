@@ -385,6 +385,7 @@ public sealed partial class Desk
 
         int by = direction.IsBackwards() ? -pixels : pixels;
 
+        window.SteadySize = null; // the person chose a size
         window.FloatingRect = direction.Axis() == SplitDirection.Horizontal
             ? rect with { Width = Math.Max(100, rect.Width + by) }
             : rect with { Height = Math.Max(100, rect.Height + by) };

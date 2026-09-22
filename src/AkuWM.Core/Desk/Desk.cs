@@ -1049,14 +1049,20 @@ public sealed partial class Desk
             // the person's: the size is kept and only the place follows.
             bool blownUp = !snapshot.PerMonitorDpi
                 && !snapshot.IsMaximized
-                && window.FloatingRect is { } kept
+                && window.FloatingRect is not null
                 && (Math.Abs(snapshot.FrameBounds.Width - was.FrameBounds.Width) > RescaleJump
                     || Math.Abs(snapshot.FrameBounds.Height - was.FrameBounds.Height) > RescaleJump);
 
-            if (blownUp)
+            if (blownUp && window.SteadySize is null)
             {
-                window.FloatingRect = new Rect(
-                    snapshot.FrameBounds.X, snapshot.FrameBounds.Y, window.FloatingRect!.Value.Width, window.FloatingRect.Value.Height);
+                window.SteadySize = (window.FloatingRect!.Value.Width, window.FloatingRect.Value.Height);
+            }
+
+            if (window.SteadySize is { } steady)
+            {
+                // Blown up and still in the hand: the place follows, the size
+                // it had is kept until AkuWM has put it down again.
+                window.FloatingRect = new Rect(snapshot.FrameBounds.X, snapshot.FrameBounds.Y, steady.Width, steady.Height);
                 Rehome(window, snapshot);
             }
             else if (!rescaling)

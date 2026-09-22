@@ -848,10 +848,18 @@ public class BlownUpWindowTests
             fixture.Turn();
         }
 
-        // Its border touched the vertical monitor: one observation, 1908 to 3318 wide.
+        // Its border touched the vertical monitor: one observation, 1908 to 3318
+        // wide -- and a few pixels more on every tick of the drag after that.
         fixture.Wait(16);
         fixture.Move(1, new Rect(1290, 100, 3318, 1244));
         fixture.Turn();
+        for (int w = 3331; w <= 3370; w += 13)
+        {
+            fixture.Wait(16);
+            fixture.Move(1, new Rect(1290, 100, w, 1244));
+            Assert.Empty(fixture.Turn().Place);
+        }
+
         fixture.Wait(Desk.SettleMs + 1);
         Redraw redraw = fixture.Turn();
 

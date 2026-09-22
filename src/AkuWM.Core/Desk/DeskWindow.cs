@@ -73,6 +73,16 @@ public sealed class DeskWindow
     public Rect? Placed { get; set; }
 
     /// <summary>
+    /// The size a window that leaves its scaling to Windows had before
+    /// Windows blew it up at a seam; kept until AkuWM has placed it again.
+    /// </summary>
+    /// <remarks>
+    /// One jump was caught and the next tick, thirteen pixels wider as the
+    /// drag went on, was believed -- the blown-up size came back anyway.
+    /// </remarks>
+    public (int Width, int Height)? SteadySize { get; set; }
+
+    /// <summary>
     /// When AkuWM last asked Windows to un-maximise it, so the maximised
     /// rectangle seen meanwhile is not read as the window covering its screen.
     /// </summary>
