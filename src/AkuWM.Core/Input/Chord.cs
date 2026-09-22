@@ -100,6 +100,9 @@ public readonly record struct Chord(KeyModifiers Modifiers, string Key)
         "SPACE", "TAB", "ENTER", "ESC", "ESCAPE", "BACKSPACE", "DELETE", "INSERT",
         "HOME", "END", "PAGEUP", "PAGEDOWN", "LEFT", "RIGHT", "UP", "DOWN",
         "PRINTSCREEN", "PAUSE",
+        // The mouse wheel as a key: Hyper+WheelDown lowers a floating window,
+        // Hyper+WheelUp raises it (AutoHotkey binds them the same way).
+        "WHEELUP", "WHEELDOWN", "WHEELLEFT", "WHEELRIGHT",
     };
 
     /// <summary>Canonical text: modifiers in a fixed order, then the key.</summary>

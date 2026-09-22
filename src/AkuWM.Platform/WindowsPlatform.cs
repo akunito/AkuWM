@@ -114,7 +114,16 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public bool SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
 
-    public void Raise(WindowHandle window) => Win32Position.Raise(window);
+    public void Raise(WindowHandle window)
+    {
+        // A window still in the always-on-top band is above every tile
+        // already; read now, not from the model, which learned the band when
+        // it asked for it and not when the application took it off.
+        if (!Win32Position.IsTopmost(window))
+        {
+            Win32Position.Raise(window);
+        }
+    }
 
     public void Lower(WindowHandle window) => Win32Position.Lower(window);
 

@@ -145,6 +145,12 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     public void Raise(WindowHandle window)
     {
         Calls.Add($"raise {window.Value}");
+        // As the platform does: one in the band is above the tiles already.
+        if (Window(window) is { IsTopmost: true })
+        {
+            return;
+        }
+
         Raised.Add(window);
     }
 

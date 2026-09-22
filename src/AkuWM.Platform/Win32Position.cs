@@ -200,14 +200,55 @@ public static class Win32Position
         ((int)PInvoke.GetWindowLongPtr(new HWND((IntPtr)window.Value), WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE)
          & (int)WINDOW_EX_STYLE.WS_EX_TOPMOST) != 0;
 
-    public static bool Raise(WindowHandle window) =>
-        PInvoke.SetWindowPos(
-            new HWND((IntPtr)window.Value),
-            HWND.HWND_TOP,
-            0, 0, 0, 0,
-            SET_WINDOW_POS_FLAGS.SWP_NOMOVE
-            | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
-            | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+    /// <summary>
+    /// Brings a window over the foreground one without activating it.
+    /// </summary>
+    /// <remarks>
+    /// HWND_TOP from a process without the foreground right lands the window
+    /// directly BELOW the foreground window, not above it: measured on the
+    /// desk 2026-09-22 17:13, "raise 0x40762" in the log, the terminal still
+    /// under the tile just clicked; the same call from an interactive
+    /// PowerShell put it on top. So when the window is still under the
+    /// foreground window afterwards, the foreground window is moved behind
+    /// it instead -- lowering a window needs no right at all.
+    /// </remarks>
+    public static bool Raise(WindowHandle window)
+    {
+        var hwnd = new HWND((IntPtr)window.Value);
+        const SET_WINDOW_POS_FLAGS flags =
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE;
+
+        bool ok = PInvoke.SetWindowPos(hwnd, HWND.HWND_TOP, 0, 0, 0, 0, flags);
+
+        HWND foreground = PInvoke.GetForegroundWindow();
+        if (foreground.IsNull || foreground == hwnd || !IsAbove(foreground, hwnd))
+        {
+            return ok;
+        }
+
+        return PInvoke.SetWindowPos(foreground, hwnd, 0, 0, 0, 0, flags);
+    }
+
+    /// <summary>Whether <paramref name="a"/> sits above <paramref name="b"/> in the z-order (walks up from b, at most 256 steps).</summary>
+    private static bool IsAbove(HWND a, HWND b)
+    {
+        HWND at = b;
+        for (int i = 0; i < 256; i++)
+        {
+            at = PInvoke.GetWindow(at, GET_WINDOW_CMD.GW_HWNDPREV);
+            if (at.IsNull)
+            {
+                return false;
+            }
+
+            if (at == a)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public static bool Lower(WindowHandle window) =>
         PInvoke.SetWindowPos(

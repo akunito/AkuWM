@@ -161,6 +161,16 @@ public sealed class DeskApplier
             {
                 Log.Debug($"  band {redraw.Band[i].Window} topmost={redraw.Band[i].Topmost}");
             }
+
+            for (int i = 0; i < redraw.Raise.Count; i++)
+            {
+                Log.Debug($"  raise {redraw.Raise[i]} over the tiles");
+            }
+
+            for (int i = 0; i < redraw.Lower.Count; i++)
+            {
+                Log.Debug($"  lower {redraw.Lower[i]} behind the tiles");
+            }
         }
 
         // Timed apart from the rest. The whole-redraw number could not answer

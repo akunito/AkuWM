@@ -95,6 +95,7 @@ public sealed partial class Desk
             if (window.State == WindowState.Tiling)
             {
                 _raiseOver = workspace;
+                _raiseAskedAt = Now;
             }
 
             // The screen the desk says it belongs to, not the one Windows has
@@ -463,6 +464,7 @@ public sealed partial class Desk
         {
             // Back over the tiles now, band or not: the next pass raises it.
             _raiseOver = workspace;
+            _raiseAskedAt = Now - RaiseDelayMs; // no click to wait for
         }
 
         return true;

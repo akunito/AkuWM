@@ -43,10 +43,32 @@ public class FloatingOverTilesTests
         Assert.True(f.Managed(2)!.Banded);
 
         f.Foreground(1);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Redraw redraw = f.Turn();
 
-        Assert.Empty(redraw.Raise);
+        // Asked, and the platform finds it still in the band: not touched.
+        Assert.Contains(W(2), redraw.Raise);
+        Assert.Empty(f.Platform.Raised);
+        Assert.False(f.Desk.Unsettled);
         Assert.DoesNotContain(redraw.Band, b => b.Window == W(2));
+    }
+
+    [Fact]
+    public void A_band_the_application_strips_later_is_caught_by_the_fresh_read()
+    {
+        DeskFixture f = TileAndFloat(bandRefused: false);
+        Assert.True(f.Managed(2)!.Banded);
+
+        // Windows Terminal, on its own activation: the bit goes, the model
+        // still says banded.
+        f.Platform.SetTopmost(W(2), false);
+        f.Managed(2)!.Banded = true;
+
+        f.Foreground(1);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
+        f.Turn();
+
+        Assert.Contains(W(2), f.Platform.Raised);
     }
 
     [Fact]
@@ -68,6 +90,13 @@ public class FloatingOverTilesTests
         DeskFixture f = TileAndFloat(bandRefused: true);
 
         f.Foreground(1);
+        // Not in the same breath as the click: the tile's own button-down
+        // would put it back on top. The desk asks to be looked at again.
+        Redraw atOnce = f.Turn();
+        Assert.Empty(atOnce.Raise);
+        Assert.True(f.Desk.Unsettled);
+
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Redraw redraw = f.Turn();
 
         Assert.Contains(W(2), redraw.Raise);
@@ -90,12 +119,14 @@ public class FloatingOverTilesTests
         f.Platform.Raised.Clear();
 
         f.Foreground(3);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Redraw redraw = f.Turn();
 
         Assert.Contains(W(4), redraw.Raise);
         Assert.DoesNotContain(W(2), redraw.Raise);
 
         f.Foreground(4);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Assert.Empty(f.Turn().Raise);
     }
 
@@ -113,6 +144,7 @@ public class FloatingOverTilesTests
 
         // A tile focused afterwards does not bring it back.
         f.Foreground(1);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Redraw next = f.Turn();
         Assert.Empty(next.Raise);
         Assert.Empty(next.Lower);
@@ -183,6 +215,7 @@ public class FloatingOverTilesTests
         f.Platform.Raised.Clear();
 
         f.Foreground(1);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Assert.Contains(W(2), f.Turn().Raise);
     }
 
@@ -196,6 +229,31 @@ public class FloatingOverTilesTests
         f.Platform.Raised.Clear();
 
         f.Foreground(1);
+        f.Wait(AkuWM.Core.Desk.Desk.RaiseDelayMs);
         Assert.Empty(f.Turn().Raise);
+    }
+}
+
+/// <summary>
+/// A redraw whose only work is a raise or a lower is work: the applier
+/// returns early on "nothing to do", and the first build of this feature
+/// computed the raise and never sent it (desk, 2026-09-22 17:08).
+/// </summary>
+public class RaiseIsWorkTests
+{
+    [Fact]
+    public void A_redraw_with_only_a_raise_is_not_nothing()
+    {
+        var redraw = new Redraw { Raise = [new WindowHandle(2)] };
+        Assert.False(redraw.IsNothing);
+        Assert.Contains("1 to raise", redraw.ToString());
+    }
+
+    [Fact]
+    public void A_redraw_with_only_a_lower_is_not_nothing()
+    {
+        var redraw = new Redraw { Lower = [new WindowHandle(2)] };
+        Assert.False(redraw.IsNothing);
+        Assert.Contains("1 to lower", redraw.ToString());
     }
 }

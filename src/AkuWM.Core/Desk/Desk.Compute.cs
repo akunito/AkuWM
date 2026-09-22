@@ -326,6 +326,11 @@ public sealed partial class Desk
             _wantFocus = WindowHandle.None;
         }
 
+        if (_raiseOver is not null && Now - _raiseAskedAt >= RaiseDelayMs)
+        {
+            _raiseOver = null;
+        }
+
         return new Redraw
         {
             Place = place,
@@ -763,18 +768,42 @@ public sealed partial class Desk
             return;
         }
 
+        // Every floating window of the workspace, banded or not: the band the
+        // model remembers can be stale (the application strips the bit on
+        // its own activation, later), so the platform reads the bit fresh
+        // and skips the ones still up there.
         if (wanted
             && _raiseOver is { } over
             && ReferenceEquals(over, workspace)
-            && window.Banded != true
             && window.Handle != Focused)
         {
+            if (Now - _raiseAskedAt < RaiseDelayMs)
+            {
+                Unsettled = true; // the settle timer looks again after the click has landed
+                return;
+            }
+
             raise.Add(window.Handle);
         }
     }
 
-    /// <summary>The workspace whose tile has just taken the focus, until the next pass.</summary>
+    /// <summary>The workspace whose tile has just taken the focus, until the raise has gone out.</summary>
     private Workspace? _raiseOver;
+
+    private long _raiseAskedAt;
+
+    /// <summary>
+    /// How long after a tile takes the focus the floating windows are raised
+    /// over it.
+    /// </summary>
+    /// <remarks>
+    /// Not at once: the foreground event arrives while Windows is still
+    /// handling the click that caused it, and the tile's own button-down
+    /// brings it to the top AFTER the raise -- measured on the desk
+    /// 2026-09-22 17:11, "raise 0x40762" in the log and the terminal under
+    /// Brave all the same. The same SetWindowPos 300 ms later sticks.
+    /// </remarks>
+    public const int RaiseDelayMs = 300;
 
     /// <summary>What the shell should draw around one window, right now.</summary>
     private Decoration DecorationFor(DeskWindow window)
@@ -833,8 +862,6 @@ public sealed partial class Desk
         bool focusRefused = false,
         IReadOnlySet<WindowHandle>? unbanded = null)
     {
-        _raiseOver = null;
-
         foreach (WindowHandle handle in redraw.Lower)
         {
             if (Window(handle) is { } lowered)

@@ -12,6 +12,8 @@ public class ChordTests
     [InlineData("Hyper+F9", "Hyper+F9")]
     [InlineData("Hyper + Space", "Hyper+SPACE")]
     [InlineData("Win+Tab", "Win+TAB")]
+    [InlineData("Hyper+WheelDown", "Hyper+WHEELDOWN")]
+    [InlineData("Hyper+WheelUp", "Hyper+WHEELUP")]
     public void ParsesAndCanonicalises(string text, string canonical)
     {
         Assert.True(Chord.TryParse(text, out Chord chord, out string? error), error);
