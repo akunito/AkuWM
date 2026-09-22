@@ -950,7 +950,13 @@ public sealed partial class Desk
     /// </summary>
     private bool RecallApp(DeskWindow window, WindowSnapshot snapshot, DeskMonitor on)
     {
+        // A window born covering its screen or maximised is a game or a
+        // player until proven otherwise: what the last window of the
+        // application was closed as says nothing about this one, and a
+        // remembered "tiled" put a fullscreen fliptest into a tile
+        // (tests/fullscreen startmax, 2026-09-22 22:45).
         if (!RemembersApps || snapshot.IsElevated || window.Rules.Count > 0
+            || window.State == WindowState.Fullscreen
             || _apps!.Recall(State.AppMemory.KeyOf(snapshot)) is not { } memory)
         {
             return false;

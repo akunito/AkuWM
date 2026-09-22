@@ -77,6 +77,20 @@ public class AppMemoryTests
     }
 
     [Fact]
+    public void A_window_born_covering_the_screen_is_not_tiled_because_the_last_one_was()
+    {
+        DeskFixture f = Desk();
+        f.Open(1, process: "fliptest");
+        f.Turn();
+        Assert.Equal(WindowState.Tiling, f.Managed(1)!.State);
+        f.Close(1);
+
+        f.Open(2, process: "fliptest", frame: new Rect(0, 0, 3840, 2160), resizable: false);
+        f.Turn();
+        Assert.Equal(WindowState.Fullscreen, f.Managed(2)!.State);
+    }
+
+    [Fact]
     public void A_window_closed_floating_reopens_floating_with_the_same_size_and_place_on_the_pointers_screen()
     {
         DeskFixture f = Desk();
