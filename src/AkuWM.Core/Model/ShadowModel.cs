@@ -247,6 +247,18 @@ public static class ShadowModel
             return true;
         }
 
-        return monitor is not null && window.FrameBounds.Contains(monitor.Bounds);
+        // Covering the screen means BEING the screen, within a border's
+        // worth, not merely containing it. A window that has grown past its
+        // monitor -- Notepad++ at 5766x2373 after a DPI mishap, 2026-09-22 --
+        // contained the bounds, was declared fullscreen, was asked to cover
+        // them exactly, refused, and every toggle-floating was undone by
+        // the next observation: a window nobody could resize or move.
+        return monitor is not null
+               && window.FrameBounds.Contains(monitor.Bounds)
+               && window.FrameBounds.Width <= monitor.Bounds.Width + FullscreenSlack
+               && window.FrameBounds.Height <= monitor.Bounds.Height + FullscreenSlack;
     }
+
+    /// <summary>How much bigger than its monitor a window may be and still count as covering it.</summary>
+    public const int FullscreenSlack = 64;
 }

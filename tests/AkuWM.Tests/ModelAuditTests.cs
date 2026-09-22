@@ -513,3 +513,40 @@ public class MaximisedApplicationTests
         Assert.DoesNotContain(redraw.Place, p => p.Window == W(1));
     }
 }
+
+/// <summary>A window that outgrew its monitor is not a fullscreen one (2026-09-22).</summary>
+public class OversizedWindowTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_window_bigger_than_the_screen_is_not_fullscreen_and_can_be_floated()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(-4, -213, 5766, 2373)));
+        fixture.Sync();
+        fixture.Turn();
+
+        Assert.Equal(WindowState.Tiling, fixture.Managed(1)!.State);
+
+        // The person floats it; the next observation of the same huge
+        // rectangle must not put it back into fullscreen.
+        Assert.True(fixture.Desk.SetFloating(W(1), true));
+        fixture.Turn();
+        fixture.Platform.ApplicationMoves(W(1), new Rect(-4, -213, 5766, 2373));
+        fixture.Sync();
+
+        Assert.Equal(WindowState.Floating, fixture.Managed(1)!.State);
+    }
+
+    [Fact]
+    public void A_borderless_window_the_size_of_the_screen_still_is()
+    {
+        var fixture = new DeskFixture();
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "game", frame: new Rect(0, 0, 3840, 2160), resizable: false));
+        fixture.Sync();
+        fixture.Turn();
+
+        Assert.Equal(WindowState.Fullscreen, fixture.Managed(1)!.State);
+    }
+}
