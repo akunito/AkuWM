@@ -213,7 +213,10 @@ public sealed class LayoutConfig
     /// unplugged): <c>move_windows</c> lends them to the workspace on screen
     /// of the monitor the person is on, <c>move_workspaces</c> lends the
     /// whole workspaces to that monitor (put away, reachable by the
-    /// workspace keys), <c>leave</c> only stops hiding them. Live on reload.
+    /// workspace keys), <c>leave</c> only stops hiding them -- the default,
+    /// Diego's choice: nothing changes place by itself, ever. The
+    /// <c>fetch-windows</c> command borrows the other screens' windows on
+    /// demand instead. Live on reload.
     /// </summary>
     public string? WhenMonitorLeaves { get; set; }
 

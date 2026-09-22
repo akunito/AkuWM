@@ -1,3 +1,4 @@
+using AkuWM.Core.Compat;
 using AkuWM.Core.Config;
 using AkuWM.Core.Desk;
 using AkuWM.Core.Layout;
@@ -362,5 +363,88 @@ public class MonitorAwayTests
         f.Turn();
         Assert.Equal("11", f.Managed(1)!.Workspace);
         Assert.Equal("11", f.Managed(2)!.Workspace);
+    }
+}
+
+/// <summary>The chord for a screen that is dark but, to Windows, present.</summary>
+public class FetchWindowsTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    private static DeskFixture Arranged()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Layout!.WhenMonitorLeaves = "leave";
+        var f = new DeskFixture(config);
+        f.Open(1);
+        f.Desk.FocusWorkspace("21");
+        f.Open(2, monitor: new MonitorHandle(2), frame: new Rect(3900, 0, 800, 600));
+        f.Open(3, monitor: new MonitorHandle(2), frame: new Rect(4000, 100, 640, 480), resizable: false);
+        f.Turn();
+        f.Desk.FocusWorkspace("11");
+        f.Turn();
+        f.Foreground(1);
+        return f;
+    }
+
+    [Fact]
+    public void Nothing_moves_by_itself_with_the_default_and_the_chord_brings_the_other_screens_windows_here()
+    {
+        DeskFixture f = Arranged();
+        Rect floating3 = f.Managed(3)!.FloatingRect!.Value;
+
+        // The vertical monitor drops out and is listed again two seconds later.
+        f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Turn();
+        Assert.Equal("21", f.Managed(2)!.Workspace);
+        f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Turn();
+        Assert.Equal("21", f.Managed(2)!.Workspace);
+        Assert.Empty(f.Desk.OnLoan);
+
+        // The person, looking at a dark screen, presses the chord.
+        var executor = new GlazeExecutor(f.Desk, new FakeDeskPlatform());
+        ExecResult fetched = executor.Command("fetch-windows");
+        f.Turn();
+        f.Turn();
+
+        Assert.True(fetched.Success);
+        Assert.True(fetched.Data!["fetched"]!.GetValue<bool>());
+        Assert.Equal("11", f.Managed(2)!.Workspace);
+        Assert.Equal("11", f.Managed(3)!.Workspace);
+        Assert.True(f.FrameOf(3).FractionInside(FakePlatform.MainMonitor().WorkArea) > 0.99, $"{f.FrameOf(3)}");
+        Assert.Contains("second", f.Desk.OnLoan);
+
+        // Pressed again: everything back where it was.
+        ExecResult returned = executor.Command("fetch-windows");
+        f.Turn();
+        f.Turn();
+
+        Assert.False(returned.Data!["fetched"]!.GetValue<bool>());
+        Assert.Equal("21", f.Managed(2)!.Workspace);
+        Assert.Equal(floating3, f.Managed(3)!.FloatingRect);
+        Assert.Empty(f.Desk.OnLoan);
+    }
+
+    [Fact]
+    public void Fetched_windows_also_go_back_when_the_screen_is_replugged()
+    {
+        DeskFixture f = Arranged();
+        var executor = new GlazeExecutor(f.Desk, new FakeDeskPlatform());
+        executor.Command("fetch-windows");
+        f.Turn();
+        Assert.Equal("11", f.Managed(2)!.Workspace);
+
+        f.Platform.MonitorList.RemoveAll(m => m.Handle.Value == 2);
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Turn();
+        f.Platform.MonitorList.Add(FakePlatform.SecondMonitor());
+        f.Desk.SetMonitors(f.Platform.Monitors());
+        f.Turn();
+
+        Assert.Equal("21", f.Managed(2)!.Workspace);
+        Assert.Empty(f.Desk.OnLoan);
     }
 }

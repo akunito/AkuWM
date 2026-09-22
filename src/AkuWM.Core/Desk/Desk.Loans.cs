@@ -59,9 +59,54 @@ public sealed partial class Desk
 
     private string ReturnsPolicy => (Config.Layout?.WhenMonitorReturns ?? "restore").ToLowerInvariant();
 
-    private void Lend(string role)
+    /// <summary>
+    /// Borrows every other screen's windows onto the workspace on screen of
+    /// the monitor the person is on, or gives them all back if some are
+    /// borrowed: the chord for "something is on a screen I cannot see".
+    /// </summary>
+    /// <remarks>
+    /// A monitor that is switched off is not necessarily gone: the vertical
+    /// one here drops out of Windows' list for two seconds and is listed
+    /// again, dark (trace 14:53:48-50, 2026-09-22), so nothing automatic can
+    /// know it is off. The person knows, and asks.
+    /// </remarks>
+    /// <returns>True when windows were fetched, false when they were returned.</returns>
+    public bool ToggleFetch()
     {
-        string policy = LeavesPolicy;
+        if (_loans.Count > 0)
+        {
+            foreach (string role in _loans.Keys.ToList())
+            {
+                if (MonitorByRole(role) is { } present)
+                {
+                    Reclaim(present);
+                }
+            }
+
+            return false;
+        }
+
+        DeskMonitor? host = FocusedMonitor;
+        if (host is null)
+        {
+            return false;
+        }
+
+        foreach (DeskMonitor other in _monitors.ToList())
+        {
+            if (!ReferenceEquals(other, host))
+            {
+                Lend(other.Role, "move_windows");
+            }
+        }
+
+        return _loans.Count > 0;
+    }
+
+    private void Lend(string role) => Lend(role, LeavesPolicy);
+
+    private void Lend(string role, string policy)
+    {
         if (policy == "leave" || _loans.ContainsKey(role) || !_byRole.TryGetValue(role, out DeskMonitor? away))
         {
             return;

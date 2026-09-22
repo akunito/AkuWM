@@ -50,7 +50,7 @@ public static class ConfigDefaults
             FloatCentered = true,
             FloatingAboveMaximized = true,
             UnmaximizeToShare = true,
-            WhenMonitorLeaves = "move_windows",
+            WhenMonitorLeaves = "leave",
             WhenMonitorReturns = "restore",
             DragToTop = "fullscreen",
             AcrossMonitors = new AcrossConfig { All = "hybrid" },

@@ -504,7 +504,7 @@ public sealed class GlazeIpcServer : IAsyncDisposable
     /// </remarks>
     private static readonly HashSet<string> OnTheSocket = new(StringComparer.OrdinalIgnoreCase)
     {
-        "focus", "move", "resize", "move-workspace", "drag-tile", "drag-to-top",
+        "focus", "move", "resize", "move-workspace", "drag-tile", "drag-to-top", "fetch-windows",
         "toggle-floating", "set-floating", "toggle-tiling", "set-tiling",
         "toggle-fullscreen", "set-fullscreen",
         "toggle-minimized", "set-minimized",

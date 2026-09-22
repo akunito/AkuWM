@@ -201,6 +201,11 @@ public sealed class GlazeExecutor
             case "drag-tile":
                 return At(parsed, (x, y) => Toggle(subject, w => _desk.DropTile(w.Handle, x, y)));
 
+            // AkuWM's own: borrow every other screen's windows here, or give
+            // them back. For a screen that is dark but, to Windows, present.
+            case "fetch-windows":
+                return ExecResult.Ok(data: new System.Text.Json.Nodes.JsonObject { ["fetched"] = _desk.ToggleFetch() });
+
             case "toggle-sticky":
                 return Toggle(subject, w => _desk.SetSticky(w.Handle, !w.Sticky));
 
