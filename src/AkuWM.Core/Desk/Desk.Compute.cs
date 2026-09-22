@@ -566,7 +566,10 @@ public sealed partial class Desk
         // difference is the window's own doing, not a person moving it. The
         // clock restarts, or a drag an hour later reads as a refusal that
         // never happened and the window is left where it was dragged.
-        if (window.Placed == frame && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
+        // "Exactly" within a pixel or two: the border is re-read across a
+        // change of scale and came back 8 where it had been 9, which moved
+        // the wanted rectangle by one pixel and sent a second placement.
+        if (window.Placed is { } asked && asked.CloseTo(frame, 2) && frame.CloseTo(window.Snapshot.FrameBounds, PlacementSlack))
         {
             window.PlacementRefused = false;
             window.PlacedAt = Now;

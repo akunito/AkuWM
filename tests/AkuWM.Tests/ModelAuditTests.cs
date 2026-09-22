@@ -826,3 +826,60 @@ public class WindowInMotionTests
         Assert.Equal(9, placement.Frame.Top); // the fake's border is 9 px, kept on this screen
     }
 }
+
+/// <summary>The size Windows blows a system-DPI window up to is not the person's (2026-09-22 13:11).</summary>
+public class BlownUpWindowTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void A_window_blown_up_at_the_seam_comes_back_to_the_size_it_had()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(100, 100, 1908, 1244), resizable: false, perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+
+        for (int x = 165; x <= 2700; x += 65)
+        {
+            fixture.Wait(16);
+            fixture.Move(1, new Rect(x, 100, 1908, 1244));
+            fixture.Turn();
+        }
+
+        // Its border touched the vertical monitor: one observation, 1908 to 3318 wide.
+        fixture.Wait(16);
+        fixture.Move(1, new Rect(1290, 100, 3318, 1244));
+        fixture.Turn();
+        fixture.Wait(Desk.SettleMs + 1);
+        Redraw redraw = fixture.Turn();
+
+        Placement placement = Assert.Single(redraw.Place, p => p.Window == W(1));
+        Assert.Equal(1908, placement.Frame.Width);
+        Assert.Equal(1244, placement.Frame.Height);
+    }
+
+    [Fact]
+    public void A_hand_resizing_it_a_few_pixels_a_tick_is_still_the_hand()
+    {
+        var fixture = new DeskFixture();
+        fixture.Wait(5000);
+        fixture.Platform.WindowList.Add(FakePlatform.Window(1, "notepad++", frame: new Rect(100, 100, 1908, 1244), resizable: false, perMonitorDpi: false));
+        fixture.Sync();
+        fixture.Turn();
+
+        for (int w = 1880; w >= 1500; w -= 20)
+        {
+            fixture.Wait(16);
+            fixture.Move(1, new Rect(100, 100, w, 1244));
+            fixture.Turn();
+        }
+
+        fixture.Wait(Desk.SettleMs + 1);
+        fixture.Turn();
+
+        Assert.Equal(1500, fixture.FrameOf(1).Width);
+        Assert.Equal(1500, fixture.Managed(1)!.FloatingRect!.Value.Width);
+    }
+}

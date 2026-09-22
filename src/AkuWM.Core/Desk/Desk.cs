@@ -77,6 +77,12 @@ public sealed partial class Desk
     internal const int NewWindowMs = 1500;
 
     /// <summary>
+    /// A change of size in one observation bigger than this, on a window that
+    /// leaves its scaling to Windows, is Windows rescaling it, not a hand.
+    /// </summary>
+    internal const int RescaleJump = 200;
+
+    /// <summary>
     /// How long after a crossing a resize belongs to Windows, not the person.
     /// </summary>
     /// <remarks>
@@ -1036,7 +1042,24 @@ public sealed partial class Desk
                 && (snapshot.FrameBounds.Width != was.FrameBounds.Width
                     || snapshot.FrameBounds.Height != was.FrameBounds.Height);
 
-            if (!rescaling)
+            // A window that leaves its scaling to Windows is blown up in ONE
+            // step the instant its border touches a screen of another scale
+            // (1908 wide to 3318, 2026-09-22); a hand resizes a window by a
+            // few pixels a tick. A jump that big in one observation is not
+            // the person's: the size is kept and only the place follows.
+            bool blownUp = !snapshot.PerMonitorDpi
+                && !snapshot.IsMaximized
+                && window.FloatingRect is { } kept
+                && (Math.Abs(snapshot.FrameBounds.Width - was.FrameBounds.Width) > RescaleJump
+                    || Math.Abs(snapshot.FrameBounds.Height - was.FrameBounds.Height) > RescaleJump);
+
+            if (blownUp)
+            {
+                window.FloatingRect = new Rect(
+                    snapshot.FrameBounds.X, snapshot.FrameBounds.Y, window.FloatingRect!.Value.Width, window.FloatingRect.Value.Height);
+                Rehome(window, snapshot);
+            }
+            else if (!rescaling)
             {
                 window.FloatingRect = snapshot.FrameBounds;
                 Rehome(window, snapshot);
