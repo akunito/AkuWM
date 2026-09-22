@@ -118,8 +118,8 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void Unfocus() => Win32Focus.Unfocus();
 
-    public bool Decorate(WindowHandle window, Decoration decoration) =>
-        Win32Decorations.Apply(new Windows.Win32.Foundation.HWND((IntPtr)window.Value), decoration);
+    public bool Decorate(WindowHandle window, Decoration decoration, bool force = false) =>
+        Win32Decorations.Apply(new Windows.Win32.Foundation.HWND((IntPtr)window.Value), decoration, force);
 
     public bool Focus(WindowHandle window)
     {

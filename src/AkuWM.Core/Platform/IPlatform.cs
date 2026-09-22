@@ -106,7 +106,11 @@ public interface IPlatformActions
     /// solve. Windows 11 only; older builds refuse and that is not an error.
     /// </remarks>
     /// <returns>False when the shell would not take it.</returns>
-    bool Decorate(WindowHandle window, Decoration decoration);
+    /// <param name="force">
+    /// Send every attribute again even if the last one sent was the same:
+    /// for an application that painted over it on activation.
+    /// </param>
+    bool Decorate(WindowHandle window, Decoration decoration, bool force = false);
 }
 
 /// <summary>The shell's taskbar, for the one thing a window manager tells it.</summary>

@@ -367,18 +367,32 @@ public sealed class WindowManager : IAsyncDisposable
             return;
         }
 
+        // Three times, at t, 4t and 10t: Windows Terminal and VS Code paint
+        // over the border more than once while they finish activating, and
+        // one re-send at 300 ms lost to the second coat (live, 15:15).
+        _reassertsLeft = 3;
+        _reassertNext = after;
         _reassert ??= new Timer(
             _ => _loop.Post("reassert decoration", () =>
             {
                 _desk.Redecorate(_desk.Focused);
                 _dirty = true;
                 Redraw();
+
+                if (--_reassertsLeft > 0)
+                {
+                    _reassertNext = _reassertsLeft == 2 ? after * 4 - after : after * 10 - after * 4;
+                    _reassert!.Change(_reassertNext, Timeout.Infinite);
+                }
             }),
             null,
             Timeout.Infinite,
             Timeout.Infinite);
         _reassert.Change(after, Timeout.Infinite);
     }
+
+    private int _reassertsLeft;
+    private int _reassertNext;
 
     private Timer? _reassert;
     private Timer? _settle;

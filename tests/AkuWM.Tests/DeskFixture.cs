@@ -186,7 +186,7 @@ public sealed class DeskFixture
         HashSet<WindowHandle>? undecorated = null;
         foreach ((WindowHandle handle, Decoration how) in redraw.Decorate)
         {
-            if (!Platform.Decorate(handle, how))
+            if (!Platform.Decorate(handle, how, redraw.Forced.Contains(handle)))
             {
                 (undecorated ??= []).Add(handle);
             }

@@ -960,3 +960,30 @@ public class TileUnderTheBarTests
         Assert.Equal(work.Left + 9, placement.Frame.Left);
     }
 }
+
+/// <summary>A re-assert must reach the shell even when nothing differs from the last decoration sent.</summary>
+public class ForcedRedecorationTests
+{
+    private static WindowHandle W(long handle) => new(handle);
+
+    [Fact]
+    public void Redecorating_sends_the_decoration_with_force()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Effects = new EffectsConfig { FocusedBorder = "#c4a7e7", OtherBorder = "none", Corners = "square" };
+        var fixture = new DeskFixture(config);
+        fixture.Open(1);
+        fixture.Turn();
+        fixture.Foreground(1);
+        fixture.Turn();
+        fixture.Platform.Calls.Clear();
+
+        fixture.Desk.Redecorate(W(1));
+        Redraw redraw = fixture.Turn();
+
+        Assert.Contains(W(1), redraw.Forced);
+        Assert.Contains(fixture.Platform.Calls, c => c.StartsWith("decorate! 1 ", StringComparison.Ordinal));
+        Assert.False(fixture.Managed(1)!.RedecorateAsked);
+        Assert.Empty(fixture.Turn().Forced);
+    }
+}

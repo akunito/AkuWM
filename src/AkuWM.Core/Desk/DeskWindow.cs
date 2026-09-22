@@ -176,6 +176,9 @@ public sealed class DeskWindow
     /// </remarks>
     public Decoration? DecorationRefused { get; set; }
 
+    /// <summary>The next decoration is sent whatever was sent before: an application painted over it.</summary>
+    public bool RedecorateAsked { get; set; }
+
     /// <summary>Whether the taskbar has been told this window is fullscreen.</summary>
     public bool Marked { get; set; }
 

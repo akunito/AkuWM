@@ -131,9 +131,9 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
     /// <summary>An old Windows build, which takes none of it.</summary>
     public bool RefusesDecoration { get; set; }
 
-    public bool Decorate(WindowHandle window, Decoration decoration)
+    public bool Decorate(WindowHandle window, Decoration decoration, bool force = false)
     {
-        Calls.Add($"decorate {window.Value} {decoration.Border:x8} {decoration.Corners}");
+        Calls.Add($"decorate{(force ? "!" : string.Empty)} {window.Value} {decoration.Border:x8} {decoration.Corners}");
 
         if (RefusesDecoration)
         {

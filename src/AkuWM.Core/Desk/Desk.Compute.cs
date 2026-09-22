@@ -43,6 +43,7 @@ public sealed partial class Desk
         var behind = new List<(WindowHandle, WindowHandle)>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
+        HashSet<WindowHandle>? forced = null;
         var button = new List<(WindowHandle, bool)>();
         var accounted = new HashSet<WindowHandle>();
 
@@ -263,6 +264,10 @@ public sealed partial class Desk
             }
 
             decorate.Add((window.Handle, want));
+            if (window.RedecorateAsked)
+            {
+                (forced ??= []).Add(window.Handle);
+            }
         }
 
         // The taskbar button follows the cloak, when the configuration says
@@ -327,6 +332,7 @@ public sealed partial class Desk
             Behind = behind,
             TaskbarMark = mark,
             Decorate = decorate,
+            Forced = forced ?? (IReadOnlySet<WindowHandle>)new HashSet<WindowHandle>(),
             TaskbarButton = button,
 
             // The focus goes last, after the windows are where they belong and
@@ -422,6 +428,7 @@ public sealed partial class Desk
         {
             window.Decorated = null;
             window.DecorationRefused = null;
+            window.RedecorateAsked = true;
         }
     }
 
@@ -842,6 +849,7 @@ public sealed partial class Desk
 
             decorated.DecorationRefused = null;
             decorated.Decorated = how == Decoration.Untouched ? null : how;
+            decorated.RedecorateAsked = false;
         }
 
         // The focused window has just been hidden: what the model calls

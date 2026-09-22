@@ -222,7 +222,7 @@ public class LedgerAuditTests
 
         public void Unfocus() => platform.Unfocus();
 
-        public bool Decorate(WindowHandle window, Decoration decoration) => platform.Decorate(window, decoration);
+        public bool Decorate(WindowHandle window, Decoration decoration, bool force = false) => platform.Decorate(window, decoration, force);
     }
 }
 

@@ -75,6 +75,9 @@ public sealed record Redraw
     /// <summary>Windows whose border or corners should change.</summary>
     public IReadOnlyList<(WindowHandle Window, Decoration How)> Decorate { get; init; } = [];
 
+    /// <summary>Of those, the ones to send even if nothing differs from the last time.</summary>
+    public IReadOnlySet<WindowHandle> Forced { get; init; } = new HashSet<WindowHandle>();
+
     /// <summary>Windows gaining or losing their button on the taskbar.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Shown)> TaskbarButton { get; init; } = [];
 

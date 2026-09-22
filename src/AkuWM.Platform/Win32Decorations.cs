@@ -54,8 +54,16 @@ internal static class Win32Decorations
     /// </remarks>
     private static readonly Dictionary<long, Decoration> Sent = [];
 
-    internal static bool Apply(HWND hwnd, Decoration decoration)
+    internal static bool Apply(HWND hwnd, Decoration decoration, bool force = false)
     {
+        // Forced: the last one sent is exactly what the application painted
+        // over, so "already sent" is the wrong answer. The re-assert after a
+        // focus change was being filtered out here for a whole afternoon.
+        if (force)
+        {
+            Sent.Remove((long)hwnd.Value);
+        }
+
         Sent.TryGetValue((long)hwnd.Value, out Decoration previous);
         bool known = Sent.ContainsKey((long)hwnd.Value);
 

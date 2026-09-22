@@ -205,7 +205,7 @@ public sealed class DeskApplier
         // without uiAccess, and the model believed the border was there.
         foreach ((WindowHandle window, Decoration how) in redraw.Decorate)
         {
-            if (!_actions.Decorate(window, how))
+            if (!_actions.Decorate(window, how, redraw.Forced.Contains(window)))
             {
                 (undecorated ??= []).Add(window);
             }
