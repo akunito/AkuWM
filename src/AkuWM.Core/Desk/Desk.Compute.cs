@@ -163,7 +163,10 @@ public sealed partial class Desk
                     // stops being fullscreen. Not for a maximised application
                     // that stops at the bar: telling the shell that one is
                     // fullscreen hides the bar under a browser.
-                    bool coversTheBounds = covering.Snapshot.FrameBounds.Contains(monitor.FullArea);
+                    // A window AkuWM itself places over the bounds is about to
+                    // cover them; only a maximised one has to prove it.
+                    bool coversTheBounds = !covering.Snapshot.IsMaximized
+                        || covering.Snapshot.FrameBounds.Contains(monitor.FullArea);
                     WantMarked(covering, coversTheBounds || LooksLikeAGame(covering), mark);
                 }
             }
