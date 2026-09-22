@@ -203,6 +203,12 @@ public sealed class GlazeExecutor
 
             // AkuWM's own: borrow every other screen's windows here, or give
             // them back. For a screen that is dark but, to Windows, present.
+            case "lower":
+                return Toggle(subject, w => _desk.SetLowered(w.Handle, true));
+
+            case "raise":
+                return Toggle(subject, w => _desk.SetLowered(w.Handle, false));
+
             case "fetch-windows":
                 return ExecResult.Ok(data: new System.Text.Json.Nodes.JsonObject { ["fetched"] = _desk.ToggleFetch() });
 

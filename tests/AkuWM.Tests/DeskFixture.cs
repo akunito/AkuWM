@@ -185,9 +185,23 @@ public sealed class DeskFixture
             Platform.SetCloak(handle, false);
         }
 
+        HashSet<WindowHandle>? unbanded = null;
         foreach ((WindowHandle handle, bool topmost) in redraw.Band)
         {
-            Platform.SetTopmost(handle, topmost);
+            if (!Platform.SetTopmost(handle, topmost))
+            {
+                (unbanded ??= []).Add(handle);
+            }
+        }
+
+        foreach (WindowHandle handle in redraw.Raise)
+        {
+            Platform.Raise(handle);
+        }
+
+        foreach (WindowHandle handle in redraw.Lower)
+        {
+            Platform.Lower(handle);
         }
 
         HashSet<WindowHandle>? undecorated = null;
@@ -218,7 +232,7 @@ public sealed class DeskFixture
             Platform.Unfocus();
         }
 
-        Desk.Applied(redraw, undecorated: undecorated, focusRefused: focusRefused);
+        Desk.Applied(redraw, undecorated: undecorated, focusRefused: focusRefused, unbanded: unbanded);
         Sync();
         return redraw;
     }

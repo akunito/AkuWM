@@ -59,6 +59,23 @@ public sealed record Redraw
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
     /// <summary>
+    /// Floating windows to bring back over the tiles, without activating them.
+    /// </summary>
+    /// <remarks>
+    /// The band is the first answer to "floating stays above tiling" and it
+    /// is not enough: an application that manages its own always-on-top
+    /// (Windows Terminal) strips the bit on every activation, and a click on
+    /// a tile then covers the terminal. So every time the focus lands on a
+    /// tile, the floating windows of that screen that are not in the band are
+    /// raised over it -- one SetWindowPos each, after the click, which is a
+    /// frame late and the person does not see it.
+    /// </remarks>
+    public IReadOnlyList<WindowHandle> Raise { get; init; } = [];
+
+    /// <summary>Floating windows the person sent behind the tiles (the <c>lower</c> command).</summary>
+    public IReadOnlyList<WindowHandle> Lower { get; init; } = [];
+
+    /// <summary>
     /// Windows to put directly behind a fullscreen one, in the ordinary band.
     /// </summary>
     /// <remarks>

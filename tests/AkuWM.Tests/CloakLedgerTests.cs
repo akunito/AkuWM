@@ -64,7 +64,9 @@ internal sealed class FakeActions : IPlatformActions
 
     public void Unfocus() => _platform.Unfocus();
 
-    public void SetTopmost(WindowHandle window, bool topmost) => _platform.SetTopmost(window, topmost);
+    public bool SetTopmost(WindowHandle window, bool topmost) => _platform.SetTopmost(window, topmost);
+    public void Raise(WindowHandle window) => _platform.Raise(window);
+    public void Lower(WindowHandle window) => _platform.Lower(window);
 
     public bool Decorate(WindowHandle window, Decoration decoration, bool force = false) => true;
 

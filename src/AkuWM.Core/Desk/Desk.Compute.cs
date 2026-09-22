@@ -1,3 +1,4 @@
+using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 
 namespace AkuWM.Core.Desk;
@@ -41,6 +42,8 @@ public sealed partial class Desk
         var unmaximize = new List<WindowHandle>();
         var band = new List<(WindowHandle, bool)>();
         var behind = new List<(WindowHandle, WindowHandle)>();
+        var raise = new List<WindowHandle>();
+        var lower = new List<WindowHandle>();
         var mark = new List<(WindowHandle, bool)>();
         var decorate = new List<(WindowHandle, Decoration)>();
         HashSet<WindowHandle>? forced = null;
@@ -132,9 +135,10 @@ public sealed partial class Desk
                     // there cannot simply be put behind a normal one, it has
                     // to leave the band first -- and then be put behind it,
                     // because leaving the band lands it on top.
-                    WantBanded(window, shielding.IsNone, band);
+                    WantBanded(window, shielding.IsNone && !window.Lowered, band);
                     WantBehind(window, shielding, behind);
                     WantMarked(window, false, mark);
+                    WantOverTheTiles(window, workspace, shielding.IsNone, raise, lower);
                 }
 
                 if (!fullscreen.IsNone && Live(fullscreen) is { } covering)
@@ -197,12 +201,13 @@ public sealed partial class Desk
                 WantHidden(window, false, hide, show);
                 WantUnmaximized(window, unmaximize);
                 WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
-                WantBanded(window, !covered, band);
+                WantBanded(window, !covered && !window.Lowered, band);
                 WantBehind(window, covered ? displayed!.Fullscreen : WindowHandle.None, behind);
 
                 // A sticky window that was covering the screen when it was
                 // stuck keeps the mark otherwise, and the taskbar stays down.
                 WantMarked(window, false, mark);
+                WantOverTheTiles(window, displayed, !covered, raise, lower);
             }
         }
 
@@ -330,6 +335,8 @@ public sealed partial class Desk
             Unmaximize = unmaximize,
             Band = band,
             Behind = behind,
+            Raise = raise,
+            Lower = lower,
             TaskbarMark = mark,
             Decorate = decorate,
             Forced = forced ?? (IReadOnlySet<WindowHandle>)new HashSet<WindowHandle>(),
@@ -724,13 +731,50 @@ public sealed partial class Desk
 
     private static void WantBanded(DeskWindow window, bool topmost, List<(WindowHandle, bool)> into)
     {
-        if (window.Banded == topmost)
+        // Asked once and not kept: the application manages its own band.
+        if (window.Banded == topmost || (topmost && window.BandRefused))
         {
             return;
         }
 
         into.Add((window.Handle, topmost));
     }
+
+    /// <summary>
+    /// Where a floating window sits against the tiles of its screen.
+    /// </summary>
+    /// <remarks>
+    /// Lowered by the person: to the bottom, once, and left there until
+    /// <c>raise</c> or a focus on it. Otherwise, whenever the focus has just
+    /// landed on a tile of this workspace, every floating window that is not
+    /// effectively in the band (the band refused, or not yet applied) is
+    /// raised over that tile. The band-kept ones need nothing: TOPMOST is
+    /// above every ordinary window whatever gets clicked.
+    /// </remarks>
+    private void WantOverTheTiles(DeskWindow window, Workspace? workspace, bool wanted, List<WindowHandle> raise, List<WindowHandle> lower)
+    {
+        if (window.Lowered)
+        {
+            if (!window.LoweredApplied)
+            {
+                lower.Add(window.Handle);
+            }
+
+            return;
+        }
+
+        if (wanted
+            && _raiseOver is { } over
+            && ReferenceEquals(over, workspace)
+            && window.Banded != true
+            && window.Handle != Focused)
+        {
+            raise.Add(window.Handle);
+        }
+    }
+
+    /// <summary>The workspace whose tile has just taken the focus, until the next pass.</summary>
+    private Workspace? _raiseOver;
 
     /// <summary>What the shell should draw around one window, right now.</summary>
     private Decoration DecorationFor(DeskWindow window)
@@ -786,8 +830,18 @@ public sealed partial class Desk
         IReadOnlySet<WindowHandle>? refused = null,
         IReadOnlySet<WindowHandle>? unmarked = null,
         IReadOnlySet<WindowHandle>? undecorated = null,
-        bool focusRefused = false)
+        bool focusRefused = false,
+        IReadOnlySet<WindowHandle>? unbanded = null)
     {
+        _raiseOver = null;
+
+        foreach (WindowHandle handle in redraw.Lower)
+        {
+            if (Window(handle) is { } lowered)
+            {
+                lowered.LoweredApplied = true;
+            }
+        }
 
         if (redraw.Place.Count > 0)
         {
@@ -852,6 +906,21 @@ public sealed partial class Desk
         {
             if (Window(handle) is { } window)
             {
+                if (unbanded?.Contains(handle) == true)
+                {
+                    // Asked for the band and the window did not keep it:
+                    // the model must not believe it is up there, and must not
+                    // ask every pass either. Raise keeps it over the tiles.
+                    window.Banded = false;
+                    if (topmost)
+                    {
+                        window.BandRefused = true;
+                        Log.Info($"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" will not stay in the always-on-top band; it is raised over the tiles on focus instead");
+                    }
+
+                    continue;
+                }
+
                 window.Banded = topmost;
 
                 // Back in the band is above everything; the insert-behind is

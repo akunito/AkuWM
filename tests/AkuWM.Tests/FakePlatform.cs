@@ -123,10 +123,35 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         Replace(window, w => w with { IsMinimized = minimized, IsMaximized = false });
     }
 
-    public void SetTopmost(WindowHandle window, bool topmost)
+    /// <summary>Windows that strip HWND_TOPMOST off themselves, as Windows Terminal does.</summary>
+    public HashSet<long> RefusesBand { get; } = [];
+
+    public bool SetTopmost(WindowHandle window, bool topmost)
     {
         Calls.Add($"topmost {window.Value} {topmost}");
+        if (topmost && RefusesBand.Contains(window.Value))
+        {
+            return false;
+        }
+
         Replace(window, w => w with { IsTopmost = topmost });
+        return true;
+    }
+
+    public List<WindowHandle> Raised { get; } = [];
+
+    public List<WindowHandle> Lowered { get; } = [];
+
+    public void Raise(WindowHandle window)
+    {
+        Calls.Add($"raise {window.Value}");
+        Raised.Add(window);
+    }
+
+    public void Lower(WindowHandle window)
+    {
+        Calls.Add($"lower {window.Value}");
+        Lowered.Add(window);
     }
 
     /// <summary>What the shell was last asked to draw, by window.</summary>

@@ -179,10 +179,40 @@ public static class Win32Position
     /// Position and size are left alone; this is only the z-order band, which
     /// is how a scratchpad or a pill stays over a fullscreen game.
     /// </remarks>
-    public static bool SetTopmost(WindowHandle window, bool topmost) =>
+    public static bool SetTopmost(WindowHandle window, bool topmost)
+    {
+        var hwnd = new HWND((IntPtr)window.Value);
+        PInvoke.SetWindowPos(
+            hwnd,
+            topmost ? HWND.HWND_TOPMOST : HWND.HWND_NOTOPMOST,
+            0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE
+            | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
+            | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+
+        // Read back, not trusted: the return value says the request went
+        // through, and an application handling WM_WINDOWPOSCHANGING can put
+        // the bit back the way it likes it (Windows Terminal does).
+        return IsTopmost(window) == topmost;
+    }
+
+    public static bool IsTopmost(WindowHandle window) =>
+        ((int)PInvoke.GetWindowLongPtr(new HWND((IntPtr)window.Value), WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE)
+         & (int)WINDOW_EX_STYLE.WS_EX_TOPMOST) != 0;
+
+    public static bool Raise(WindowHandle window) =>
         PInvoke.SetWindowPos(
             new HWND((IntPtr)window.Value),
-            topmost ? HWND.HWND_TOPMOST : HWND.HWND_NOTOPMOST,
+            HWND.HWND_TOP,
+            0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE
+            | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
+            | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+
+    public static bool Lower(WindowHandle window) =>
+        PInvoke.SetWindowPos(
+            new HWND((IntPtr)window.Value),
+            HWND.HWND_BOTTOM,
             0, 0, 0, 0,
             SET_WINDOW_POS_FLAGS.SWP_NOMOVE
             | SET_WINDOW_POS_FLAGS.SWP_NOSIZE

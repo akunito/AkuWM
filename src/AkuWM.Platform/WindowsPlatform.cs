@@ -112,7 +112,11 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
         }
     }
 
-    public void SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
+    public bool SetTopmost(WindowHandle window, bool topmost) => Win32Position.SetTopmost(window, topmost);
+
+    public void Raise(WindowHandle window) => Win32Position.Raise(window);
+
+    public void Lower(WindowHandle window) => Win32Position.Lower(window);
 
     public void PlaceBehind(WindowHandle window, WindowHandle behind) => Win32Position.PlaceBehind(window, behind);
 

@@ -77,9 +77,25 @@ public sealed partial class Desk
 
         Focused = handle;
 
+        // The person is on this window now: a floating one they had sent
+        // behind the tiles comes forward again (Windows has already raised it
+        // by activating it; the model follows).
+        if (window.Lowered)
+        {
+            window.Lowered = false;
+            window.LoweredApplied = false;
+        }
+
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
             workspace.Touch(handle);
+
+            // A tile clicked or tabbed to comes up over the floating windows
+            // that are not held in the band; the next pass raises them back.
+            if (window.State == WindowState.Tiling)
+            {
+                _raiseOver = workspace;
+            }
 
             // The screen the desk says it belongs to, not the one Windows has
             // it on this instant. A window adopted a moment ago is still
@@ -427,6 +443,31 @@ public sealed partial class Desk
     /// or exactly where it already is. One that has floated before goes back
     /// where it was either way.
     /// </param>
+    /// <summary>
+    /// Sends a floating (or sticky) window behind the tiles, or brings it back.
+    /// </summary>
+    /// <returns>False for a tile, an unknown window, or no change.</returns>
+    public bool SetLowered(WindowHandle handle, bool lowered)
+    {
+        if (Window(handle) is not { Managed: true } window
+            || window.Lowered == lowered
+            || (!window.Sticky && window.State != WindowState.Floating))
+        {
+            return false;
+        }
+
+        window.Lowered = lowered;
+        window.LoweredApplied = false;
+
+        if (!lowered && window.Workspace is { } name && Workspace(name) is { } workspace)
+        {
+            // Back over the tiles now, band or not: the next pass raises it.
+            _raiseOver = workspace;
+        }
+
+        return true;
+    }
+
     public bool SetFloating(WindowHandle handle, bool floating, bool centred)
     {
         if (Window(handle) is not { Managed: true } window)

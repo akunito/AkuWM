@@ -214,7 +214,9 @@ public class LedgerAuditTests
 
         public void SetMinimized(WindowHandle window, bool minimized) => platform.SetMinimized(window, minimized);
 
-        public void SetTopmost(WindowHandle window, bool topmost) => platform.SetTopmost(window, topmost);
+        public bool SetTopmost(WindowHandle window, bool topmost) => platform.SetTopmost(window, topmost);
+        public void Raise(WindowHandle window) => platform.Raise(window);
+        public void Lower(WindowHandle window) => platform.Lower(window);
 
         public void PlaceBehind(WindowHandle window, WindowHandle behind) => platform.PlaceBehind(window, behind);
 

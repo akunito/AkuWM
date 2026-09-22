@@ -78,7 +78,20 @@ public interface IPlatformActions
     void SetMinimized(WindowHandle window, bool minimized);
 
     /// <summary>Puts a window in the always-on-top band, or takes it out.</summary>
-    void SetTopmost(WindowHandle window, bool topmost);
+    /// <returns>
+    /// Whether the window is in the asked-for band AFTERWARDS, read back.
+    /// Windows Terminal undoes HWND_TOPMOST on itself within the same call
+    /// (measured 2026-09-22: SetWindowPos returns true, the bit is gone 300 ms
+    /// later, and again after every activation); the model believed the band
+    /// it had asked for, and the terminals sat under every clicked tile.
+    /// </returns>
+    bool SetTopmost(WindowHandle window, bool topmost);
+
+    /// <summary>Brings a window to the top of its band without activating it.</summary>
+    void Raise(WindowHandle window);
+
+    /// <summary>Sends a window to the bottom of the z-order without activating it.</summary>
+    void Lower(WindowHandle window);
 
     /// <summary>
     /// Puts a window directly behind another in the z-order, touching only

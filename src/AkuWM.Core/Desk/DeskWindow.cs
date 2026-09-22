@@ -142,6 +142,22 @@ public sealed class DeskWindow
     public bool? Banded { get; set; }
 
     /// <summary>
+    /// The band was asked for and the window did not keep it: the
+    /// application manages its own always-on-top (Windows Terminal). Not
+    /// asked again; kept over the tiles by <see cref="Redraw.Raise"/> instead.
+    /// </summary>
+    public bool BandRefused { get; set; }
+
+    /// <summary>
+    /// A floating window the person sent behind the tiles with <c>lower</c>.
+    /// Cleared by <c>raise</c>, or by the person focusing it.
+    /// </summary>
+    public bool Lowered { get; set; }
+
+    /// <summary>The HWND_BOTTOM for <see cref="Lowered"/> has been sent.</summary>
+    public bool LoweredApplied { get; set; }
+
+    /// <summary>
     /// The fullscreen window AkuWM last put this one behind, or None.
     /// </summary>
     /// <remarks>

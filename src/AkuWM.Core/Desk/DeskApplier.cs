@@ -15,7 +15,8 @@ public readonly record struct ApplyResult(
     TimeSpan Elapsed,
     IReadOnlySet<WindowHandle>? Unmarked = null,
     IReadOnlySet<WindowHandle>? Undecorated = null,
-    bool FocusRefused = false)
+    bool FocusRefused = false,
+    IReadOnlySet<WindowHandle>? Unbanded = null)
 {
     public override string ToString() =>
         $"{Placed} placed, {Refused.Count} refused, {Elapsed.TotalMilliseconds:F2} ms";
@@ -180,14 +181,28 @@ public sealed class DeskApplier
         Cloak(redraw.Show, false, refused);
         var cloakTook = Lap(ref at);
 
+        HashSet<WindowHandle>? unbanded = null;
         foreach ((WindowHandle window, bool topmost) in redraw.Band)
         {
-            _actions.SetTopmost(window, topmost);
+            if (!_actions.SetTopmost(window, topmost))
+            {
+                (unbanded ??= []).Add(window);
+            }
         }
 
         foreach ((WindowHandle window, WindowHandle game) in redraw.Behind)
         {
             _actions.PlaceBehind(window, game);
+        }
+
+        for (int i = 0; i < redraw.Raise.Count; i++)
+        {
+            _actions.Raise(redraw.Raise[i]);
+        }
+
+        for (int i = 0; i < redraw.Lower.Count; i++)
+        {
+            _actions.Lower(redraw.Lower[i]);
         }
 
         var bandTook = Lap(ref at);
@@ -264,7 +279,7 @@ public sealed class DeskApplier
             Log.Info($"placing {redraw.Place.Count} window(s) took {placeTook.TotalMilliseconds:F0} ms: {Names(redraw.Place)}");
         }
 
-        return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused);
+        return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused, unbanded);
     }
 
     /// <summary>Above this, a placement names the windows it waited on.</summary>
