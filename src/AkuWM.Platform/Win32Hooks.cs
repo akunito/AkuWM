@@ -39,6 +39,7 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
     private const uint EventObjectShow = 0x8002;
     private const uint EventObjectHide = 0x8003;
     private const uint EventObjectReorder = 0x8004;
+    private bool _reorderSeen;
     private const uint EventObjectLocationChange = 0x800B;
     private const uint EventObjectNameChange = 0x800C;
     private const uint EventObjectCloaked = 0x8017;
@@ -166,6 +167,24 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
     private void OnWinEvent(
         HWINEVENTHOOK hook, uint eventId, HWND window, int objectId, int childId, uint thread, uint time)
     {
+        // A z-order change is reported on the PARENT (the desktop) with the
+        // client object, not on a window with OBJID_WINDOW: the filter below
+        // dropped every one of them, and a tile clicked while it already had
+        // the focus stayed over the floating windows for good (live desk
+        // 2026-09-23 11:14, Zen over the Explorer). Let it through; the
+        // handle is not used for it.
+        if (eventId == EventObjectReorder)
+        {
+            if (!_reorderSeen)
+            {
+                _reorderSeen = true;
+                Log.Debug(() => $"z-order events flow (object {objectId}, child {childId}, window {window.Value:x})");
+            }
+
+            Event?.Invoke(new PlatformEvent(PlatformEventKind.WindowsReordered, new WindowHandle(window.Value), Environment.TickCount64));
+            return;
+        }
+
         // Only the window itself; the controls inside it are not AkuWM's
         // business and there are thousands of them.
         if (objectId != ObjectIdWindow || childId != ChildIdSelf || window.IsNull)

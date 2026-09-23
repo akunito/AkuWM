@@ -246,6 +246,22 @@ public sealed class DeskApplier
         // without uiAccess, and the model believed the border was there.
         foreach ((WindowHandle window, Decoration how) in redraw.Decorate)
         {
+            // An elevated window is never decorated, only outlined: DWM
+            // refuses the border and the corners on it whatever the token
+            // (0x80070006 with uiAccess too, 10.27), and the caption strip a
+            // uiAccess build CAN make -- SetWindowLongPtr and a FRAMECHANGED
+            // SetWindowPos on the Administrator console -- had the console
+            // put its style back and take the foreground again: with the
+            // pointer resting on it, the foreground flipped between it and
+            // the tile under it every 30 ms, for as long as the pointer
+            // stayed, decorating both every time (2026-09-23 11:12; stable
+            // with the build that cannot touch it, and with none).
+            if (Look(window) is { IsElevated: true })
+            {
+                (undecorated ??= []).Add(window);
+                continue;
+            }
+
             if (!_actions.Decorate(window, how, redraw.Forced.Contains(window)))
             {
                 (undecorated ??= []).Add(window);
