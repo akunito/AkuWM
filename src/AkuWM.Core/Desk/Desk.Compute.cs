@@ -30,6 +30,14 @@ public sealed partial class Desk
     {
         Unsettled = false;
         RaisePending = false;
+
+        // A release the script never reported (it was reloaded mid-click):
+        // the buttons say so.
+        if (!_lifted.IsNone && _buttonsDown?.Invoke() == false)
+        {
+            Release();
+        }
+
         _raiseDue = RaiseIsDue();
 
         if (Paused)
@@ -134,7 +142,7 @@ public sealed partial class Desk
                         window.OverGame = false;
                     }
 
-                    WantBanded(window, window.OverGame, band);
+                    WantBanded(window, window.OverGame || window.Lifted, band);
                     WantBehind(window, window.OverGame ? WindowHandle.None : shielding, behind);
                     WantMarked(window, false, mark);
                 }
@@ -1015,7 +1023,9 @@ public sealed partial class Desk
             return false;
         }
 
-        if (_buttonsDown?.Invoke() == true)
+        // Not while a tile is held up: lowering it behind the floating
+        // windows would take it out of the band mid-click.
+        if (!_lifted.IsNone || _buttonsDown?.Invoke() == true)
         {
             _raiseReleasedAt = null;
             RaisePending = true;

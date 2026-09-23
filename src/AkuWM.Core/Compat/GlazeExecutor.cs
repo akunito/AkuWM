@@ -206,6 +206,22 @@ public sealed class GlazeExecutor
             case "lower":
                 return Toggle(subject, w => _desk.SetLowered(w.Handle, true));
 
+            // AkuWM's own, from the AutoHotkey's ~LButton / ~LButton Up: a
+            // tile held under the mouse button stays over the floating
+            // windows until it is let go. --handle is the window under the
+            // pointer as the script sees it (MouseGetPos), which is not
+            // necessarily the focused one.
+            case "press":
+                return ExecResult.Ok(data: new JsonObject
+                {
+                    ["lifted"] = long.TryParse(parsed.Value("handle"), out long pressed)
+                        ? _desk.Press(new WindowHandle(pressed))
+                        : subject is not null && _desk.Press(subject.Handle),
+                });
+
+            case "release":
+                return ExecResult.Ok(data: new JsonObject { ["released"] = _desk.Release() });
+
             case "raise":
                 return Toggle(subject, w => _desk.SetLowered(w.Handle, false));
 

@@ -198,6 +198,13 @@ public sealed class DeskWindow
     public WindowHandle YieldedTo { get; set; } = WindowHandle.None;
 
     /// <summary>
+    /// A tile held under a mouse button: in the always-on-top band, over
+    /// every floating window, elevated ones included, until the button is
+    /// let go (Desk.Press / Release, plan 10.35).
+    /// </summary>
+    public bool Lifted { get; set; }
+
+    /// <summary>
     /// It was covering its monitor when it went to the taskbar, and comes back
     /// covering it, whatever it was before that.
     /// </summary>

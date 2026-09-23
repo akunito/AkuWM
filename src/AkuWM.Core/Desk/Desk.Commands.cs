@@ -954,6 +954,63 @@ public sealed partial class Desk
         return true;
     }
 
+    /// <summary>
+    /// A mouse button went down on this window (the AutoHotkey reports it):
+    /// a tile comes up over every floating window, the elevated ones too,
+    /// and stays there until <see cref="Release"/>. Windows raises a tile
+    /// only when the click ACTIVATES it, and with the focus following the
+    /// pointer the tile already has the focus when it is clicked -- so the
+    /// floating windows kept covering the tile the person was clicking on
+    /// (Diego, 2026-09-23 11:47). Never over a fullscreen window.
+    /// </summary>
+    public bool Press(WindowHandle handle)
+    {
+        if (Window(handle) is not { Managed: true, State: WindowState.Tiling, Hidden: false, Workspace: { } name } window
+            || Workspace(name) is not { } workspace
+            || !workspace.Fullscreen.IsNone)
+        {
+            return false;
+        }
+
+        if (!_lifted.IsNone && _lifted != handle && Window(_lifted) is { } other)
+        {
+            other.Lifted = false;
+        }
+
+        window.Lifted = true;
+        _lifted = handle;
+        return true;
+    }
+
+    /// <summary>The button is up: the lifted tile leaves the band and the floating windows come back over it.</summary>
+    public bool Release()
+    {
+        if (_lifted.IsNone)
+        {
+            return false;
+        }
+
+        WindowHandle handle = _lifted;
+        _lifted = WindowHandle.None;
+        if (Window(handle) is not { } window)
+        {
+            return false;
+        }
+
+        window.Lifted = false;
+        if (window.Workspace is { } name && Workspace(name) is { } workspace)
+        {
+            _raiseOver = workspace;
+            _raiseAskedAt = Now;
+            _raiseReleasedAt = Now;
+            Unsettled = true;
+        }
+
+        return true;
+    }
+
+    private WindowHandle _lifted = WindowHandle.None;
+
     /// <summary>Raises a floating window within its band.</summary>
     public bool Raise(WindowHandle handle)
     {
