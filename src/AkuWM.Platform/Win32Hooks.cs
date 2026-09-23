@@ -38,6 +38,7 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
     private const uint EventObjectDestroy = 0x8001;
     private const uint EventObjectShow = 0x8002;
     private const uint EventObjectHide = 0x8003;
+    private const uint EventObjectReorder = 0x8004;
     private const uint EventObjectLocationChange = 0x800B;
     private const uint EventObjectNameChange = 0x800C;
     private const uint EventObjectCloaked = 0x8017;
@@ -157,7 +158,7 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
     [
         (EventSystemForeground, EventSystemForeground),
         (EventSystemMinimizeStart, EventSystemMinimizeEnd),
-        (EventObjectCreate, EventObjectHide),
+        (EventObjectCreate, EventObjectReorder),
         (EventObjectLocationChange, EventObjectNameChange),
         (EventObjectCloaked, EventObjectUncloaked),
     ];
@@ -181,6 +182,7 @@ public sealed class Win32Hooks : IPlatformEvents, IDisposable
             EventObjectDestroy => PlatformEventKind.WindowDestroyed,
             EventObjectShow => PlatformEventKind.WindowShown,
             EventObjectHide => PlatformEventKind.WindowHidden,
+            EventObjectReorder => PlatformEventKind.WindowsReordered,
             EventObjectLocationChange => PlatformEventKind.WindowMoved,
             EventObjectNameChange => PlatformEventKind.WindowTitleChanged,
             EventObjectCloaked => PlatformEventKind.WindowCloaked,

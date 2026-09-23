@@ -70,6 +70,9 @@ public sealed record Redraw
     /// <summary>Windows entering or leaving the always-on-top band.</summary>
     public IReadOnlyList<(WindowHandle Window, bool Topmost)> Band { get; init; } = [];
 
+    /// <summary>The tiles the windows in <see cref="Raise"/> go back over (IPlatform.RaiseOver).</summary>
+    public IReadOnlyList<WindowHandle> Tiles { get; init; } = [];
+
     /// <summary>
     /// Floating windows to bring back over the tiles, without activating them.
     /// </summary>

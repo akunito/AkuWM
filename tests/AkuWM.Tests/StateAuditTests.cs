@@ -215,6 +215,10 @@ public class LedgerAuditTests
         public void SetMinimized(WindowHandle window, bool minimized) => platform.SetMinimized(window, minimized);
 
         public bool SetTopmost(WindowHandle window, bool topmost) => platform.SetTopmost(window, topmost);
+        public void RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles)
+        {
+        }
+
         public void Raise(WindowHandle window) => platform.Raise(window);
         public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost, int corner, int width) => platform.Outline(window, frame, colour, topmost, corner, width);
         public void Lower(WindowHandle window) => platform.Lower(window);

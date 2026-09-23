@@ -203,9 +203,9 @@ public sealed class DeskFixture
             }
         }
 
-        foreach (WindowHandle handle in redraw.Raise)
+        if (redraw.Raise.Count > 0)
         {
-            Platform.Raise(handle);
+            Platform.RaiseOver(redraw.Raise, redraw.Tiles);
         }
 
         foreach (WindowHandle handle in redraw.Lower)

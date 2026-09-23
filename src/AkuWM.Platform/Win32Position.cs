@@ -308,6 +308,90 @@ public static class Win32Position
             | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER);
 
     /// <summary>
+    /// The floating windows back over the tiles, their own order kept: the
+    /// z-order is read once, and every tile above the lowest floating window
+    /// is put directly behind it (IPlatform.RaiseOver). Returns how many
+    /// tiles moved.
+    /// </summary>
+    public static int RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles)
+    {
+        if (floating.Count == 0 || tiles.Count == 0)
+        {
+            return 0;
+        }
+
+        // Top to bottom, once: a dictionary lookup per window afterwards.
+        var depth = new Dictionary<long, int>(256);
+        HWND at = PInvoke.GetTopWindow(HWND.Null);
+        for (int i = 0; !at.IsNull && i < 4096; i++)
+        {
+            depth[(long)at.Value] = i;
+            at = PInvoke.GetWindow(at, GET_WINDOW_CMD.GW_HWNDNEXT);
+        }
+
+        // Lowest first. A tile is put behind the lowest floating window that
+        // takes the call: an ELEVATED one cannot be named as hwndInsertAfter
+        // by a process without uiAccess (SetWindowPos returns false, measured
+        // 2026-09-23 09:45 with the elevated console as the lowest), so the
+        // next one up is the anchor then, and the elevated window stays
+        // where it was.
+        var order = new List<(int Depth, WindowHandle Window)>(floating.Count);
+        for (int i = 0; i < floating.Count; i++)
+        {
+            if (depth.TryGetValue(floating[i].Value, out int d))
+            {
+                order.Add((d, floating[i]));
+            }
+        }
+
+        order.Sort((a, b) => b.Depth.CompareTo(a.Depth));
+
+        int moved = 0;
+        WindowHandle anchor = WindowHandle.None;
+        for (int f = 0; f < order.Count && anchor.IsNone; f++)
+        {
+            (int lowestDepth, WindowHandle lowest) = order[f];
+            bool refused = false;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                if (!depth.TryGetValue(tiles[i].Value, out int d) || d >= lowestDepth)
+                {
+                    continue;
+                }
+
+                if (PlaceBehind(tiles[i], lowest))
+                {
+                    moved++;
+                }
+                else
+                {
+                    refused = true;
+                    break;
+                }
+            }
+
+            if (!refused)
+            {
+                anchor = lowest;
+            }
+        }
+
+        Log.Debug(() =>
+        {
+            var line = new System.Text.StringBuilder(160);
+            line.Append("  raise over: ").Append(floating.Count).Append(" floating kept in order, anchor ").Append(anchor).Append("; tiles:");
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                line.Append(' ').Append(tiles[i]).Append('@').Append(depth.TryGetValue(tiles[i].Value, out int d) ? d : -1);
+            }
+
+            return line.Append("; moved ").Append(moved).ToString();
+        });
+
+        return moved;
+    }
+
+    /// <summary>
     /// Turns a visible-frame rectangle into the outer rectangle
     /// <c>SetWindowPos</c> expects.
     /// </summary>

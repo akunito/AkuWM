@@ -293,7 +293,17 @@ public sealed class WindowManager : IAsyncDisposable
                 _resync = true;
                 break;
 
+            case EventResponse.TheStackChanged:
+                // A click on a tile that already has the focus raises it over
+                // the floating windows natively, and no foreground event
+                // follows: the desk asks for them back (live desk 2026-09-23
+                // 09:26, the tile stayed over five floating windows for 28 s).
+                _desk.StackChanged();
+                _dirty = true;
+                return;
+
             case EventResponse.TheFocusMoved:
+                Log.Debug(() => $"  foreground -> {platformEvent.Handle} {_desk.Window(platformEvent.Handle)?.Snapshot.ProcessName ?? "(unknown)"}");
                 // A window nobody has seen taking the foreground is a birth
                 // whose show event was gated out; a window born maximised
                 // never moves afterwards, so this was its last event and the

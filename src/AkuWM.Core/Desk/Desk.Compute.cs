@@ -360,6 +360,20 @@ public sealed partial class Desk
             _wantFocus = WindowHandle.None;
         }
 
+        // The tiles the floating windows go back over: the platform moves
+        // the ones that came up behind them, and touches nothing else.
+        var tiles = new List<WindowHandle>();
+        if (raise.Count > 0 && _raiseOver is { } over)
+        {
+            foreach (WindowHandle handle in over.Windows)
+            {
+                if (Live(handle) is { State: WindowState.Tiling, Hidden: false })
+                {
+                    tiles.Add(handle);
+                }
+            }
+        }
+
         if (_raiseOver is not null && Now - _raiseAskedAt >= RaiseDelayMs)
         {
             _raiseOver = null;
@@ -374,6 +388,7 @@ public sealed partial class Desk
             Unmaximize = unmaximize,
             Remaximize = remaximize,
             Band = band,
+            Tiles = tiles,
             Behind = behind,
             Raise = raise,
             Lower = lower,

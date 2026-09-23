@@ -20,6 +20,25 @@ public class ChordTests
         Assert.Equal(canonical, chord.ToString());
     }
 
+    [Theory]
+
+    [InlineData("Hyper+?")]
+
+    [InlineData("Hyper+Shift+;")]
+
+    [InlineData("Hyper+Shift+-")]
+
+    [InlineData("Ctrl+Alt+:")]
+
+    public void A_shifted_punctuation_key_is_a_key(string text)
+
+    {
+
+        Assert.True(Chord.TryParse(text, out _, out string? error), error);
+
+    }
+
+
     [Fact]
     public void HyperIsCtrlAltWin()
     {

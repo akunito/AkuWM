@@ -221,9 +221,9 @@ public sealed class DeskApplier
             _actions.PlaceBehind(window, game);
         }
 
-        for (int i = 0; i < redraw.Raise.Count; i++)
+        if (redraw.Raise.Count > 0)
         {
-            _actions.Raise(redraw.Raise[i]);
+            _actions.RaiseOver(redraw.Raise, redraw.Tiles);
         }
 
         for (int i = 0; i < redraw.Lower.Count; i++)

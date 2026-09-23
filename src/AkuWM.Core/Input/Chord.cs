@@ -86,7 +86,12 @@ public readonly record struct Chord(KeyModifiers Modifiers, string Key)
 
     private static bool IsKey(string part)
     {
-        if (part.Length == 1 && (char.IsLetterOrDigit(part[0]) || "`-=[]\\;',./".Contains(part[0])))
+        // Any one printable character: the shifted ones too (`?` for the
+        // right-hand focus, `:` for the move; the AutoHotkey binds them by
+        // the character). Refusing `?` stopped the daemon from starting on
+        // a configuration the bindings renderer had already accepted
+        // (2026-09-23 09:37, the desk rescued and unmanaged).
+        if (part.Length == 1 && !char.IsWhiteSpace(part[0]) && !char.IsControl(part[0]))
         {
             return true;
         }

@@ -90,6 +90,16 @@ public interface IPlatformActions
     /// <summary>Brings a window to the top of its band without activating it.</summary>
     void Raise(WindowHandle window);
 
+    /// <summary>
+    /// Puts the floating windows back over the tiles WITHOUT changing their
+    /// order among themselves: every tile that sits above the lowest of them
+    /// is moved behind it (a lowering needs no foreground right), nothing
+    /// else is touched. Raising them one by one with HWND_TOP put them back
+    /// in list order -- the window the person had on top ended fourth
+    /// every time a tile was hovered (live desk 2026-09-23 09:26).
+    /// </summary>
+    void RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles);
+
     /// <summary>Sends a window to the bottom of the z-order without activating it.</summary>
     void Lower(WindowHandle window);
 
@@ -191,6 +201,9 @@ public enum PlatformEventKind
     WindowMinimizeEnd,
     WindowTitleChanged,
     ForegroundChanged,
+
+    /// <summary>The z-order of the top-level windows changed (EVENT_OBJECT_REORDER on the desktop).</summary>
+    WindowsReordered,
     DisplayChanged,
     SettingsChanged,
     PowerSuspend,

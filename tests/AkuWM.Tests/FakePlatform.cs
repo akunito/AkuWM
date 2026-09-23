@@ -176,6 +176,20 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
         Lowered.Add(window);
     }
 
+    /// <summary>The tiles asked to go behind the floating windows, per call.</summary>
+    public List<WindowHandle> TilesLowered { get; } = [];
+
+    public void RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles)
+    {
+        Calls.Add($"raise-over {floating.Count} over {tiles.Count}");
+        for (int i = 0; i < floating.Count; i++)
+        {
+            Raise(floating[i]);
+        }
+
+        TilesLowered.AddRange(tiles);
+    }
+
     /// <summary>What the shell was last asked to draw, by window.</summary>
     public Dictionary<WindowHandle, Decoration> Decorations { get; } = [];
 

@@ -136,6 +136,9 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
 
     public void Lower(WindowHandle window) => Win32Position.Lower(window);
 
+    public void RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles) =>
+        Win32Position.RaiseOver(floating, tiles);
+
     public void PlaceBehind(WindowHandle window, WindowHandle behind) => Win32Position.PlaceBehind(window, behind);
 
     public void Unfocus() => Win32Focus.Unfocus();

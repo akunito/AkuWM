@@ -858,6 +858,25 @@ public sealed partial class Desk
         }
     }
 
+    /// <summary>
+    /// The z-order changed by somebody else's hand (EVENT_OBJECT_REORDER):
+    /// with a tile in focus, the floating windows of its workspace may have
+    /// gone under it, and the next pass puts them back (RaiseDelayMs later,
+    /// once, like a click). Nothing when a raise is already on its way, so
+    /// the pass's own lowering does not re-arm it for ever.
+    /// </summary>
+    public void StackChanged()
+    {
+        if (_raiseOver is null
+            && Window(Focused) is { Managed: true, State: WindowState.Tiling, Workspace: { } name }
+            && Workspace(name) is { } workspace)
+        {
+            _raiseOver = workspace;
+            _raiseAskedAt = Now;
+            Unsettled = true;
+        }
+    }
+
     /// <summary>Pins a window to its monitor, or lets it belong to a workspace again.</summary>
     public bool SetSticky(WindowHandle handle, bool sticky)
     {

@@ -65,6 +65,10 @@ internal sealed class FakeActions : IPlatformActions
     public void Unfocus() => _platform.Unfocus();
 
     public bool SetTopmost(WindowHandle window, bool topmost) => _platform.SetTopmost(window, topmost);
+    public void RaiseOver(IReadOnlyList<WindowHandle> floating, IReadOnlyList<WindowHandle> tiles)
+    {
+    }
+
     public void Raise(WindowHandle window) => _platform.Raise(window);
     public void Outline(WindowHandle window, Rect? frame, uint colour, bool topmost, int corner, int width) => _platform.Outline(window, frame, colour, topmost, corner, width);
     public void Lower(WindowHandle window) => _platform.Lower(window);

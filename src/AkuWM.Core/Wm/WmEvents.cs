@@ -38,6 +38,9 @@ public enum EventResponse
     /// <summary>The screens changed. Roles are resolved again, then the desk is read.</summary>
     TheScreensChanged,
 
+    /// <summary>The z-order changed under AkuWM: a tile clicked while already focused comes up over the floating windows with no other event.</summary>
+    TheStackChanged,
+
     /// <summary>Nothing AkuWM needs to do.</summary>
     Nothing,
 }
@@ -62,6 +65,7 @@ public static class WmEvents
         PlatformEventKind.WindowHidden => EventResponse.ReadTheDeskIfWeKnowIt,
 
         PlatformEventKind.ForegroundChanged => EventResponse.TheFocusMoved,
+        PlatformEventKind.WindowsReordered => EventResponse.TheStackChanged,
 
         PlatformEventKind.DisplayChanged => EventResponse.TheScreensChanged,
 

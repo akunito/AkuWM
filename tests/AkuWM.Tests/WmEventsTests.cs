@@ -15,6 +15,7 @@ public class WmEventsTests
     [InlineData(PlatformEventKind.WindowShown, EventResponse.ReadTheDeskIfItCouldBeOurs)]
     [InlineData(PlatformEventKind.WindowHidden, EventResponse.ReadTheDeskIfWeKnowIt)]
     [InlineData(PlatformEventKind.ForegroundChanged, EventResponse.TheFocusMoved)]
+    [InlineData(PlatformEventKind.WindowsReordered, EventResponse.TheStackChanged)]
     [InlineData(PlatformEventKind.DisplayChanged, EventResponse.TheScreensChanged)]
     [InlineData(PlatformEventKind.SettingsChanged, EventResponse.TheScreensChanged)]
     [InlineData(PlatformEventKind.PowerResume, EventResponse.TheScreensChanged)]
