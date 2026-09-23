@@ -598,7 +598,7 @@ public sealed partial class Desk
                 Height = Math.Min(rect.Height, area.Height),
             };
         }
-        else if (rect.FractionInside(area) > 0.5)
+        else if (Reachable(rect, area))
         {
             return rect;
         }
@@ -608,6 +608,23 @@ public sealed partial class Desk
             X = Math.Clamp(rect.X, area.Left, Math.Max(area.Left, area.Right - rect.Width)),
             Y = Math.Clamp(rect.Y, area.Top, Math.Max(area.Top, area.Bottom - rect.Height)),
         };
+    }
+
+    /// <summary>
+    /// A floating window the person can still take hold of: at least this
+    /// much of it, both ways, on the work area. Dragging a window mostly off
+    /// the screen to see what is under it is a thing people do, and "more than
+    /// half inside" pulled every such window back (Diego, 2026-09-23 11:52;
+    /// 24 px is his number). A rectangle remembered from a screen that is
+    /// gone overlaps the current one not at all, so it still comes back.
+    /// </summary>
+    public const int GrabMarginPx = 24;
+
+    private static bool Reachable(in Rect rect, in Rect area)
+    {
+        int across = Math.Min(rect.Right, area.Right) - Math.Max(rect.Left, area.Left);
+        int down = Math.Min(rect.Bottom, area.Bottom) - Math.Max(rect.Top, area.Top);
+        return across >= GrabMarginPx && down >= GrabMarginPx;
     }
 
     /// <summary>How long a window has to reach where it was put before AkuWM stops asking.</summary>
