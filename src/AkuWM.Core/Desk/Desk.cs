@@ -1530,9 +1530,56 @@ public sealed partial class Desk
             _wantFocus = WindowHandle.None;
         }
 
-        if (window.Workspace is { } name)
+        if (window.Workspace is { } name && Workspace(name) is { } left)
         {
-            Workspace(name)?.Release(handle);
+            bool heldTheScreen = left.Fullscreen == handle;
+            left.Release(handle);
+
+            // The slot goes to another window that still covers the screen:
+            // a second fullscreen window on the workspace took it from the
+            // game, and when the second one closed the game stayed demoted,
+            // under its own tiles (tests/fullscreen 13, the side window
+            // opened over the game, 2026-09-23 11:02).
+            if (heldTheScreen)
+            {
+                // The one that yielded the slot to this window first (it was
+                // tiled meanwhile, so its rectangle says nothing); else any
+                // window of the workspace still covering the screen.
+                DeskWindow? back = null;
+                foreach (DeskWindow candidate in _windows.Values)
+                {
+                    if (candidate.Managed
+                        && candidate.Handle != handle
+                        && candidate.State != WindowState.Minimized
+                        && string.Equals(candidate.Workspace, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (candidate.YieldedTo == handle)
+                        {
+                            back = candidate;
+                            break;
+                        }
+
+                        if (back is null && ShadowModel.IsFullscreen(candidate.Snapshot, MonitorByHandle(candidate.Snapshot.Monitor)?.Snapshot))
+                        {
+                            back = candidate;
+                        }
+                    }
+                }
+
+                if (back is not null)
+                {
+                    back.YieldedTo = WindowHandle.None;
+                    if (back.State == WindowState.Fullscreen)
+                    {
+                        left.Fullscreen = back.Handle; // an orphan: the slot is all it lacks
+                        back.Marked = false;
+                    }
+                    else
+                    {
+                        SetFullscreen(back, true);
+                    }
+                }
+            }
         }
 
         foreach (DeskMonitor monitor in _monitors)
@@ -1874,6 +1921,19 @@ public sealed partial class Desk
         switch (window.State)
         {
             case WindowState.Fullscreen:
+                // Only one window covers a workspace: whoever held the slot
+                // goes back to what it was, or it keeps the Fullscreen state
+                // with no slot and no container -- drawn nowhere, and never
+                // given the slot back (a second fullscreen fliptest over the
+                // game, tests/fullscreen 13, 2026-09-23 11:02).
+                if (!workspace.Fullscreen.IsNone
+                    && workspace.Fullscreen != window.Handle
+                    && Window(workspace.Fullscreen) is { } holder)
+                {
+                    SetFullscreen(holder, false);
+                    holder.YieldedTo = window.Handle;
+                }
+
                 workspace.Fullscreen = window.Handle;
                 break;
 

@@ -192,6 +192,12 @@ public sealed class DeskWindow
     public bool OverGame { get; set; }
 
     /// <summary>
+    /// The window this one gave the fullscreen slot up to (a second window
+    /// covering the workspace). When that one closes, the slot comes back.
+    /// </summary>
+    public WindowHandle YieldedTo { get; set; } = WindowHandle.None;
+
+    /// <summary>
     /// It was covering its monitor when it went to the taskbar, and comes back
     /// covering it, whatever it was before that.
     /// </summary>
