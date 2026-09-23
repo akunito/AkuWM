@@ -145,6 +145,32 @@ public static class Win32Windows
         var exStyle = (WINDOW_EX_STYLE)(uint)PInvoke.GetWindowLongPtr(hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
 
         Rect windowRect = Rect.FromEdges(rect.left, rect.top, rect.right, rect.bottom);
+        string className = ClassOf(hwnd);
+
+        // A UWP application's top-level window belongs to ApplicationFrameHost;
+        // the application itself owns the CoreWindow inside it. Reported as
+        // the host, no rule and no chord by process ever matched the
+        // Calculator: Hyper+X found no "CalculatorApp" window and launched a
+        // second one every time (2026-09-23). One FindWindowEx, only for
+        // that class.
+        if (className == "ApplicationFrameWindow")
+        {
+            HWND core = PInvoke.FindWindowEx(hwnd, HWND.Null, "Windows.UI.Core.CoreWindow", null);
+            if (!core.IsNull)
+            {
+                uint hosted = 0;
+                unsafe
+                {
+                    PInvoke.GetWindowThreadProcessId(core, &hosted);
+                }
+
+                if (hosted != 0 && hosted != processId)
+                {
+                    processId = hosted;
+                }
+            }
+        }
+
         (string process, bool elevated) = ProcessFacts(processId);
 
         return new WindowSnapshot
@@ -152,7 +178,7 @@ public static class Win32Windows
             Handle = new WindowHandle(hwnd.Value),
             ProcessId = processId,
             ProcessName = process,
-            ClassName = ClassOf(hwnd),
+            ClassName = className,
             Title = TitleOf(hwnd),
             WindowRect = windowRect,
             FrameBounds = FrameBoundsOf(hwnd) ?? windowRect,
