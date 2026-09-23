@@ -159,6 +159,20 @@ public static class Program
         // everything as new, once; records from before this boot are dropped.
         long bootedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (Environment.TickCount64 / 1000);
         var placements = new PlacementJournal(paths.PlacementsFile, droppedBefore: bootedAt);
+        // The chords as the AutoHotkey script binds them, from the shortcuts
+        // of the configuration: rendered at every start so a fresh logon has
+        // the file, and again by `bindings reload` after the GUI edits one.
+        {
+            var problems = new List<string>();
+            AkuWM.Core.Bindings.Bindings.Write(paths.BindingsFile, AkuWM.Core.Bindings.Bindings.Render(loaded.Effective.Shortcuts, problems));
+            foreach (string problem in problems)
+            {
+                Log.Warn($"bindings: {problem}");
+            }
+
+            Win32Hotkeys.PokeBindings();
+        }
+
         if (args.Contains("--fresh"))
         {
             placements.Clear();
@@ -403,7 +417,8 @@ public static class Program
                 : new RulesCommand(read => manager.Do("rules", read).GetAwaiter().GetResult()),
             manager is null
                 ? null
-                : process => manager.Do("forget-app", desk => desk.ForgetApp(process)).GetAwaiter().GetResult());
+                : process => manager.Do("forget-app", desk => desk.ForgetApp(process)).GetAwaiter().GetResult(),
+            new BindingsCommand(paths, Win32Hotkeys.PokeBindings));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>

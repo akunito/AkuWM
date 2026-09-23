@@ -13,6 +13,7 @@ public sealed class CommandRouter
     private readonly DoctorCommand _doctor;
     private readonly QueryCommands? _query;
     private readonly ShadowCommand? _shadow;
+    private readonly BindingsCommand? _bindings;
     private readonly MonitorCommands? _monitors;
     private readonly UncloakCommand? _uncloak;
     private readonly BenchCommand? _bench;
@@ -39,9 +40,11 @@ public sealed class CommandRouter
         CompatCommand? compat = null,
         StateCommand? state = null,
         RulesCommand? rules = null,
-        Func<string, int>? forgetApp = null)
+        Func<string, int>? forgetApp = null,
+        BindingsCommand? bindings = null)
     {
         _forgetApp = forgetApp;
+        _bindings = bindings;
         _config = config;
         _doctor = doctor;
         _query = query;
@@ -68,7 +71,7 @@ public sealed class CommandRouter
     /// one arranging it.
     /// </remarks>
     public static bool NeedsNoDaemon(string verb) =>
-        verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors"
+        verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors" or "bindings"
             or "uncloak-all" or "bench" or "rescue" or "state";
 
     /// <summary>
@@ -120,6 +123,8 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "AkuWM is not managing the desk, so there is nothing to ask"),
                 "rules" => _rules?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "rules needs a running window manager"),
+                "bindings" => _bindings?.Execute(line, tokens)
+                    ?? CommandResponse.Fail(line, "there are no bindings on this host"),
                 "doctor" => _doctor.Execute(line),
                 "version" => CommandResponse.Ok(line, new { version = Build.Version, build = Build.Description }),
                 "help" => CommandResponse.Ok(line, new { commands = Help }),
@@ -158,6 +163,7 @@ public sealed class CommandRouter
         "rescue [--all] [--keep-daemon] [--forgive]",
         "state",
         "forget-app <process>         (the next window of it opens as a stranger)",
+        "bindings validate|render|reload|poke|path   (shortcuts -> bindings.tsv -> the AutoHotkey script, live)",
         "compat <query|command> ...   (what the glazewm shim sends)",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",

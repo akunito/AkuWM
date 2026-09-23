@@ -47,6 +47,9 @@ public sealed class ConfigPaths
 
     public string JournalFile => Path.Combine(RuntimeDir, "journal.json");
 
+    /// <summary>The shortcuts as the AutoHotkey script binds them, rendered by the daemon (Bindings).</summary>
+    public string BindingsFile => Path.Combine(RuntimeDir, "bindings.tsv");
+
     /// <summary>
     /// The windows AkuWM has hidden, written before each cloak so a crash
     /// cannot take them with it.
