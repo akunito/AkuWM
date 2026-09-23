@@ -501,7 +501,14 @@ public sealed partial class Desk
             // monitor powering on takes seconds and passes through wrong
             // shapes -- the vertical one came back LANDSCAPE for 1.2 s,
             // 2026-09-22 18:06); a bar that moved is one notification.
-            _screenSettleFor = SameScreenSet(monitors) ? ScreenSettleMs : MonitorSettleMs;
+            _screenSettleFor = SameScreenSet(monitors)
+                ? ScreenSettleMs
+                : monitors.Count < _mostScreens || HasPlaceholder(monitors) ? MonitorReturnMs : MonitorSettleMs;
+        }
+
+        if (monitors.Count > _mostScreens)
+        {
+            _mostScreens = monitors.Count;
         }
 
         Dictionary<MonitorHandle, string> roles = MonitorRoles.Resolve(Config.Monitors ?? [], monitors);
@@ -575,6 +582,23 @@ public sealed partial class Desk
                 Reclaim(_monitors[i]);
             }
         }
+    }
+
+    /// <summary>The most screens seen this run: fewer means one is away, and on a resume it is on its way back.</summary>
+    private int _mostScreens;
+
+    /// <summary>Windows' stand-in while a monitor reconnects ("Default_Monitor"): not a screen to lay anything out on yet.</summary>
+    private static bool HasPlaceholder(IReadOnlyList<MonitorSnapshot> monitors)
+    {
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            if (monitors[i].HardwareId.StartsWith("Default_Monitor", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool SameScreenSet(IReadOnlyList<MonitorSnapshot> monitors)

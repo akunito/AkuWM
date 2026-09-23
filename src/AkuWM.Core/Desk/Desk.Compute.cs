@@ -390,9 +390,12 @@ public sealed partial class Desk
 
             // And when nothing is to be focused while the focused window is
             // going away, the keyboard must not stay on it.
-            Unfocus = _wantFocus.IsNone && !Focused.IsNone && hide.Contains(Focused),
+            Unfocus = _wantUnfocus || (_wantFocus.IsNone && !Focused.IsNone && hide.Contains(Focused)),
         };
     }
+
+    /// <summary>Set by <see cref="FocusSomethingVisible"/> when the focused screen shows nothing.</summary>
+    private bool _wantUnfocus;
 
     /// <summary>
     /// The frame, moved so that frame plus border stays within the screen,
@@ -589,6 +592,18 @@ public sealed partial class Desk
 
     /// <summary>A window minimised this soon after a screen change was parked by Windows, not by the person.</summary>
     public const int ParkWindowMs = 5000;
+
+    /// <summary>
+    /// The wait while a screen is MISSING, or a placeholder stands in for
+    /// one. A resume brings the monitors back one at a time: fifteen
+    /// notifications over 17 s with gaps of 2.3, 3.2, 3.2 and 2.6 s between
+    /// them, the main screen replaced by a "Default_Monitor" of 1920x1080
+    /// and then 1024x740 for eight of those seconds (2026-09-23 07:40).
+    /// MonitorSettleMs ran out inside every gap, and Brave was placed eight
+    /// times into layouts that were gone a second later -- four sizes,
+    /// placements of 1 and 1.7 s -- and did not paint again until relaunched.
+    /// </summary>
+    public const int MonitorReturnMs = 6000;
 
     private int _screenSettleFor = ScreenSettleMs;
 
@@ -1193,10 +1208,12 @@ public sealed partial class Desk
         // The focused window has just been hidden: what the model calls
         // focused must not be a window nobody can see, or the next chord with
         // no --id acts on it and the bar says the wrong workspace has focus.
-        if (Window(Focused) is { Hidden: true })
+        if (Window(Focused) is { Hidden: true } || (redraw.Unfocus && _wantUnfocus))
         {
             Focused = WindowHandle.None;
         }
+
+        _wantUnfocus = false;
 
         // Cheap: a compare per window, a memory-mapped write per change.
         RememberPlacements();

@@ -131,6 +131,19 @@ public sealed partial class Desk
             ? VisibleLastFocused(displayed)
             : WindowHandle.None;
 
+        // The screen the person is on shows nothing: the keyboard goes to
+        // the desktop, not to a window on ANOTHER screen. The fallback below
+        // took the elevated console on the main monitor every time the
+        // vertical one was switched to an empty workspace -- raised over its
+        // tiles and its outline rebuilt, nine times in one morning (live desk
+        // 2026-09-23 07:42, "the main monitor changes when I switch a
+        // workspace on the vertical one").
+        if (monitor?.Displayed is not null && (target.IsNone || Window(target) is not { Managed: true, Hidden: false }))
+        {
+            _wantUnfocus = true;
+            return false;
+        }
+
         if (target.IsNone || Window(target) is not { Managed: true, Hidden: false })
         {
             for (int i = 0; i < _monitors.Count; i++)
