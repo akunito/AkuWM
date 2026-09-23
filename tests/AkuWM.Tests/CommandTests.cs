@@ -199,3 +199,30 @@ public class CommandSurfaceTests
         Assert.Contains("M2", Build.Description);
     }
 }
+
+public class DebugCommandTests
+{
+    [Fact]
+    public void Debug_flips_the_level_and_the_marker()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "akuwm-debug-" + Guid.NewGuid().ToString("N"));
+        var paths = new ConfigPaths(Path.Combine(root, "cfg"), "T", Path.Combine(root, "state"));
+        var router = new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => false), debug: new DebugCommand(paths));
+        try
+        {
+            Assert.True(router.Execute("debug on").Success);
+            Assert.True(File.Exists(paths.DebugMarkerFile));
+            Assert.True(AkuWM.Core.Logging.Log.DebugOn);
+            CommandResponse off = router.Execute("debug off");
+            Assert.True(off.Success);
+            Assert.False(File.Exists(paths.DebugMarkerFile));
+            Assert.False(AkuWM.Core.Logging.Log.DebugOn);
+            Assert.False(router.Execute("debug sideways").Success);
+            Assert.False(new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => false)).Execute("debug on").Success);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}

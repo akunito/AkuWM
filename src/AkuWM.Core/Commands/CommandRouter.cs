@@ -22,6 +22,7 @@ public sealed class CommandRouter
     private readonly StateCommand? _state;
     private readonly RulesCommand? _rules;
     private readonly Func<string, int>? _forgetApp;
+    private readonly DebugCommand? _debug;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -41,8 +42,10 @@ public sealed class CommandRouter
         StateCommand? state = null,
         RulesCommand? rules = null,
         Func<string, int>? forgetApp = null,
-        BindingsCommand? bindings = null)
+        BindingsCommand? bindings = null,
+        DebugCommand? debug = null)
     {
+        _debug = debug;
         _forgetApp = forgetApp;
         _bindings = bindings;
         _config = config;
@@ -126,6 +129,8 @@ public sealed class CommandRouter
                 "bindings" => _bindings?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "there are no bindings on this host"),
                 "doctor" => _doctor.Execute(line),
+                "debug" => _debug?.Execute(line, tokens)
+                    ?? CommandResponse.Fail(line, "debug needs the running daemon: its level is what changes"),
                 "version" => CommandResponse.Ok(line, new { version = Build.Version, build = Build.Description }),
                 "help" => CommandResponse.Ok(line, new { commands = Help }),
                 "exit" => CommandResponse.Ok(line, new { stopping = true }),
@@ -168,6 +173,7 @@ public sealed class CommandRouter
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",
         "doctor",
+        "debug on|off|status          (the daemon's log level, live, and the marker its next start reads)",
         "version",
         "help",
         "exit",

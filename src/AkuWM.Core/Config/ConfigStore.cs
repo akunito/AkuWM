@@ -90,8 +90,43 @@ public static class ConfigStore
         Directory.CreateDirectory(directory);
 
         string temporary = Path.Combine(directory, $".{Path.GetFileName(file)}.{Environment.ProcessId}.tmp");
-        File.WriteAllText(temporary, json + Environment.NewLine, new UTF8Encoding(false));
+        File.WriteAllText(temporary, WithNewlinesOf(file, json), new UTF8Encoding(false));
         File.Move(temporary, file, overwrite: true);
+    }
+
+    /// <summary>
+    /// The file's own line ending, kept. The files live in a git checkout
+    /// shared with Linux and are LF there; on Windows the JSON writer and
+    /// <c>Environment.NewLine</c> are CRLF, and one <c>config set</c> turned
+    /// every line of common.json into a diff (1050 lines, 2026-09-23). A file
+    /// that does not exist yet is written LF for the same reason.
+    /// </summary>
+    public static string WithNewlinesOf(string file, string text)
+    {
+        bool crlf = false;
+        if (File.Exists(file))
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            int previous = -1, b;
+            while ((b = stream.ReadByte()) >= 0)
+            {
+                if (b == '\n')
+                {
+                    crlf = previous == '\r';
+                    break;
+                }
+
+                previous = b;
+            }
+        }
+
+        string lf = text.Replace("\r\n", "\n");
+        if (!lf.EndsWith('\n'))
+        {
+            lf += "\n";
+        }
+
+        return crlf ? lf.Replace("\n", "\r\n") : lf;
     }
 
     public static void Save(string file, AkuWmConfig layer)
@@ -101,7 +136,7 @@ public static class ConfigStore
         Directory.CreateDirectory(directory);
 
         string temporary = Path.Combine(directory, $".{Path.GetFileName(file)}.{Environment.ProcessId}.tmp");
-        File.WriteAllText(temporary, ConfigJson.Write(layer) + Environment.NewLine, new UTF8Encoding(false));
+        File.WriteAllText(temporary, WithNewlinesOf(file, ConfigJson.Write(layer)), new UTF8Encoding(false));
 
         // File.Move over an existing file is atomic on both NTFS and ext4, so a
         // reader never sees a half-written configuration.

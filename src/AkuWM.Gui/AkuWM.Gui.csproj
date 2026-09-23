@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The settings window: its own process, `akuwm-gui.exe`, a normal-integrity
+       client of the daemon's pipe like the CLI. Not inside the daemon on
+       purpose: the daemon is uiAccess (signed, Program Files, cannot be run
+       from a shell), holds one hot thread with a 5 ms budget, and must never
+       die because a settings panel threw; a toolkit's working set does not
+       belong in a process that runs all day either. net8.0, not -windows, so
+       the headless tests run on Linux with the rest. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AkuWM.Gui</RootNamespace>
+    <AssemblyName>akuwm-gui</AssemblyName>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Avalonia 12's analyzers are built against a newer Roslyn than SDK
+         8.0.4xx ships; the warning is about the analyzers, not the code. -->
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AkuWM.Core/AkuWM.Core.csproj" />
+    <InternalsVisibleTo Include="AkuWM.Gui.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/akuwm.png" LogicalName="akuwm.png" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,7 @@
-using Xunit;
 using AkuWM.Core.Desk;
 using AkuWM.Core.Model;
 using AkuWM.Core.Platform;
+using Xunit;
 
 namespace AkuWM.Tests;
 

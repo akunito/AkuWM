@@ -132,3 +132,33 @@ public class ConfigStoreTests
         Assert.EndsWith("DESK_W11.json", paths.ProfileFile, StringComparison.Ordinal);
     }
 }
+
+public class ConfigStoreNewlineTests
+{
+    [Fact]
+    public void A_save_keeps_the_files_line_ending_and_defaults_to_lf()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "akuwm-eol-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string lf = Path.Combine(root, "lf.json");
+            File.WriteAllText(lf, "{\n  \"version\": 1\n}\n");
+            ConfigStore.SaveText(lf, "{\r\n  \"version\": 2\r\n}");
+            Assert.Equal("{\n  \"version\": 2\n}\n", File.ReadAllText(lf));
+
+            string crlf = Path.Combine(root, "crlf.json");
+            File.WriteAllText(crlf, "{\r\n  \"version\": 1\r\n}\r\n");
+            ConfigStore.SaveText(crlf, "{\n  \"version\": 2\n}");
+            Assert.Equal("{\r\n  \"version\": 2\r\n}\r\n", File.ReadAllText(crlf));
+
+            string fresh = Path.Combine(root, "fresh.json");
+            ConfigStore.SaveText(fresh, "{\r\n}");
+            Assert.Equal("{\n}\n", File.ReadAllText(fresh));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}

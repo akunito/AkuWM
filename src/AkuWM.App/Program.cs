@@ -418,7 +418,8 @@ public static class Program
             manager is null
                 ? null
                 : process => manager.Do("forget-app", desk => desk.ForgetApp(process)).GetAwaiter().GetResult(),
-            new BindingsCommand(paths, Win32Hotkeys.PokeBindings));
+            new BindingsCommand(paths, Win32Hotkeys.PokeBindings),
+            manager is null ? null : new DebugCommand(paths));
     }
 
     /// <summary>The checks only the Windows host can make.</summary>
