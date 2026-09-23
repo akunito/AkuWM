@@ -86,6 +86,13 @@ public sealed partial class Desk
             window.LoweredApplied = false;
         }
 
+        // Activated, it is at the top of its band now, whatever the model
+        // sent before: a window that took the focus while the game was
+        // minimised sat over it after the restore, with the model certain
+        // it was still behind (the insert-behind is sent once per pair).
+        // tests/fullscreen 8-gamelike step 2, 0 % direct, 2026-09-23 09:58.
+        window.Behind = WindowHandle.None;
+
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
             workspace.Touch(handle);
