@@ -84,9 +84,15 @@ public sealed class WindowManager : IAsyncDisposable
         // injection while the foreground is a window covering its screen.
         // Read on the wm thread, which is where the applier calls Focus from.
         // It was declared and never assigned, so the F24 route ran regardless.
+        // An elevated window in front counts only without uiAccess: the
+        // attach and the injection are refused by UIPI then and would be
+        // wasted; with uiAccess they work, and refusing them left every
+        // focus the tests asked for undone while the Administrator console
+        // had the foreground (tests/wm toggle, 12 checks red, 2026-09-23 10:23).
+        bool uiAccess = Win32Token.HasUiAccess();
         Win32Focus.GameInFront = () =>
             _desk.Window(_platform.Foreground()) is { } front
-            && (_desk.LooksLikeAGame(front) || front.Marked || front.Snapshot.IsElevated);
+            && (_desk.LooksLikeAGame(front) || front.Marked || (front.Snapshot.IsElevated && !uiAccess));
 
         // A window that has closed is not one AkuWM has to put back -- and
         // not one to keep a cloak record for: Windows reuses the handle, and

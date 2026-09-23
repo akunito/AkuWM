@@ -336,6 +336,7 @@ public sealed class GlazeExecutor
             }
 
             ShowTheWorkspaceOf(window);
+            _desk.ShowOverGame(window.Handle);
             _desk.WantFocus(window.Handle);
             return ExecResult.Ok(window.Id);
         }

@@ -184,6 +184,14 @@ public sealed class DeskWindow
     public WindowHandle Behind { get; set; } = WindowHandle.None;
 
     /// <summary>
+    /// Asked for by name while a fullscreen window covers its workspace
+    /// (Hyper+&lt;letter&gt;, <c>focus --container-id</c>): it sits in the
+    /// always-on-top band, over the game, until the game takes the focus
+    /// again. The game itself is never touched (10.21).
+    /// </summary>
+    public bool OverGame { get; set; }
+
+    /// <summary>
     /// It was covering its monitor when it went to the taskbar, and comes back
     /// covering it, whatever it was before that.
     /// </summary>

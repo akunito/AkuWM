@@ -124,8 +124,16 @@ public sealed partial class Desk
                     WantHidden(window, false, hide, show);
                     WantUnmaximized(window, unmaximize);
                     WantPlaced(window, rect, monitor, place);
-                    WantBanded(window, false, band);
-                    WantBehind(window, shielding, behind);
+
+                    // A tile asked for by name over the game sits in the band
+                    // too (Notepad opens tiled; tests/wm toggle 7b).
+                    if (window.OverGame && shielding.IsNone)
+                    {
+                        window.OverGame = false;
+                    }
+
+                    WantBanded(window, window.OverGame, band);
+                    WantBehind(window, window.OverGame ? WindowHandle.None : shielding, behind);
                     WantMarked(window, false, mark);
                 }
 
@@ -145,8 +153,13 @@ public sealed partial class Desk
                     // there cannot simply be put behind a normal one, it has
                     // to leave the band first -- and then be put behind it,
                     // because leaving the band lands it on top.
-                    WantBanded(window, shielding.IsNone && !window.Lowered, band);
-                    WantBehind(window, shielding, behind);
+                    if (window.OverGame && shielding.IsNone)
+                    {
+                        window.OverGame = false; // the game is gone
+                    }
+
+                    WantBanded(window, (shielding.IsNone || window.OverGame) && !window.Lowered, band);
+                    WantBehind(window, window.OverGame ? WindowHandle.None : shielding, behind);
                     WantMarked(window, false, mark);
                     WantOverTheTiles(window, workspace, shielding.IsNone, raise, lower);
                 }
@@ -215,8 +228,13 @@ public sealed partial class Desk
                 WantHidden(window, false, hide, show);
                 WantUnmaximized(window, unmaximize);
                 WantPlaced(window, FloatingRectOf(window, monitor), monitor, place);
-                WantBanded(window, !covered && !window.Lowered, band);
-                WantBehind(window, covered ? displayed!.Fullscreen : WindowHandle.None, behind);
+                if (window.OverGame && !covered)
+                {
+                    window.OverGame = false;
+                }
+
+                WantBanded(window, (!covered || window.OverGame) && !window.Lowered, band);
+                WantBehind(window, covered && !window.OverGame ? displayed!.Fullscreen : WindowHandle.None, behind);
 
                 // A sticky window that was covering the screen when it was
                 // stuck keeps the mark otherwise, and the taskbar stays down.

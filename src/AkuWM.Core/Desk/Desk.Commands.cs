@@ -93,6 +93,20 @@ public sealed partial class Desk
         // tests/fullscreen 8-gamelike step 2, 0 % direct, 2026-09-23 09:58.
         window.Behind = WindowHandle.None;
 
+        // The game has the focus again: whatever was shown over it by name
+        // goes back under.
+        if (window.State == WindowState.Fullscreen)
+        {
+            foreach (DeskWindow other in _windows.Values)
+            {
+                if (other.OverGame)
+                {
+                    other.OverGame = false;
+                    other.Behind = WindowHandle.None;
+                }
+            }
+        }
+
         if (window.Workspace is { } name && Workspace(name) is { } workspace)
         {
             workspace.Touch(handle);
@@ -912,6 +926,32 @@ public sealed partial class Desk
             Place(window, workspace);
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// "Show me this one": a window asked for by name on a workspace a
+    /// fullscreen window covers comes up over it (DeskWindow.OverGame). The
+    /// opposite of an application that merely opens while you play, which
+    /// stays under (tests/wm toggle 7 and 7b).
+    /// </summary>
+    public bool ShowOverGame(WindowHandle handle)
+    {
+        if (Window(handle) is not { Managed: true } window || window.State == WindowState.Fullscreen)
+        {
+            return false;
+        }
+
+        WindowHandle game = window.Sticky
+            ? (MonitorByRole(window.StickyMonitor ?? string.Empty)?.Displayed?.Fullscreen ?? WindowHandle.None)
+            : (window.Workspace is { } name ? Workspace(name)?.Fullscreen ?? WindowHandle.None : WindowHandle.None);
+        if (game.IsNone || game == handle)
+        {
+            return false;
+        }
+
+        window.OverGame = true;
+        window.Behind = WindowHandle.None;
         return true;
     }
 
