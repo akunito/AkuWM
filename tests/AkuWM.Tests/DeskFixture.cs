@@ -45,6 +45,7 @@ public sealed class DeskFixture
         Desk = new Desk(config, clock: () => _now);
         Desk.ChecksHandlesWith(h => Platform.Window(h) is not null);
         Desk.ReadsTheCursorWith(() => Platform.Cursor);
+        Desk.ReadsTheButtonsWith(() => Platform.ButtonsDown);
         Desk.SetMonitors(Platform.Monitors());
     }
 

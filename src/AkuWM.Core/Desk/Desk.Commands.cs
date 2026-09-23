@@ -115,8 +115,7 @@ public sealed partial class Desk
             // that are not held in the band; the next pass raises them back.
             if (window.State == WindowState.Tiling)
             {
-                _raiseOver = workspace;
-                _raiseAskedAt = Now;
+                ArmRaiseOver(workspace);
             }
 
             // The screen the desk says it belongs to, not the one Windows has
@@ -498,7 +497,8 @@ public sealed partial class Desk
         {
             // Back over the tiles now, band or not: the next pass raises it.
             _raiseOver = workspace;
-            _raiseAskedAt = Now - RaiseDelayMs; // no click to wait for
+            _raiseAskedAt = Now;
+            _raiseReleasedAt = Now - RaiseAfterReleaseMs; // no click to wait for
         }
 
         return true;
@@ -892,8 +892,7 @@ public sealed partial class Desk
             && Window(Focused) is { Managed: true, State: WindowState.Tiling, Workspace: { } name }
             && Workspace(name) is { } workspace)
         {
-            _raiseOver = workspace;
-            _raiseAskedAt = Now;
+            ArmRaiseOver(workspace);
             Unsettled = true;
         }
     }

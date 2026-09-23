@@ -130,6 +130,11 @@ public sealed partial class Desk
     /// <summary>Where the pointer is, so the focus can follow it and not the windows.</summary>
     public void ReadsTheCursorWith(Func<(int X, int Y)> cursor) => _cursor = cursor;
 
+    /// <summary>Whether a mouse button is held: the raise over the tiles waits for the click to end.</summary>
+    public void ReadsTheButtonsWith(Func<bool> anyButtonDown) => _buttonsDown = anyButtonDown;
+
+    private Func<bool>? _buttonsDown;
+
     /// <param name="clock">
     /// Milliseconds from somewhere monotonic. Injected so a test can let two
     /// seconds pass without taking two seconds.

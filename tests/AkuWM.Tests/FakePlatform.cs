@@ -22,6 +22,9 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
 
     public (int X, int Y) Cursor { get; set; } = (0, 0);
 
+    /// <summary>A mouse button held down, as GetAsyncKeyState would say.</summary>
+    public bool ButtonsDown { get; set; }
+
     public IReadOnlyList<MonitorSnapshot> Monitors() => MonitorList;
 
     /// <summary>

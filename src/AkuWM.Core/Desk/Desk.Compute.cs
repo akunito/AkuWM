@@ -29,6 +29,8 @@ public sealed partial class Desk
     public Redraw Compute()
     {
         Unsettled = false;
+        RaisePending = false;
+        _raiseDue = RaiseIsDue();
 
         if (Paused)
         {
@@ -392,9 +394,10 @@ public sealed partial class Desk
             }
         }
 
-        if (_raiseOver is not null && Now - _raiseAskedAt >= RaiseDelayMs)
+        if (_raiseOver is not null && _raiseDue)
         {
             _raiseOver = null;
+            _raiseReleasedAt = null;
         }
 
         return new Redraw
@@ -898,9 +901,9 @@ public sealed partial class Desk
             && ReferenceEquals(over, workspace)
             && window.Handle != Focused)
         {
-            if (Now - _raiseAskedAt < RaiseDelayMs)
+            if (!_raiseDue)
             {
-                Unsettled = true; // the settle timer looks again after the click has landed
+                Unsettled = true; // looked at again once the click has ended
                 return;
             }
 
@@ -979,6 +982,68 @@ public sealed partial class Desk
     /// Brave all the same. The same SetWindowPos 300 ms later sticks.
     /// </remarks>
     public const int RaiseDelayMs = 300;
+
+    /// <summary>
+    /// How long after the mouse buttons are seen up the floating windows are
+    /// raised over the tile. The fixed wait above restarted on every
+    /// foreground event a click produced (Zen sends two or three while it
+    /// activates), which made the Explorer vanish behind a clicked tile for
+    /// about a second (Diego, 2026-09-23 11:40; 355 ms measured for a
+    /// synthetic click that releases at once). The tile stays in front for
+    /// as long as the button is held, and the floating windows come back
+    /// this soon after it is let go.
+    /// </summary>
+    public const int RaiseAfterReleaseMs = 80;
+
+    /// <summary>
+    /// True while a raise over the tiles is armed and not yet due -- a mouse
+    /// button still held, or the RaiseAfterReleaseMs after it -- so the host
+    /// looks again every few tens of milliseconds rather than at the next
+    /// settle (320 ms: the floating windows came back 375 ms after a click
+    /// with the 80 ms rule in place, measured 2026-09-23 11:44).
+    /// </summary>
+    public bool RaisePending { get; private set; }
+
+    private long? _raiseReleasedAt;
+    private bool _raiseDue;
+
+    /// <summary>Once per pass: whether the pending raise over the tiles may go ahead.</summary>
+    private bool RaiseIsDue()
+    {
+        if (_raiseOver is null)
+        {
+            return false;
+        }
+
+        if (_buttonsDown?.Invoke() == true)
+        {
+            _raiseReleasedAt = null;
+            RaisePending = true;
+            return false;
+        }
+
+        _raiseReleasedAt ??= Now;
+        if (Now - _raiseReleasedAt.Value < RaiseAfterReleaseMs)
+        {
+            RaisePending = true;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Arms the raise of the floating windows over this workspace's tiles, once: a second focus event of the same click does not restart the wait.</summary>
+    private void ArmRaiseOver(Workspace workspace)
+    {
+        if (ReferenceEquals(_raiseOver, workspace))
+        {
+            return;
+        }
+
+        _raiseOver = workspace;
+        _raiseAskedAt = Now;
+        _raiseReleasedAt = _buttonsDown?.Invoke() == true ? null : Now;
+    }
 
     /// <summary>What the shell should draw around one window, right now.</summary>
     /// <summary>

@@ -119,6 +119,7 @@ public sealed class WindowManager : IAsyncDisposable
         }
         _desk.ChecksHandlesWith(h => Win32Windows.IsWindow(h));
         _desk.ReadsTheCursorWith(() => _platform.CursorPosition());
+        _desk.ReadsTheButtonsWith(Win32Input.AnyMouseButtonDown);
 
         _loop = new WmLoop(OnEvent, watchdog.Beat, onBatchEnd: Redraw);
 
@@ -455,6 +456,8 @@ public sealed class WindowManager : IAsyncDisposable
 
     private Timer? _reassert;
     private Timer? _settle;
+    private Timer? _buttons;
+    private const int ButtonPollMs = 40;
     private bool _sessionEnding;
 
     private const int BirthPollMs = 150;
@@ -533,6 +536,23 @@ public sealed class WindowManager : IAsyncDisposable
             // Outside the block above: when the ONLY thing to do was the
             // deferred placement, the redraw was "nothing" and this never
             // ran -- a fetched terminal came back rescaled and stayed so.
+            // A raise waiting for the mouse button: looked at again soon, so
+            // the floating windows come back right after the click ends
+            // rather than at the next settle.
+            if (_desk.RaisePending)
+            {
+                _buttons ??= new Timer(
+                    _ => _loop.Post("the mouse button", () =>
+                    {
+                        _dirty = true;
+                        Redraw();
+                    }),
+                    null,
+                    Timeout.Infinite,
+                    Timeout.Infinite);
+                _buttons.Change(ButtonPollMs, Timeout.Infinite);
+            }
+
             if (_desk.Unsettled)
             {
                 _settle ??= new Timer(
@@ -639,6 +659,7 @@ public sealed class WindowManager : IAsyncDisposable
     {
         _reassert?.Dispose();
         _settle?.Dispose();
+        _buttons?.Dispose();
         _hooks.Dispose();
         await _server.DisposeAsync().ConfigureAwait(false);
         await _loop.DisposeAsync().ConfigureAwait(false);
