@@ -1,3 +1,4 @@
+using AkuWM.Core.Config;
 using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 
@@ -23,6 +24,7 @@ public sealed class CommandRouter
     private readonly RulesCommand? _rules;
     private readonly Func<string, int>? _forgetApp;
     private readonly DebugCommand? _debug;
+    private readonly OpsCommands _ops;
 
     /// <param name="query">
     /// Null on a host with no platform layer -- running the CLI on Linux, or a
@@ -43,9 +45,11 @@ public sealed class CommandRouter
         RulesCommand? rules = null,
         Func<string, int>? forgetApp = null,
         BindingsCommand? bindings = null,
-        DebugCommand? debug = null)
+        DebugCommand? debug = null,
+        ConfigPaths? paths = null)
     {
         _debug = debug;
+        _ops = new OpsCommands(paths ?? ConfigPaths.Discover());
         _forgetApp = forgetApp;
         _bindings = bindings;
         _config = config;
@@ -75,7 +79,7 @@ public sealed class CommandRouter
     /// </remarks>
     public static bool NeedsNoDaemon(string verb) =>
         verb is "config" or "doctor" or "version" or "help" or "query" or "shadow" or "monitors" or "bindings"
-            or "uncloak-all" or "bench" or "rescue" or "state";
+            or "uncloak-all" or "bench" or "rescue" or "state" or "profiles" or "git" or "nodes" or "docker" or "monitor";
 
     /// <summary>
     /// Commands a second process answers itself even when the daemon is up.
@@ -128,6 +132,7 @@ public sealed class CommandRouter
                     ?? CommandResponse.Fail(line, "rules needs a running window manager"),
                 "bindings" => _bindings?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "there are no bindings on this host"),
+                "profiles" or "git" or "nodes" or "docker" or "monitor" => _ops.Execute(line, tokens),
                 "doctor" => _doctor.Execute(line),
                 "debug" => _debug?.Execute(line, tokens)
                     ?? CommandResponse.Fail(line, "debug needs the running daemon: its level is what changes"),
@@ -172,6 +177,7 @@ public sealed class CommandRouter
         "compat <query|command> ...   (what the glazewm shim sends)",
         "bench [--rounds 20]",
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",
+        .. OpsCommands.Help,
         "doctor",
         "debug on|off|status          (the daemon's log level, live, and the marker its next start reads)",
         "version",

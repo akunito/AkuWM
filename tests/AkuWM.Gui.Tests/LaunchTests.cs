@@ -26,7 +26,7 @@ public class LaunchTests
         Assert.True(LaunchArgs.ValidSection(null));
         Assert.True(LaunchArgs.ValidSection("doctor"));
         Assert.False(LaunchArgs.ValidSection("bogus"));
-        Assert.Equal(9, LaunchArgs.Sections.Length);
+        Assert.Equal(14, LaunchArgs.Sections.Length);
     }
 
     [Theory]

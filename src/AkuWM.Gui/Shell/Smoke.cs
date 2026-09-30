@@ -35,6 +35,29 @@ public static class Smoke
                         lines.Append(line).Append('\n');
                     }
                 }
+                else if (step == window.Sections.Count + 1)
+                {
+                    // The infrastructure sections against the real nodes: a
+                    // probe over ssh through WSL, and the dashboard in one
+                    // round trip. Both need the keys, so both can only be
+                    // proven here, on the desk.
+                    var nodes = (NodesSection)window.SectionOf("nodes");
+                    var vps = nodes.Items.Select(i => i.Item).FirstOrDefault(i => i["id"]?.ToString() == "VPS_PROD");
+                    if (vps is null)
+                    {
+                        lines.Append("FAIL no VPS_PROD node in the configuration\n");
+                    }
+                    else
+                    {
+                        (bool ok, string detail) = nodes.Probe(vps);
+                        lines.Append(ok ? "PASS" : "FAIL").Append(" VPS_PROD reachable over ssh through WSL: ").Append(detail).Append('\n');
+                    }
+
+                    var dash = Core.Nodes.Prometheus.Build(window.Services().Config.Load().Effective, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    bool got = dash.Errors.Count == 0 && dash.Targets.Count > 0 && dash.Nodes.Count > 0;
+                    lines.Append(got ? "PASS" : "FAIL").Append($" dashboard in one round trip: {dash.Targets.Count} targets, {dash.Nodes.Count} node cards, {dash.Backups.Count} backups, {dash.Network.Count} probes").Append(dash.Errors.Count > 0 ? " · " + string.Join("; ", dash.Errors) : string.Empty).Append('\n');
+                    ((MonitoringSection)window.SectionOf("monitoring")).Render(dash);
+                }
                 else
                 {
                     timer.Stop();

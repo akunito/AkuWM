@@ -4,7 +4,7 @@ namespace AkuWM.Gui;
 public sealed record LaunchArgs(string? Section, string? Select, bool Toggle, bool Hidden, string? Smoke)
 {
     public static readonly string[] Sections =
-        ["rules", "startup", "apps", "windows", "shortcuts", "monitors", "tools", "log", "doctor"];
+        ["rules", "startup", "apps", "windows", "shortcuts", "monitors", "tools", "profiles", "git", "nodes", "docker", "monitoring", "log", "doctor"];
 
     public static bool ValidSection(string? section) =>
         section is null || Array.IndexOf(Sections, section) >= 0;

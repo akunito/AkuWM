@@ -58,6 +58,11 @@ public sealed class MainWindow : Window
             new ShortcutsSection(services),
             new MonitorsSection(services),
             new ToolsSection(services),
+            new ProfilesSection(services),
+            new GitSection(services),
+            new NodesSection(services),
+            new DockerSection(services),
+            new MonitoringSection(services),
             new LogSection(services),
             new DoctorSection(services),
         ];
@@ -94,6 +99,8 @@ public sealed class MainWindow : Window
     public bool Quitting { get; set; }
 
     public Section SectionOf(string key) => Sections.First(s => s.Key == key);
+
+    public AppServices Services() => _services;
 
     private Control BuildLayout()
     {

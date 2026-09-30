@@ -18,6 +18,8 @@ public sealed class Fixture : IDisposable
         File.WriteAllText(Paths.CommonFile, Common);
         File.WriteAllText(Paths.ProfileFile, Profile);
         Daemon = new FakeDaemon();
+        // No test reaches a node: every node command answers empty.
+        Core.Nodes.NodeShell.Launcher = (_, _, _) => new Core.Nodes.ShellRun(0, string.Empty, string.Empty);
         Services = new AppServices
         {
             Daemon = Daemon,
@@ -82,6 +84,10 @@ public sealed class Fixture : IDisposable
           ],
           "tools": [
             { "id": "t-disp", "name": "Display settings", "command": "ms-settings:display", "icon": "▭", "enabled": true }
+          ],
+          "nodes": [
+            { "id": "VPS_PROD", "name": "VPS", "profile": "VPS_PROD", "ssh": "akunito@100.64.0.6:56777", "daemons": [ "rootless" ], "prometheus_instance": "monitoring", "order": 10 },
+            { "id": "DESK_W11", "name": "this box", "profile": "DESK_W11", "ssh": "", "daemons": [], "order": 35 }
           ],
           "apps": { "catalogue": "../winget-packages.json" }
         }
