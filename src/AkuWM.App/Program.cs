@@ -59,7 +59,7 @@ public static class Program
         // string. So the program can write its own output to a file instead,
         // which is the only way a script can read what it said.
         string? outFile = OutFile(ref args);
-        AkuWM.Cli.Program.Utf8Console();
+        ConsoleOutput.Utf8();
 
         string line = CommandLine.Join(args);
         var client = new PipeClient();

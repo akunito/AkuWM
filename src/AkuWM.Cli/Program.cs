@@ -21,25 +21,8 @@ public static class Program
             return 2;
         }
 
-        Utf8Console();
+        ConsoleOutput.Utf8();
         return Print(new PipeClient().Send(CommandLine.Join(args)));
-    }
-
-    /// <summary>
-    /// The console's default is the OEM code page: a title's bullet came out
-    /// as byte 0x07 (CP437 draws it as a bullet) and an accented name as '?',
-    /// so `query windows` was not JSON to any strict reader (2026-09-30).
-    /// </summary>
-    public static void Utf8Console()
-    {
-        try
-        {
-            Console.OutputEncoding = new System.Text.UTF8Encoding(false);
-        }
-        catch (IOException)
-        {
-            // No console at all: nothing to set.
-        }
     }
 
     /// <summary>Prints a reply the way the CLI always does, and returns the exit code.</summary>

@@ -30,6 +30,8 @@ public static class Program
             return 2;
         }
 
+        ConsoleOutput.Utf8();
+
         // Handed on verbatim: the grammar belongs to the callers, and AkuWM
         // parses it at the far end.
         CommandResponse response = new PipeClient().Send("compat " + CommandLine.Join(args));
