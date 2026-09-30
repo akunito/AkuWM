@@ -173,6 +173,41 @@ public class DeskApplierTests
     }
 
     [Fact]
+    public void A_hide_the_shell_answers_with_an_error_is_final_a_silent_no_is_not()
+    {
+        Open(1);
+        Open(2);
+        Open(3);
+        _applier.Apply(new Redraw { Hide = [W(3)] }); // the round trip, proven on a window that can
+        _applier.Apply(new Redraw { Show = [W(3)] });
+        _platform.CloakErrors.Add(1);
+        _platform.RefusesToCloak.Add(2);
+
+        ApplyResult result = _applier.Apply(new Redraw { Hide = [W(1), W(2)] });
+
+        Assert.Contains(W(1), result.Refused);
+        Assert.Contains(W(2), result.Refused);
+        Assert.Contains(W(1), result.Uncloakable!);
+        Assert.DoesNotContain(W(2), result.Uncloakable!);
+        Assert.Empty(_ledger.Entries);
+    }
+
+    [Fact]
+    public void An_erroring_window_first_in_the_batch_does_not_declare_the_machine_unable_to_hide()
+    {
+        Open(1);
+        Open(3);
+        _platform.CloakErrors.Add(1);
+
+        ApplyResult result = _applier.Apply(new Redraw { Hide = [W(1), W(3)] });
+
+        Assert.True(_applier.CanHide);
+        Assert.Contains(W(1), result.Uncloakable!);
+        Assert.DoesNotContain(W(3), result.Refused);
+        Assert.True(_platform.Window(W(3))!.Cloak.HasFlag(CloakKind.Shell));
+    }
+
+    [Fact]
     public void A_window_that_has_closed_between_the_decision_and_the_call_is_skipped()
     {
         _applier.Apply(new Redraw { Hide = [W(404)] });

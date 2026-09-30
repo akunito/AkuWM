@@ -185,14 +185,31 @@ public sealed class DeskFixture
 
         Platform.Place(redraw.Place);
 
+        HashSet<WindowHandle>? refused = null;
+        HashSet<WindowHandle>? uncloakable = null;
+        // Read back, as DeskApplier does: the shell has a spelling of this
+        // call that says yes and does nothing, and the model must not
+        // believe it. An error is final (Uncloakable); a silent no is retried.
         foreach (WindowHandle handle in redraw.Hide)
         {
-            Platform.SetCloak(handle, true);
+            if (Platform.SetCloak(handle, true) is not null)
+            {
+                (refused ??= []).Add(handle);
+                (uncloakable ??= []).Add(handle);
+            }
+            else if (Platform.Window(handle) is { } w && !w.Cloak.HasFlag(CloakKind.Shell))
+            {
+                (refused ??= []).Add(handle);
+            }
         }
 
         foreach (WindowHandle handle in redraw.Show)
         {
-            Platform.SetCloak(handle, false);
+            if (Platform.SetCloak(handle, false) is not null
+                || Platform.Window(handle)?.Cloak.HasFlag(CloakKind.Shell) == true)
+            {
+                (refused ??= []).Add(handle);
+            }
         }
 
         HashSet<WindowHandle>? unbanded = null;
@@ -247,7 +264,7 @@ public sealed class DeskFixture
             Platform.Unfocus();
         }
 
-        Desk.Applied(redraw, undecorated: undecorated, focusRefused: focusRefused, unbanded: unbanded);
+        Desk.Applied(redraw, refused, undecorated: undecorated, focusRefused: focusRefused, unbanded: unbanded, uncloakable: uncloakable);
         Sync();
         return redraw;
     }

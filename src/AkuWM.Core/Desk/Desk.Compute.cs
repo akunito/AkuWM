@@ -880,7 +880,7 @@ public sealed partial class Desk
     private void WantHidden(
         DeskWindow window, bool hidden, List<WindowHandle> hide, List<WindowHandle> show)
     {
-        if (window.Hidden == hidden)
+        if (window.Hidden == hidden || (hidden && window.CloakRefused))
         {
             return;
         }
@@ -1191,8 +1191,21 @@ public sealed partial class Desk
         IReadOnlySet<WindowHandle>? unmarked = null,
         IReadOnlySet<WindowHandle>? undecorated = null,
         bool focusRefused = false,
-        IReadOnlySet<WindowHandle>? unbanded = null)
+        IReadOnlySet<WindowHandle>? unbanded = null,
+        IReadOnlySet<WindowHandle>? uncloakable = null)
     {
+        if (uncloakable is not null)
+        {
+            foreach (WindowHandle handle in uncloakable)
+            {
+                if (Window(handle) is { } window && !window.CloakRefused)
+                {
+                    window.CloakRefused = true;
+                    Log.Warn($"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" cannot be hidden by the shell; it stays visible on every workspace and is not asked again");
+                }
+            }
+        }
+
         foreach (WindowHandle handle in redraw.Lower)
         {
             if (Window(handle) is { } lowered)

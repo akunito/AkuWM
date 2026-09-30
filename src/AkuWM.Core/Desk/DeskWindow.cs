@@ -156,6 +156,12 @@ public sealed class DeskWindow
     public bool BandRefused { get; set; }
 
     /// <summary>
+    /// The shell answered its hide with an error: it has no view for this
+    /// window. It is never asked again and stays visible on every workspace.
+    /// </summary>
+    public bool CloakRefused { get; set; }
+
+    /// <summary>
     /// A floating window the person sent behind the tiles with <c>lower</c>.
     /// Cleared by <c>raise</c>, or by the person focusing it.
     /// </summary>

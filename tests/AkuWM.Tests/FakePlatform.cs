@@ -63,9 +63,17 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
 
     public List<string> Calls { get; } = [];
 
+    /// <summary>Windows the fake answers with an error, as the shell does for a window it has no view for.</summary>
+    public HashSet<long> CloakErrors { get; } = [];
+
     public string? SetCloak(WindowHandle window, bool cloaked)
     {
         Calls.Add($"cloak {window.Value} {cloaked}");
+
+        if (CloakErrors.Contains(window.Value))
+        {
+            return "the shell has no view for that window";
+        }
 
         if (cloaked ? RefusesToCloak.Contains(window.Value) : RefusesToUncloak.Contains(window.Value))
         {

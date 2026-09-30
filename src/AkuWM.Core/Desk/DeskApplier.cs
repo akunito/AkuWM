@@ -9,6 +9,11 @@ namespace AkuWM.Core.Desk;
 /// <param name="Refused">Windows whose cloak did not take, read back from DWM.</param>
 /// <param name="Elapsed">How long the whole batch took.</param>
 /// <param name="Unmarked">Windows the shell would not take the fullscreen mark for.</param>
+/// <param name="Uncloakable">
+/// The subset of <paramref name="Refused"/> the shell answered with an ERROR
+/// (no view for the window, or a COM failure) rather than a silent no. A
+/// silent no is retried; an error is final for that window.
+/// </param>
 public readonly record struct ApplyResult(
     int Placed,
     IReadOnlySet<WindowHandle> Refused,
@@ -16,7 +21,8 @@ public readonly record struct ApplyResult(
     IReadOnlySet<WindowHandle>? Unmarked = null,
     IReadOnlySet<WindowHandle>? Undecorated = null,
     bool FocusRefused = false,
-    IReadOnlySet<WindowHandle>? Unbanded = null)
+    IReadOnlySet<WindowHandle>? Unbanded = null,
+    IReadOnlySet<WindowHandle>? Uncloakable = null)
 {
     public override string ToString() =>
         $"{Placed} placed, {Refused.Count} refused, {Elapsed.TotalMilliseconds:F2} ms";
@@ -134,6 +140,7 @@ public sealed class DeskApplier
 
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         var refused = new HashSet<WindowHandle>();
+        var uncloakable = new HashSet<WindowHandle>();
 
         // Before the placements: a minimised window has no frame to move, so
         // placing it first throws the move away; a maximised one ignores it.
@@ -203,8 +210,8 @@ public sealed class DeskApplier
         // in the plan was the remainder after the placement, unattributed,
         // and the focus fallbacks alone can be 120 ms of polling.
         long at = System.Diagnostics.Stopwatch.GetTimestamp();
-        Cloak(redraw.Hide, true, refused);
-        Cloak(redraw.Show, false, refused);
+        Cloak(redraw.Hide, true, refused, uncloakable);
+        Cloak(redraw.Show, false, refused, uncloakable);
         var cloakTook = Lap(ref at);
 
         HashSet<WindowHandle>? unbanded = null;
@@ -327,7 +334,7 @@ public sealed class DeskApplier
             Log.Info($"placing {redraw.Place.Count} window(s) took {placeTook.TotalMilliseconds:F0} ms: {Names(redraw.Place)}");
         }
 
-        return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused, unbanded);
+        return new ApplyResult(placed, refused, elapsed, unmarked, undecorated, focusRefused, unbanded, uncloakable);
     }
 
     /// <summary>Above this, a placement names the windows it waited on.</summary>
@@ -427,7 +434,17 @@ public sealed class DeskApplier
 
         _proof = Proof.OneWay; // until shown otherwise
 
-        _actions.SetCloak(handle, true);
+        // An ERROR from the shell is about this window, not about the machine:
+        // a notification toast it has no view for, first in the batch, would
+        // otherwise have declared every window unhideable for the whole run.
+        // Not tried: the next window proves it.
+        if (_actions.SetCloak(handle, true) is not null)
+        {
+            _ledger.Forget(handle);
+            _proof = Proof.Untried;
+            return;
+        }
+
         WindowSnapshot? after = _platform.Window(handle);
         if (after is null)
         {
@@ -477,11 +494,11 @@ public sealed class DeskApplier
             + "Every workspace will show all of its windows. Report this with `akuwm doctor`.");
     }
 
-    private void Cloak(IReadOnlyList<WindowHandle> windows, bool hidden, HashSet<WindowHandle> refused)
+    private void Cloak(IReadOnlyList<WindowHandle> windows, bool hidden, HashSet<WindowHandle> refused, HashSet<WindowHandle> uncloakable)
     {
-        if (hidden && _proof == Proof.Untried && windows.Count > 0)
+        for (int i = 0; hidden && _proof == Proof.Untried && i < windows.Count; i++)
         {
-            ProveTheRoundTrip(windows[0]);
+            ProveTheRoundTrip(windows[i]);
         }
 
         if (hidden && _proof == Proof.OneWay)
@@ -518,6 +535,15 @@ public sealed class DeskApplier
             if (error is not null || nowCloaked != hidden)
             {
                 refused.Add(handle);
+                if (error is not null)
+                {
+                    // An error, not a silent no: the shell has no view for
+                    // it (a notification toast, ShellExperienceHost: 2199
+                    // refusals in one morning, one per redraw, 2026-09-30).
+                    // Retrying is what filled the log; the model stops asking.
+                    uncloakable.Add(handle);
+                }
+
                 Log.Warn(
                     $"{(hidden ? "hiding" : "showing")} {before.ProcessName} \"{before.Title}\" did not take"
                     + (error is null ? " (the call reported success)" : $": {error}"));
