@@ -194,6 +194,20 @@ internal static class Win32Decorations
                 return false;
             }
 
+            // A window that draws its own title bar has nothing to strip: its
+            // client area already fills the frame (WinUI 3 Notepad, Windows
+            // Terminal, a browser with its tabs in the title bar -- measured
+            // 2026-09-30: non-client height 8-9 px with WS_CAPTION set, against
+            // ~80 for Notepad++). Taking WS_CAPTION from a WinUI window left
+            // it painting the classic caption -- title, minimise, maximise,
+            // close -- over its own tab strip after the next re-layout
+            // (Diego, Notepad, 12:35). The style is what its title bar code
+            // is built on; the bar it draws is the one `hide` would remove.
+            if (DrawsItsOwnCaption(hwnd))
+            {
+                return false;
+            }
+
             Captions[key] = style;
             style &= ~WsCaption;
         }
@@ -269,5 +283,20 @@ internal static class Win32Decorations
 
         return PInvoke.SetLayeredWindowAttributes(
             hwnd, default, alpha, LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA);
+    }
+
+    /// <summary>How much frame a window may have above its client area and still count as drawing its own caption.</summary>
+    private const int OwnCaptionNonClientPx = 16;
+
+    private static bool DrawsItsOwnCaption(HWND hwnd)
+    {
+        if (!PInvoke.GetWindowRect(hwnd, out RECT window) || !PInvoke.GetClientRect(hwnd, out RECT client))
+        {
+            return false;
+        }
+
+        int frame = window.bottom - window.top;
+        int inside = client.bottom - client.top;
+        return frame > 0 && inside > 0 && frame - inside <= OwnCaptionNonClientPx;
     }
 }
