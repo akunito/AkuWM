@@ -118,6 +118,16 @@ public sealed class HotkeyHostConfig
 
     /// <summary>What starts it again: a <c>.lnk</c>, an executable, or a command the shell runs.</summary>
     public string? Command { get; set; }
+
+    /// <summary>
+    /// Whether a window with the <c>anticheat</c> action stops the hotkey
+    /// process for as long as it is on the desk. Default true (plan 10.27:
+    /// NCGuard/VIOLET blacklist AutoHotkey by process name; the expected
+    /// outcome is a refused login, not a ban). Diego set it false on
+    /// 2026-09-30: the playtest ran with the script alive, and chords on the
+    /// other monitor matter more than the login risk, which is his to take.
+    /// </summary>
+    public bool? StopForGames { get; set; }
 }
 
 public sealed class GapsConfig

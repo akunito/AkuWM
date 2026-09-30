@@ -44,6 +44,20 @@ no code for, and has no reason to acquire.
   "press this every N seconds". Not as a default, not as an option. A window
   manager does not need them, and their presence would change what AkuWM is.
 
+## The hotkey process around a game
+
+The chords live in a separate AutoHotkey process, and NCGuard/VIOLET
+blacklist AutoHotkey by process name. `anticheat` on a rule marks a game;
+while such a window is on the desk AkuWM stops the hotkey process and
+starts it again when the game is gone -- unless `general.hotkey_host.
+stop_for_games` is `false`, in which case the script stays and every
+chord keeps working on every monitor. The measured expectation (plan
+10.27) is that a blacklisted process costs a refused login, not a ban:
+bans are for behaviour, and injecting input over a game is the behaviour
+neither AkuWM nor the script performs. Diego took the login risk on
+2026-09-30 after a playtest with the script alive; the knob is there so
+the decision can be reversed from the GUI the day Purple refuses.
+
 ## Why `uiAccess` at all
 
 Measured on this desk (spike S1): with an elevated window in front for 14 of 30

@@ -162,3 +162,15 @@ public class ConfigStoreNewlineTests
         }
     }
 }
+
+public class HotkeyHostKnobTests
+{
+    [Fact]
+    public void Stop_for_games_round_trips_and_defaults_to_null()
+    {
+        AkuWmConfig config = ConfigJson.Read("""{ "version": 1, "general": { "hotkey_host": { "process": "AutoHotkey64_UIA", "command": "x.lnk", "stop_for_games": false } } }""");
+        Assert.False(config.General!.HotkeyHost!.StopForGames);
+        Assert.Contains("\"stop_for_games\": false", ConfigJson.Write(config));
+        Assert.Null(ConfigJson.Read("""{ "version": 1, "general": { "hotkey_host": { "process": "p", "command": "c" } } }""").General!.HotkeyHost!.StopForGames);
+    }
+}

@@ -105,7 +105,17 @@ public sealed class WindowManager : IAsyncDisposable
         // window, and started again when the last one is gone: anti-cheats
         // block or disconnect by process NAME (NCSoft on Aion 2, December
         // 2025); nothing short of absence hides a process from that scan.
-        _desk.GameModeChanged += on => HotkeyHost.Toggle(_desk.Config.General?.HotkeyHost, !on);
+        _desk.GameModeChanged += on =>
+        {
+            HotkeyHostConfig? host = _desk.Config.General?.HotkeyHost;
+            if (on && host?.StopForGames == false)
+            {
+                Log.Info("game mode: on, the hotkey process is left running (general.hotkey_host.stop_for_games is false)");
+                return;
+            }
+
+            HotkeyHost.Toggle(host, !on);
+        };
 
         if (placements is not null)
         {
