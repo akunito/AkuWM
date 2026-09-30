@@ -580,6 +580,24 @@ public sealed partial class Desk
         Rect rect = window.FloatingRect ?? window.Snapshot.FrameBounds;
         Rect area = monitor.TilingArea;
 
+        // Covering its screen: it gets the screen, bounds and all, exactly as
+        // a workspace's fullscreen window does. A STICKY window is never
+        // Fullscreen (MakeSticky demotes it: the slot is a workspace's), so
+        // Telegram's media viewer -- sticky by the Telegram rule, born
+        // borderless over the whole monitor -- fell through to the trim
+        // below, was asked for the work area, put itself back over the bar,
+        // and was asked again every 75 ms until the patience ran out: two
+        // seconds of the picture jumping between two sizes (Diego,
+        // 2026-09-30 11:44). The same slack as IsFullscreen, so what counts
+        // as covering is one answer everywhere.
+        Rect full = monitor.FullArea;
+        if (rect.Contains(full)
+            && rect.Width <= full.Width + ShadowModel.FullscreenSlack
+            && rect.Height <= full.Height + ShadowModel.FullscreenSlack)
+        {
+            return full;
+        }
+
         // Bigger than the screen it is on. A floating window's size is the
         // person's choice everywhere else in here, but a window that does not
         // fit cannot be put inside the work area at all -- the move below has
