@@ -43,7 +43,7 @@ public sealed class MonitoringSection : Section
             _tabs.Items.Add(item);
         }
 
-        var bar = Ui.Row(10, Ui.Button("Refresh", Refresh, "accent"), _note);
+        var bar = Ui.Row(10, _note);
         bar.Margin = new Thickness(0, 0, 0, 8);
         var dock = new DockPanel();
         DockPanel.SetDock(bar, Dock.Top);

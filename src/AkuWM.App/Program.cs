@@ -70,7 +70,7 @@ public static class Program
         // that has stopped behaving.
         if (!CommandRouter.NeverDelegates(verb) && client.IsRunning())
         {
-            return Print(client.Send(line), verb, args, outFile);
+            return Print(client.Send(line, PipeClient.TimeoutFor(line)), verb, args, outFile);
         }
 
         if (!CommandRouter.NeedsNoDaemon(verb))

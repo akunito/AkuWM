@@ -22,7 +22,8 @@ public static class Program
         }
 
         ConsoleOutput.Utf8();
-        return Print(new PipeClient().Send(CommandLine.Join(args)));
+        string line = CommandLine.Join(args);
+        return Print(new PipeClient().Send(line, PipeClient.TimeoutFor(line)));
     }
 
     /// <summary>Prints a reply the way the CLI always does, and returns the exit code.</summary>

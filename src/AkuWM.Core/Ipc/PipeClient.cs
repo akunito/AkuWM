@@ -45,6 +45,18 @@ public sealed class PipeClient
     /// typed at a stuck window manager would hang the terminal too, including
     /// the one that puts the desk back.
     /// </remarks>
+    /// <summary>
+    /// How long to wait for an answer: the commands that reach a node over
+    /// ssh (a dashboard is ~15 s through the VPS) get minutes; everything
+    /// else stays at five seconds, the "it may be stuck" line.
+    /// </summary>
+    public static int TimeoutFor(string command)
+    {
+        int space = command.IndexOf(' ');
+        string verb = (space < 0 ? command : command[..space]).ToLowerInvariant();
+        return verb is "profiles" or "git" or "nodes" or "docker" or "monitor" ? 180_000 : 5_000;
+    }
+
     public CommandResponse Send(string command, int timeoutMs = 5000)
     {
         using var pipe = new NamedPipeClientStream(
