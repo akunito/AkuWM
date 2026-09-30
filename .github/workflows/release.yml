@@ -1,0 +1,60 @@
+name: Release
+
+# A tag v* becomes a GitHub Release carrying akuwm-<tag>-win-x64.zip: the
+# daemon (uiAccess manifest, unsigned -- the installer signs it on the machine
+# it lands on, with a certificate that exists only there), the CLI, the
+# glazewm shim, the settings window, and the tools. tools/bootstrap.ps1 is
+# what a machine runs to fetch and install it.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Licence tripwire
+        run: ./tools/licence-tripwire.sh
+
+      - name: Build
+        run: dotnet build AkuWM.sln --configuration Release
+
+      - name: Test
+        run: |
+          dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --no-build
+          dotnet test tests/AkuWM.Gui.Tests/AkuWM.Gui.Tests.csproj --configuration Release --no-build
+
+      # Each project into its OWN folder: two single-file publishes sharing
+      # an output directory produce a bundle that does not run (the second
+      # overwrites the host files of the first; measured 2026-09-21).
+      - name: Publish
+        run: |
+          set -e
+          dotnet publish src/AkuWM.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o stage/app
+          dotnet publish src/AkuWM.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:UiAccess=false -o stage/cli
+          dotnet publish src/AkuWM.Shim -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:UiAccess=false -o stage/shim
+          dotnet publish src/AkuWM.Gui -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o stage/gui
+          mkdir -p release/tools
+          cp stage/app/akuwm.exe stage/cli/akuwm-cli.exe stage/shim/glazewm.exe stage/gui/akuwm-gui.exe release/
+          cp tools/*.ps1 tools/*.cmd release/tools/
+          cp tools/uia-install.ps1 release/
+          cp README.md LICENSE docs/recovery.md docs/input-and-anticheat.md release/
+          grep -q 'uiAccess="true"' release/akuwm.exe || { echo "the daemon was published without the uiAccess manifest"; exit 1; }
+          (cd release && zip -r "../akuwm-${GITHUB_REF_NAME}-win-x64.zip" .)
+          sha256sum "akuwm-${GITHUB_REF_NAME}-win-x64.zip" > "akuwm-${GITHUB_REF_NAME}-win-x64.zip.sha256"
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            akuwm-*-win-x64.zip
+            akuwm-*-win-x64.zip.sha256
+          generate_release_notes: true

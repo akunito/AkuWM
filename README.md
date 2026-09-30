@@ -4,12 +4,33 @@ A tiling window manager for Windows 11 that is also its own hotkey daemon and
 its own configuration UI — one MIT application in place of three programs that
 had to agree with each other.
 
-**Status: M1.** AkuWM can see the desk — every window, every monitor by its
-EDID, and what it would do with each — and it changes nothing on it. Its view
-was compared with the window manager actually in charge, 270 times over 45
-minutes of real use, and agreed every time. Taking over is M2. The plan,
-milestone by milestone, lives in the dotfiles repository at
-`docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
+**Status: M6 landed (2026-09-30).** AkuWM has had the desk since 2026-09-21:
+tiling and floating layouts on named workspaces bound to monitors by EDID,
+sticky windows, fullscreen handling built for games, a signed `uiAccess`
+install so chords work over elevated windows, a GlazeWM-compatible IPC and
+`glazewm` shim so the existing AutoHotkey script and Zebar kept working
+unchanged, and a settings window (`akuwm-gui.exe`, `Hyper+S`) with fourteen
+sections -- rules, startup, apps, windows, shortcuts, monitors, tools,
+profiles, git, nodes, docker, monitoring, log, doctor. The plan, milestone by
+milestone and with every measured Windows fact, lives in the dotfiles
+repository at `docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
+
+## Installing
+
+From a GitHub release, on the machine that will run it (one UAC prompt: the
+daemon is signed there with a certificate that exists only there):
+
+```powershell
+irm https://raw.githubusercontent.com/akunito/AkuWM/main/tools/bootstrap.ps1 | iex
+```
+
+Or from a checkout: `powershell -ExecutionPolicy Bypass -File tools\bootstrap.ps1
+[-Tag v0.2.0]`. It downloads `akuwm-<tag>-win-x64.zip`, unpacks it into
+`%TEMP%\akuwm-uia` and runs `uia-install.ps1`, which stops the running daemon,
+signs and installs `akuwm.exe`, `akuwm-cli.exe` and `glazewm.exe` into
+`C:\Program Files\AkuWM`, puts `akuwm-gui.exe` into `%LOCALAPPDATA%\Programs\AkuWM`,
+points the Startup folder at the boot script and starts the daemon again.
+Getting the desk back if anything goes wrong: `docs/recovery.md`.
 
 ## Why
 

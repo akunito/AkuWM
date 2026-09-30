@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Stages the signed install: the daemon WITH uiAccess, the CLI and the shim
-# without, and the tools, in %TEMP%\akuwm-uia -- what uia-install.ps1 (one
+# Stages the signed install: the daemon WITH uiAccess, the CLI, the shim and
+# the settings window without, and the tools, in %TEMP%\akuwm-uia -- what uia-install.ps1 (one
 # UAC prompt) signs and copies into Program Files. Same one-project-per-stage
 # rule as publish-dev.sh (a shared output directory produces a bundle that
 # does not run).
@@ -20,6 +20,7 @@ publish() {
 publish src/AkuWM.App akuwm.exe true
 publish src/AkuWM.Cli akuwm-cli.exe false
 publish src/AkuWM.Shim glazewm.exe false
+publish src/AkuWM.Gui akuwm-gui.exe false
 mkdir -p "$out/tools"
 cp "$root"/tools/*.ps1 "$root"/tools/*.cmd "$out/tools/"
 cp "$root/tools/uia-install.ps1" "$out/uia-install.ps1"

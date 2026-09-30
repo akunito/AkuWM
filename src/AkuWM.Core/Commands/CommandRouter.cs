@@ -192,5 +192,5 @@ public static class Build
     public static string Version =>
         typeof(Build).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
-    public static string Description => $"AkuWM {Version} (M2: it arranges the desk)";
+    public static string Description => $"AkuWM {Version}";
 }

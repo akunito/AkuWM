@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=linux.trx" --results-directory test-results
 
+      # The settings window's tests: Avalonia headless, on Linux like the rest.
+      - name: Test the GUI
+        run: dotnet test tests/AkuWM.Gui.Tests/AkuWM.Gui.Tests.csproj --configuration Release --logger "console;verbosity=normal" --logger "trx;LogFileName=gui.trx" --results-directory test-results
+
       # An artifact needs a token to download, even on a public repo, and the
       # job log needs admin. Annotations need neither, so the trx is turned
       # into them: that is the only public channel for "which test failed".
@@ -73,7 +77,12 @@ jobs:
       # The drop-in CLI goes with it: the installer puts both in Program Files,
       # and without it the hotkey script has nothing to talk to.
       - name: Publish the glazewm shim
-        run: dotnet publish src/AkuWM.Shim/AkuWM.Shim.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
+        run: dotnet publish src/AkuWM.Shim/AkuWM.Shim.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:UiAccess=false -o publish-shim
+
+      - name: Publish the CLI and the settings window
+        run: |
+          dotnet publish src/AkuWM.Cli/AkuWM.Cli.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:UiAccess=false -o publish-cli
+          dotnet publish src/AkuWM.Gui/AkuWM.Gui.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish-gui
 
       # Only what main built is offered as a download: a pull request's
       # binary is untrusted code with a trusted-looking name.
@@ -83,7 +92,9 @@ jobs:
           name: akuwm-win-x64
           path: |
             publish/akuwm.exe
-            publish/glazewm.exe
+            publish-shim/glazewm.exe
+            publish-cli/akuwm-cli.exe
+            publish-gui/akuwm-gui.exe
 
   # And again on Windows, where it actually runs. The platform tests that need
   # a desktop skip themselves; what this proves is that the Windows-targeted

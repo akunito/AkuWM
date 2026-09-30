@@ -44,6 +44,8 @@
 param(
     [string] $Source = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\akuwm.exe'),
     [string] $Shim = (Join-Path (Split-Path -Parent $PSScriptRoot) 'publish\glazewm.exe'),
+    [string] $Cli = '',
+    [string] $Gui = '',
     [string] $Destination = (Join-Path $env:ProgramFiles 'AkuWM'),
     [switch] $Force
 )
@@ -174,6 +176,32 @@ if (Test-Path $Shim) {
     Good "installed $shimTarget"
 } else {
     Note "no glazewm.exe at $Shim; the hotkeys will not reach AkuWM until it is built"
+}
+
+# --- 3a'. the thin client and the settings window ---------------------------
+# Both without uiAccess: a normal shell can run them and read their output.
+# The CLI goes next to the daemon (on the PATH below); the settings window
+# goes to the per-user Programs folder the Hyper+S shortcut and the startup
+# entry name. Defaults: the siblings of the daemon being installed.
+if (-not $Cli) { $Cli = Join-Path (Split-Path $Source -Parent) 'akuwm-cli.exe' }
+if (-not $Gui) { $Gui = Join-Path (Split-Path $Source -Parent) 'akuwm-gui.exe' }
+Step 'Installing akuwm-cli and the settings window'
+if (Test-Path $Cli) {
+    Copy-Item $Cli (Join-Path $Destination 'akuwm-cli.exe') -Force
+    Good "installed $(Join-Path $Destination 'akuwm-cli.exe')"
+} else {
+    Note "no akuwm-cli.exe at $Cli; skipped"
+}
+if (Test-Path $Gui) {
+    $guiDir = Join-Path $env:LOCALAPPDATA 'Programs\AkuWM'
+    New-Item -ItemType Directory -Force -Path $guiDir | Out-Null
+    $guiTarget = Join-Path $guiDir 'akuwm-gui.exe'
+    Get-Process -Name akuwm-gui -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    Copy-Item $Gui $guiTarget -Force
+    Good "installed $guiTarget"
+} else {
+    Note "no akuwm-gui.exe at $Gui; the settings window is not installed"
 }
 
 # --- 3a. reachable by name --------------------------------------------------

@@ -192,11 +192,15 @@ public class CommandSurfaceTests
     }
 
     [Fact]
-    public void The_build_says_which_milestone_it_is()
+    public void The_build_says_which_version_it_is()
     {
         // It is the first line of every log and the first line of doctor. A
-        // stale one is a small lie told very often.
-        Assert.Contains("M2", Build.Description);
+        // stale milestone label was a small lie told very often (it said M2
+        // until 2026-09-30), so the description carries only the version,
+        // which Directory.Build.props owns.
+        Assert.Equal($"AkuWM {Build.Version}", Build.Description);
+        Assert.Matches(@"^\d+\.\d+\.\d+", Build.Version);
+        Assert.NotEqual("0.1.0", Build.Version);
     }
 }
 
