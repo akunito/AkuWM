@@ -37,4 +37,15 @@ public class CommandLineTests
         Assert.Null(options["dry-run"]);
         Assert.Equal("x.yaml", options["from"]);
     }
+
+    [Fact]
+    public void A_command_line_splits_into_program_and_arguments()
+    {
+        Assert.Equal(("C:\\Users\\d\\AppData\\Local\\Programs\\AkuWM\\akuwm-gui.exe", "--hidden"),
+            CommandLine.Program("\"C:\\Users\\d\\AppData\\Local\\Programs\\AkuWM\\akuwm-gui.exe\" --hidden"));
+        Assert.Equal(("C:\\x\\a.lnk", string.Empty), CommandLine.Program("C:\\x\\a.lnk"));
+        Assert.Equal(("C:\\Program Files\\ShareX\\ShareX.exe", "-workflow \"Hyper+Shift+C\""),
+            CommandLine.Program("\"C:\\Program Files\\ShareX\\ShareX.exe\" -workflow \"Hyper+Shift+C\""));
+        Assert.Equal((string.Empty, string.Empty), CommandLine.Program("  "));
+    }
 }

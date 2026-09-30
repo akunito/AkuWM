@@ -24,6 +24,49 @@ public static class CommandLine
     /// intact -- treating every backslash as an escape ate the separators of
     /// every app-launch chord whose target lives under Program Files.
     /// </remarks>
+    /// <summary>
+    /// A startup entry's or a tool's command line as program and arguments:
+    /// <c>"C:\a b\x.exe" --hidden</c> is the file <c>C:\a b\x.exe</c> with
+    /// <c>--hidden</c>. Handed whole to ProcessStartInfo, the quoted path with
+    /// its argument was looked up as one file name and "cannot be found"
+    /// (the settings window's startup entry, every start, 2026-09-30).
+    /// </summary>
+    public static (string File, string Arguments) Program(string command)
+    {
+        // The arguments are passed on as written, quotes and all: the program
+        // receiving them parses its own command line, and re-quoting could
+        // only change what it sees.
+        string line = command.Trim();
+        if (line.Length == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        int end;
+        int start = 0;
+        if (line[0] == '"')
+        {
+            start = 1;
+            end = line.IndexOf('"', 1);
+            if (end < 0)
+            {
+                end = line.Length;
+            }
+        }
+        else
+        {
+            end = line.IndexOf(' ');
+            if (end < 0)
+            {
+                end = line.Length;
+            }
+        }
+
+        string file = line[start..end];
+        string rest = end + 1 < line.Length ? line[(end + 1)..].Trim() : string.Empty;
+        return (file, rest);
+    }
+
     public static string[] Split(string line)
     {
         var tokens = new List<string>();

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AkuWM.Core.Config;
+using AkuWM.Core.Ipc;
 using AkuWM.Core.Logging;
 
 namespace AkuWM.App;
@@ -69,7 +70,8 @@ public sealed class StartupRunner
     {
         try
         {
-            Process.Start(new ProcessStartInfo(command) { UseShellExecute = true });
+            (string file, string arguments) = CommandLine.Program(command);
+            Process.Start(new ProcessStartInfo(file, arguments) { UseShellExecute = true });
             Log.Info($"startup: started {entry.Name ?? command}");
         }
         catch (Exception ex)
@@ -81,7 +83,7 @@ public sealed class StartupRunner
     /// <summary>The process name a command will run under, or null when it cannot be told.</summary>
     internal static string? ExecutableOf(string command)
     {
-        string path = command;
+        string path = CommandLine.Program(command).File;
 
         if (path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
         {
