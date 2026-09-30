@@ -143,11 +143,19 @@ public class GitSyncRepoTests : IDisposable
 
     public void Dispose()
     {
+        // git writes its objects read-only; on Windows Directory.Delete
+        // refuses those (UnauthorizedAccessException, CI 2026-09-30), and a
+        // Dispose that throws fails the test that just passed.
         try
         {
+            foreach (string file in Directory.EnumerateFiles(_tmp, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
             Directory.Delete(_tmp, recursive: true);
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
     }
