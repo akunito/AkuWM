@@ -31,6 +31,7 @@ public static class ConfigValidator
         WarnAboutTheDecorative(config, issues);
         ValidateShortcuts(config, issues);
         ValidateStartup(config, issues);
+        ValidateNodes(config, issues);
         ValidateSettings(config.Settings, issues);
 
         return new ValidationResult(issues);
@@ -653,6 +654,36 @@ public static class ConfigValidator
             if (entry.DelayMs is < 0)
             {
                 issues.Add(ValidationIssue.Error(path + ".delay_ms", "cannot be negative"));
+            }
+        }
+    }
+
+    private static void ValidateNodes(AkuWmConfig config, List<ValidationIssue> issues)
+    {
+        List<NodeConfig> nodes = config.Nodes ?? [];
+        CheckDuplicateIds(nodes, "nodes", issues);
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            NodeConfig node = nodes[i];
+            string path = $"nodes[{i}]";
+
+            if (string.IsNullOrWhiteSpace(node.Id))
+            {
+                issues.Add(ValidationIssue.Error(path + ".id", "a node needs an id (the profile name, usually)"));
+            }
+
+            foreach (string daemon in node.Daemons ?? [])
+            {
+                if (!ConfigDefaults.DockerDaemons.Contains(daemon))
+                {
+                    issues.Add(ValidationIssue.Error(path + ".daemons", $"'{daemon}' is not {string.Join(" or ", ConfigDefaults.DockerDaemons)}"));
+                }
+            }
+
+            if (node.Ssh is { Length: > 0 } ssh && !ssh.Contains('@'))
+            {
+                issues.Add(ValidationIssue.Error(path + ".ssh", "ssh must be user@host[:port], or empty for this machine"));
             }
         }
     }

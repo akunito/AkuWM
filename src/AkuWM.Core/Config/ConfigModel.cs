@@ -499,11 +499,22 @@ public sealed class NodeConfig : IConfigItem
     public string? Id { get; set; }
     public string? Name { get; set; }
 
-    /// <summary><c>user@host:port</c>.</summary>
+    /// <summary>The dotfiles profile <c>deploy.sh --profile</c> takes.</summary>
+    public string? Profile { get; set; }
+
+    /// <summary><c>user@host[:port]</c>; empty is this machine.</summary>
     public string? Ssh { get; set; }
 
+    /// <summary>The docker daemons on it: <c>rootful</c>, <c>rootless</c>.</summary>
     public List<string>? Daemons { get; set; }
+
+    /// <summary>The rootful daemon needs <c>sudo -n docker</c> (the user is not in the docker group).</summary>
+    public bool? SudoRootful { get; set; }
+
+    /// <summary>The node_exporter instance label, without the port.</summary>
     public string? PrometheusInstance { get; set; }
+
+    public int? Order { get; set; }
     public bool? Enabled { get; set; }
     public string? Notes { get; set; }
     public long? UpdatedAt { get; set; }
@@ -514,6 +525,17 @@ public sealed class SettingsConfig
     public GitSettings? Git { get; set; }
     public JournalSettings? Journal { get; set; }
     public RepairSettings? Repair { get; set; }
+    public MonitoringSettings? Monitoring { get; set; }
+}
+
+public sealed class MonitoringSettings
+{
+    /// <summary>The node Prometheus runs on; its 9090 is reached over that node's ssh.</summary>
+    public string? PrometheusNode { get; set; }
+
+    public string? PrometheusUrl { get; set; }
+
+    public string? GrafanaUrl { get; set; }
 }
 
 public sealed class GitSettings

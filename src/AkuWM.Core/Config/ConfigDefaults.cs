@@ -73,6 +73,8 @@ public static class ConfigDefaults
 
     public static readonly string[] StartupPhases = ["now", "ipc"];
 
+    public static readonly string[] DockerDaemons = ["rootful", "rootless"];
+
     /// <summary>
     /// Options this build reads, validates, and does not act on.
     /// </summary>

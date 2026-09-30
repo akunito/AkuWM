@@ -228,3 +228,26 @@ public class ConfigValidatorTests
         Assert.Contains("startup[0].after", ErrorPaths(config));
     }
 }
+
+public class NodeValidationTests
+{
+    [Fact]
+    public void Nodes_need_ids_known_daemons_and_a_user_at_host()
+    {
+        AkuWmConfig config = DeskFixture.Configuration();
+        config.Nodes =
+        [
+            new NodeConfig { Id = "VPS_PROD", Ssh = "akunito@100.64.0.6:56777", Daemons = ["rootless"] },
+            new NodeConfig { Id = "NAS", Ssh = "nas-aku", Daemons = ["rootful", "podman"] },
+            new NodeConfig { Id = "", Ssh = "" },
+            new NodeConfig { Id = "VPS_PROD" },
+        ];
+        List<string> errors = ConfigValidator.Validate(config).Errors.Select(e => e.Path).ToList();
+        Assert.Contains("nodes[1].ssh", errors);
+        Assert.Contains("nodes[1].daemons", errors);
+        Assert.Contains("nodes[2].id", errors);
+        Assert.Contains(errors, e => e.StartsWith("nodes", StringComparison.Ordinal) && e != "nodes[1].ssh" && e != "nodes[1].daemons" && e != "nodes[2].id");
+        config.Nodes = [config.Nodes[0], new NodeConfig { Id = "DESK_W11", Ssh = "", Daemons = [] }];
+        Assert.DoesNotContain(ConfigValidator.Validate(config).Errors, e => e.Path.StartsWith("nodes", StringComparison.Ordinal));
+    }
+}
