@@ -22,4 +22,5 @@ publish src/AkuWM.Cli akuwm-cli.exe false
 publish src/AkuWM.Shim glazewm.exe false
 mkdir -p "$out/tools"
 cp "$root"/tools/*.ps1 "$root"/tools/*.cmd "$out/tools/"
+cp "$root/tools/uia-install.ps1" "$out/uia-install.ps1"
 ls -la "$out"/*.exe
