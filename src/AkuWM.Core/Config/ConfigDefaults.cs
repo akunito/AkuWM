@@ -94,18 +94,14 @@ public static class ConfigDefaults
     /// </remarks>
     public static readonly (string Path, string When)[] NotImplemented =
     [
-        ("general.focus_follows_mouse", "M3, with the input layer"),
-        ("general.cursor_jump", "M3, with the input layer"),
-        ("general.startup_fold_virtual_desktops", "M4, with the display work"),
+        ("general.focus_follows_mouse", "click to focus was kept on 2026-09-15; nothing reads it"),
+        ("general.cursor_jump", "nothing reads it"),
+        ("general.startup_fold_virtual_desktops", "nothing reads it; AkuWM manages windows on every native desktop"),
         ("layout.resize_step_ppt", "the step comes from the command, not the configuration"),
         ("monitors[].primary", "AkuWM resolves monitors by identity, not by which is primary"),
         ("monitors[].orientation", "written by `monitors identify`, read by nobody yet"),
-        ("apps.catalogue", "M6, with the apps section"),
-        ("tools", "M6"),
-        ("nodes", "M6"),
-        ("settings.git.auto_commit", "M6"),
-        ("settings.git.auto_push", "M6"),
+        ("settings.git.auto_push", "nothing pushes on its own; the Git section or `akuwm-cli git push` does"),
         ("settings.journal.interval_s", "the journal is written as it happens, not on a timer"),
-        ("settings.repair.settle_ms", "M4, with the repair"),
+        ("settings.repair.settle_ms", "the desk settles on its own measured constant, not this"),
     ];
 }

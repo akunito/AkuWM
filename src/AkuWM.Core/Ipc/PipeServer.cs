@@ -53,7 +53,18 @@ public sealed class PipeServer : IAsyncDisposable
         {
             try
             {
-                using NamedPipeServerStream pipe = Create();
+                // Serialised: the FirstPipeInstance flag goes to whichever
+                // listener gets here first, and CreateNamedPipe with that flag
+                // fails with ACCESS_DENIED if a sibling listener created its
+                // plain instance in between (one ERR line at every start from
+                // 14:36 on 2026-09-30, four Task.Run listeners racing).
+                NamedPipeServerStream pipe;
+                lock (_createLock)
+                {
+                    pipe = Create();
+                }
+
+                using NamedPipeServerStream _ = pipe;
 
                 await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
                 await ServeAsync(pipe, token).ConfigureAwait(false);
@@ -136,6 +147,10 @@ public sealed class PipeServer : IAsyncDisposable
     }
 
     private int _first;
+    private readonly object _createLock = new();
+
+    /// <summary>True once a listener failed to create or serve its instance (the logged ERR).</summary>
+    public bool Complained => Volatile.Read(ref _complained) != 0;
 
     private async Task ServeAsync(NamedPipeServerStream pipe, CancellationToken token)
     {

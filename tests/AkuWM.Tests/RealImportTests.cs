@@ -42,8 +42,9 @@ public class RealImportTests
         }
 
         // A checkout that exists but has lost the file IS a failure: that is
-        // the case this test is here to catch.
-        string path = Path.Combine(dotfiles, "templates", "windows", "DESK_W11", "glazewm", "config.yaml");
+        // the case this test is here to catch. Archived on 2026-09-30 (GlazeWM
+        // is gone from the desk); the importer keeps working on the record.
+        string path = Path.Combine(dotfiles, "templates", "windows", "DESK_W11", "archive", "glazewm-config.yaml");
         Assert.True(File.Exists(path), path);
         return path;
     }

@@ -102,3 +102,29 @@ public class PipeTests
         await asked.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 }
+
+/// <summary>
+/// Four listeners start at once. On Windows the first-created instance carries
+/// FirstPipeInstance, and a sibling creating its plain instance first made
+/// that one fail with ACCESS_DENIED (an ERR at every daemon start, 2026-09-30).
+/// Linux has no such flag, so this proves the race is gone only where the
+/// Windows job runs it; here it proves the serialisation costs nothing.
+/// </summary>
+public class PipeListenerRaceTests
+{
+    [Fact]
+    public async Task Four_listeners_starting_together_never_complain()
+    {
+        for (int round = 0; round < 25; round++)
+        {
+            using var dir = new TempDir();
+            string name = "akuwm-race-" + Guid.NewGuid().ToString("n")[..12];
+            var paths = new ConfigPaths(dir.Path, "TEST", dir.Path);
+            await using var server = new PipeServer(new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => true)), name);
+            server.Start(instances: 4);
+            Assert.True(new PipeClient(name).Send("version").Success);
+            await Task.Delay(20);
+            Assert.False(server.Complained, $"a listener complained in round {round}");
+        }
+    }
+}
