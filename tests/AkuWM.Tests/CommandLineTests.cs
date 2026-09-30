@@ -47,5 +47,11 @@ public class CommandLineTests
         Assert.Equal(("C:\\Program Files\\ShareX\\ShareX.exe", "-workflow \"Hyper+Shift+C\""),
             CommandLine.Program("\"C:\\Program Files\\ShareX\\ShareX.exe\" -workflow \"Hyper+Shift+C\""));
         Assert.Equal((string.Empty, string.Empty), CommandLine.Program("  "));
+
+        // An unquoted path with spaces that exists is the whole file.
+        string lnk = "C:\\Users\\d\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Zebar.lnk";
+        Assert.Equal((lnk, string.Empty), CommandLine.Program(lnk, exists: path => path == lnk));
+        Assert.Equal(("C:\\Users\\d\\AppData\\Roaming\\Microsoft\\Windows\\Start", "Menu\\Programs\\Startup\\Zebar.lnk"),
+            CommandLine.Program(lnk, exists: _ => false));
     }
 }

@@ -208,6 +208,18 @@ internal static class Win32Decorations
                 return false;
             }
 
+            // A window with a classic menu bar keeps its caption. Notepad++
+            // in dark mode paints the menu bar dark from its non-client
+            // handlers; without WS_CAPTION the bar came out white
+            // (240,240,240), and DrawMenuBar, RedrawWindow(RDW_FRAME) and
+            // WM_NCACTIVATE did not bring it back -- only the style did
+            // (measured 2026-09-30 13:08). A white menu bar is worse than a
+            // title bar.
+            if (!PInvoke.GetMenu(hwnd).IsNull)
+            {
+                return false;
+            }
+
             Captions[key] = style;
             style &= ~WsCaption;
         }

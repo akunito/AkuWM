@@ -31,8 +31,9 @@ public static class CommandLine
     /// its argument was looked up as one file name and "cannot be found"
     /// (the settings window's startup entry, every start, 2026-09-30).
     /// </summary>
-    public static (string File, string Arguments) Program(string command)
+    public static (string File, string Arguments) Program(string command, Func<string, bool>? exists = null)
     {
+        exists ??= System.IO.File.Exists;
         // The arguments are passed on as written, quotes and all: the program
         // receiving them parses its own command line, and re-quoting could
         // only change what it sees.
@@ -40,6 +41,15 @@ public static class CommandLine
         if (line.Length == 0)
         {
             return (string.Empty, string.Empty);
+        }
+
+        // An unquoted path with spaces is a file, not a program and its
+        // arguments: the Startup-folder shortcuts the importer wrote live
+        // under "Start Menu\Programs\Startup", and splitting at the first
+        // space left ShareX and Zebar unstarted (2026-09-30 13:04).
+        if (line[0] != '"' && line.IndexOf(' ') >= 0 && exists(line))
+        {
+            return (line, string.Empty);
         }
 
         int end;
