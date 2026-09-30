@@ -1,91 +1,134 @@
 # AkuWM
 
-A tiling window manager for Windows 11 that is also its own hotkey daemon and
-its own configuration UI — one MIT application in place of three programs that
-had to agree with each other.
+A tiling window manager for Windows 11 with its own settings window and its
+own CLI: one MIT application, one process, one configuration, with the desk's
+tooling (a hotkey script, a bar, a few ops panels for the home lab) hanging
+off it instead of standing next to it.
 
-**Status: M6 landed (2026-09-30).** AkuWM has had the desk since 2026-09-21:
-tiling and floating layouts on named workspaces bound to monitors by EDID,
-sticky windows, fullscreen handling built for games, a signed `uiAccess`
-install so chords work over elevated windows, a GlazeWM-compatible IPC and
-`glazewm` shim so the existing AutoHotkey script and Zebar kept working
-unchanged, and a settings window (`akuwm-gui.exe`, `Hyper+S`) with fourteen
-sections -- rules, startup, apps, windows, shortcuts, monitors, tools,
-profiles, git, nodes, docker, monitoring, log, doctor. The plan, milestone by
-milestone and with every measured Windows fact, lives in the dotfiles
-repository at `docs/akunito/infrastructure/desk-w11-akuwm-plan.md`.
+Built for one desk, and shaped by it: three monitors of three DPIs, a Sway
+keymap to keep, games with anti-cheat, and a NixOS in WSL where the
+configuration lives and the tests run.
+
+**Release: [v0.2.0](https://github.com/akunito/AkuWM/releases/latest)** (2026-09-30).
+
+## What it does
+
+- **Workspaces per monitor**, identified by EDID, so a monitor that naps and
+  comes back gets its own workspaces back. Ten per monitor, numbered the way
+  Sway's `swaysome` numbers them, switchable from the keyboard, the bar or the
+  settings window.
+- **Tiling and floating** in the same workspace: a layout tree with gaps,
+  splits, resize steps and a Sway keymap; floating windows above the tiled
+  ones; sticky windows shown on every workspace of their monitor.
+- **Rules by process, class or title**: float, tile, sticky, workspace, size,
+  ignore, and `anticheat`, which puts the desk in game mode while such a window
+  exists.
+- **Fullscreen for games**: a game keeps the screen, its frame timing is not
+  touched, and nothing is injected while it has the foreground. Measured with
+  PresentMon against the suite in `tests/fullscreen`. Read
+  [docs/input-and-anticheat.md](docs/input-and-anticheat.md) before playing
+  anything that watches your process list: the daemon observes input, never
+  fabricates it over a game, reads no other process's memory and has no macro
+  feature.
+- **Shortcuts as data**: `Hyper+<letter>` app toggles, launchers and settings
+  pages live in the configuration, are edited in the settings window, and
+  reach the hotkey script live (no reload, no chord lost).
+- **Startup entries** the daemon launches after its pipe answers, in order.
+- **A settings window** (`akuwm-gui.exe`, `Hyper+S`) with fourteen sections:
+  rules, startup, apps, windows, shortcuts, monitors, tools, profiles, git,
+  nodes, docker, monitoring, log, doctor. The last six are the home-lab panels:
+  configuration profiles with snapshots and diffs, git sync of the
+  configuration, ssh nodes, their Docker daemons, and a Prometheus/Grafana
+  dashboard.
+- **A CLI** (`akuwm-cli`) for all of it, including `doctor`, `rescue`,
+  `debug on|off`, `state`, `bench`, and the ops verbs (`profiles`, `git`,
+  `nodes`, `docker`, `monitor`).
+- **A way back**: every window it hides or moves is written down before the
+  change; `rescue`, a Desktop button, a watchdog, safe mode after two unclean
+  runs, and a boot script that only trusts a pipe that answers. See
+  [docs/recovery.md](docs/recovery.md).
 
 ## Installing
 
-From a GitHub release, on the machine that will run it (one UAC prompt: the
-daemon is signed there with a certificate that exists only there):
+On the machine that will run it, from any PowerShell (one UAC prompt: the
+daemon runs with `uiAccess` so chords work over elevated windows, and it is
+signed on the machine with a certificate that exists only there):
 
 ```powershell
 irm https://raw.githubusercontent.com/akunito/AkuWM/main/tools/bootstrap.ps1 | iex
 ```
 
-Or from a checkout: `powershell -ExecutionPolicy Bypass -File tools\bootstrap.ps1
-[-Tag v0.2.0]`. It downloads `akuwm-<tag>-win-x64.zip`, unpacks it into
-`%TEMP%\akuwm-uia` and runs `uia-install.ps1`, which stops the running daemon,
-signs and installs `akuwm.exe`, `akuwm-cli.exe` and `glazewm.exe` into
-`C:\Program Files\AkuWM`, puts `akuwm-gui.exe` into `%LOCALAPPDATA%\Programs\AkuWM`,
-points the Startup folder at the boot script and starts the daemon again.
-Getting the desk back if anything goes wrong: `docs/recovery.md`.
+The same line updates an existing install. From a checkout,
+`tools\bootstrap.ps1 [-Tag v0.2.0]` picks a release. What lands where:
 
-## Why
+| file | where | what |
+|---|---|---|
+| `akuwm.exe` | `C:\Program Files\AkuWM` | the daemon (signed, `uiAccess`); never run it from a shell except for `rescue` |
+| `akuwm-cli.exe` | `C:\Program Files\AkuWM` (on the PATH) | the client; every command in this README goes through it |
+| `akuwm-gui.exe` | `%LOCALAPPDATA%\Programs\AkuWM` | the settings window, started hidden at boot, `Hyper+S` shows it |
+| `akuwm-boot.ps1` | `%LOCALAPPDATA%\Programs\AkuWM` | what the Startup folder runs |
+| `akuwm-rescue.cmd` | Desktop shortcut "Rescue my desk (AkuWM)" | stops the daemon, gives every window back |
 
-The desk it replaces ran GlazeWM (the window manager), AutoHotkey (the chords,
-the app toggles, the layout repair) and a hand-edited configuration split
-across both. Every order one gave the other was a **47 ms** CLI round trip, and
-it acted on a state that could already be stale — half the bugs fixed in the
-week before this was started were exactly that. In one process those are
-function calls, and what is left is the Win32 work itself.
+State, logs and the journal: `%LOCALAPPDATA%\akuwm\`.
 
-## Layout
+## Configuration
+
+Two JSON layers in a git repository: `common.json` and `<PROFILE>.json` on top
+of it, found under `templates/windows/<PROFILE>/akuwm/` of the dotfiles
+checkout (`AKUWM_STATE_DIR` and `AKUWM_PROFILE` override the lookup). The
+daemon watches the files; the settings window and the CLI edit them by id,
+and `git sync` merges two machines' edits item by item.
+
+```sh
+akuwm-cli config show --layer effective
+akuwm-cli config validate
+akuwm-cli rules for --focused
+akuwm-cli query windows
+akuwm-cli profiles snapshot create "before the new monitor"
+akuwm-cli doctor
+```
+
+Sections: `general`, `gaps`, `effects`, `layout`, `monitors`, `workspaces`,
+`rules`, `shortcuts`, `startup`, `apps`, `nodes`, `settings`. An option the
+build reads but does not act on is reported as a warning at start, never as
+an error, and only when it is set.
+
+## Repository
 
 | project | what it is |
 |---|---|
-| `AkuWM.Core` | the configuration, the rule matcher, the importers, the model. No Win32, so it is unit-tested on Linux |
-| `AkuWM.Platform` | Win32, COM and DWM. `net8.0-windows`; the shape is here, the code lands at M1 |
-| `AkuWM.App` | the host: the pipe server, the commands, and from M2 the window manager and the IPC on 6123 |
-| `AkuWM.Cli` | the thin client the `glazewm` shim calls |
-| `AkuWM.Tests` | xUnit, Linux |
+| `src/AkuWM.Core` | configuration, rules, the desk model and layout, the pipe protocol, the ops (profiles, git, nodes, docker, prometheus). No Win32: unit-tested on Linux |
+| `src/AkuWM.Platform` | Win32, DWM, COM, the input hook, the display and power events (`net8.0-windows`) |
+| `src/AkuWM.App` | the daemon: the window-manager thread, the pipe server, the hotkey host, game mode |
+| `src/AkuWM.Cli` | the thin client |
+| `src/AkuWM.Gui` | the settings window (Avalonia, Rosé Pine) |
+| `src/AkuWM.Shim` | a compatibility shim for the bar and the hotkey script, until they speak the daemon's own protocol |
+| `tests/AkuWM.Tests` | xUnit, Linux and Windows |
+| `tests/AkuWM.Gui.Tests` | xUnit + Avalonia headless |
+| `tools/` | `bootstrap.ps1`, `uia-install.ps1` + `install-uiaccess.ps1`, `akuwm-boot.ps1`, the publish scripts, the licence tripwire |
+| `docs/` | recovery, input and anti-cheat, trimming |
+
+The driven suites that exercise a real desk (`tests/wm`, 190 cases through
+AutoHotkey; `tests/fullscreen`, 48 cases with PresentMon) live in the dotfiles
+repository next to the configuration, together with the plan that carries
+every measured Windows fact.
 
 ## Building
 
-From WSL or from Windows, with .NET 8:
+.NET 8, from WSL or from Windows:
 
 ```sh
 dotnet build AkuWM.sln
 dotnet test tests/AkuWM.Tests/AkuWM.Tests.csproj
-dotnet publish src/AkuWM.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+dotnet test tests/AkuWM.Gui.Tests/AkuWM.Gui.Tests.csproj
+tools/publish-uia.sh        # stages a signed install in %TEMP%\akuwm-uia; then uia-install.ps1
+tools/publish-dev.sh        # an unsigned daemon for the no-UAC dev loop
 ```
 
-On NixOS the SDK comes from the dotfiles flag `dotnetDevEnable`.
-
-## Using what exists
-
-```sh
-akuwm config import glazewm     # today's GlazeWM + AutoHotkey setup → common.json
-akuwm config validate
-akuwm doctor
-akuwm daemon                    # the pipe, and from M1 the window manager
-```
-
-The configuration is two JSON layers in the dotfiles repository —
-`templates/windows/DESK_W11/akuwm/common.json` and `DESK_W11.json` on top of it
-— found through `AKUWM_STATE_DIR`. Logs and the journal live in
-`%LOCALAPPDATA%\akuwm\`.
-
-## Games
-
-AkuWM watches the keyboard and runs with `uiAccess`, so it is worth knowing
-exactly what it does to input before playing anything with an anti-cheat:
-[docs/input-and-anticheat.md](docs/input-and-anticheat.md). The short version
-is that it observes, never fabricates input while a game is in front, never
-reads another process's memory, and has no macro features at all.
+A tag `v*` builds a release: tests, four single-file publishes, a check that
+the daemon carries the `uiAccess` manifest, a zip with a sha256.
 
 ## Licence
 
-MIT. AkuWM replaces GPL programs and contains no line of them; the procedure
-that keeps that true is in [LICENSING.md](LICENSING.md) and is checked in CI.
+MIT. The programs it replaced were GPL; AkuWM contains no line of them, and
+[LICENSING.md](LICENSING.md) is the procedure that keeps it so, checked in CI.
