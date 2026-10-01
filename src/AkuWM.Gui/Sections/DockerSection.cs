@@ -58,7 +58,7 @@ public sealed class DockerSection : Section
 
     protected override Control Build()
     {
-        var bar = Ui.Row(10, Ui.Field("node / daemon", _node), Ui.Button("Refresh", Load), Ui.Button("Disk usage", ShowDf), _note);
+        var bar = Ui.Row(10, Ui.Field("node / daemon", _node), Ui.Button("Refresh", () => Load()), Ui.Button("Disk usage", ShowDf), _note);
         bar.Margin = new Thickness(0, 0, 0, 10);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("380,16,*") };
         grid.Children.Add(new ScrollViewer { Content = _list });
@@ -93,16 +93,27 @@ public sealed class DockerSection : Section
         return node is null ? null : (node, parts[1]);
     }
 
-    public void Load()
+    /// <summary>The status line under the toolbar.</summary>
+    public string NoteText => _note.Text ?? string.Empty;
+
+    private Task? _inflight;
+
+    /// <returns>The render that follows the load, so a test can await it: the one in flight when a load is already running (Shown starts one), completed at once when nothing is selected.</returns>
+    public Task Load()
     {
-        if (_loading || Selected() is not (NodeConfig node, string daemon))
+        if (_loading)
         {
-            return;
+            return _inflight ?? Task.CompletedTask;
+        }
+
+        if (Selected() is not (NodeConfig node, string daemon))
+        {
+            return Task.CompletedTask;
         }
 
         _loading = true;
         _note.Text = $"reading {node.Id}/{daemon}…";
-        Task.Run(() => Docker.Containers(node, daemon)).ContinueWith(t =>
+        return _inflight = Task.Run(() => Docker.Containers(node, daemon)).ContinueWith(t =>
         {
             _loading = false;
             if (t.Status != TaskStatus.RanToCompletion)

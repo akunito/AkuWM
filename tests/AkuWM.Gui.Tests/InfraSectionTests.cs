@@ -85,17 +85,19 @@ public class InfraSectionTests
     }
 
     [AvaloniaFact]
-    public void Docker_lists_the_daemons_of_the_nodes_and_renders_containers()
+    public async Task Docker_lists_the_daemons_of_the_nodes_and_renders_containers()
     {
         using var f = new Fixture();
         var docker = new DockerSection(f.Services);
         Assert.Equal(["VPS_PROD/rootless"], docker.Targets());
         docker.Shown();
         NodeShell.Launcher = (_, remote, _) => new ShellRun(0, remote.Contains("ps -a") ? new JsonObject { ["ID"] = "abc", ["Names"] = "immich_server", ["Image"] = "immich", ["State"] = "running", ["Status"] = "Up", ["Labels"] = "com.docker.compose.project=immich" }.ToJsonString() + "\n" : "\n", string.Empty);
-        docker.Load();
-        // the load runs on a task: give the headless dispatcher the result by rendering what Docker returns directly
-        List<Container> cs = Docker.Containers(new NodeConfig { Id = "VPS_PROD", Ssh = "a@b", Daemons = ["rootless"] }, "rootless", withStats: false, withInspect: false);
-        Assert.Single(cs);
+        // The load runs on a task and renders on the dispatcher when it lands;
+        // the test awaits exactly that (the M6 note said this only proved the parse).
+        await docker.Load().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Single(docker.Containers);
+        Assert.Equal("immich_server", docker.Containers[0].Name);
+        Assert.Contains("1 container(s)", docker.NoteText);
         Assert.True(docker.View.IsVisible);
     }
 
