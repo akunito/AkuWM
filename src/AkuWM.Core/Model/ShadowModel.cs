@@ -162,6 +162,17 @@ public static class ShadowModel
             return (false, UnmanagedReason.Rule, ignored.Name ?? ignored.Id);
         }
 
+        // The shell's own surfaces are visible, titled, uncloaked top-level
+        // windows while they are up -- and the lock screen is up at every
+        // resume. 2026-10-01 10:15: "Windows Default Lock Screen" (LockApp,
+        // 3840x2160) was managed and tiled on the displayed workspace, then
+        // refused once the shell cloaked it again, and its slot stayed in the
+        // layout: every window opened there got two thirds of the monitor.
+        if (IsShellSurface(window))
+        {
+            return (false, UnmanagedReason.Shell, window.ProcessName);
+        }
+
         // A window the application itself cloaked is in the tray, not on the
         // desk. The shell's cloak is a different matter: that is how a
         // workspace is hidden, and those windows are still managed.
@@ -187,6 +198,19 @@ public static class ShadowModel
 
         return (true, UnmanagedReason.None, null);
     }
+
+    /// <summary>
+    /// A top-level CoreWindow is the shell's (an application's CoreWindow
+    /// reaches the desk as its ApplicationFrameHost window); the process list
+    /// covers the shell hosts that draw with other classes.
+    /// </summary>
+    public static bool IsShellSurface(WindowSnapshot window) =>
+        window.ClassName == "Windows.UI.Core.CoreWindow"
+        || window.ProcessName.Equals("LockApp", StringComparison.OrdinalIgnoreCase)
+        || window.ProcessName.Equals("ShellExperienceHost", StringComparison.OrdinalIgnoreCase)
+        || window.ProcessName.Equals("StartMenuExperienceHost", StringComparison.OrdinalIgnoreCase)
+        || window.ProcessName.Equals("SearchHost", StringComparison.OrdinalIgnoreCase)
+        || window.ProcessName.Equals("TextInputHost", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Minimised beats everything, then fullscreen, then what the rules and the

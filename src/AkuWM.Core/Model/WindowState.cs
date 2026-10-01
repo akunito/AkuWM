@@ -38,4 +38,12 @@ public enum UnmanagedReason
 
     /// <summary>AkuWM's own windows.</summary>
     Ours,
+
+    /// <summary>
+    /// A surface of the shell itself: the lock screen, Start, Search, the
+    /// notification toasts, the input experience. They are top-level
+    /// <c>Windows.UI.Core.CoreWindow</c>s (an application's CoreWindow sits
+    /// inside ApplicationFrameHost, which is what the desk sees instead).
+    /// </summary>
+    Shell,
 }
