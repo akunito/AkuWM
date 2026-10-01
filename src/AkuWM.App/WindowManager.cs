@@ -248,6 +248,9 @@ public sealed class WindowManager : IAsyncDisposable
         // Reload makes the second of the two a no-op.
         if (_paths is not null && Directory.Exists(_paths.ConfigDir))
         {
+            // What is in use now is the baseline: a save that changes nothing
+            // (an editor's Ctrl+S, a pull of the same bytes) is not a reload.
+            _configFingerprint = System.Text.Json.JsonSerializer.Serialize(_desk.Config);
             _configWatcher = new ConfigWatcher(_paths.ConfigDir, () => _loop.Post("configuration changed on disk", Reload));
         }
 
