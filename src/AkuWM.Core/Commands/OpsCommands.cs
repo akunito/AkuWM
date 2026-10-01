@@ -191,7 +191,11 @@ public sealed class OpsCommands
 
             case "commit":
                 {
-                    string message = options.GetValueOrDefault("m") ?? options.GetValueOrDefault("message") ?? (args.Length > 1 ? string.Join(' ', args[1..]) : "edited from the CLI");
+                    // `-m` is git's spelling and the one the help promises; the
+                    // shared parser only knows `--key`, so on 2026-10-01 the
+                    // first commit from the desk was titled "akuwm: -m akuwm: ...".
+                    string[] words = args.Length > 1 && args[1] == "-m" ? args[2..] : args[1..];
+                    string message = options.GetValueOrDefault("m") ?? options.GetValueOrDefault("message") ?? (words.Length > 0 ? string.Join(' ', words) : "edited from the CLI");
                     return CommandResponse.Ok(line, new { sha = git.Commit(git.StateFiles(), message) });
                 }
 

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
+using AkuWM.Core.Commands;
 using AkuWM.Core.Config;
 using AkuWM.Core.Git;
+using AkuWM.Core.Ipc;
 using Xunit;
 
 namespace AkuWM.Tests;
@@ -158,6 +160,30 @@ public class GitSyncRepoTests : IDisposable
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    /// <summary>
+    /// `git commit -m <words>` through the ops router against a real clone:
+    /// the message is the words, not "-m" and the words (the first commit
+    /// from the desk, 2026-10-01, read "akuwm: -m akuwm: k-sound notes ...").
+    /// </summary>
+    [Fact]
+    public void The_ops_router_commits_with_the_message_after_dash_m()
+    {
+        var paths = new ConfigPaths(Path.Combine(_a, Rel), "DESK_W11", Path.Combine(_tmp, "state-a"));
+        var router = new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => false), paths: paths);
+        File.AppendAllText(Path.Combine(_a, Rel, "common.json"), "\n");
+        CommandResponse r = router.Execute("git commit -m k-sound notes (the Git path)");
+        Assert.True(r.Success, r.Error);
+        Assert.NotNull(r.Data!["sha"]);
+        Assert.Equal("akuwm: k-sound notes (the Git path)", Git(_a, "log", "-1", "--format=%s").Trim());
+        File.AppendAllText(Path.Combine(_a, Rel, "common.json"), "\n");
+        // `--m` is the shared parser's spelling: one token, so the quotes carry the spaces.
+        Assert.True(router.Execute("git commit --m \"the long spelling\"").Success);
+        Assert.Equal("akuwm: the long spelling", Git(_a, "log", "-1", "--format=%s").Trim());
+        File.AppendAllText(Path.Combine(_a, Rel, "common.json"), "\n");
+        Assert.True(router.Execute("git commit").Success);
+        Assert.Equal("akuwm: edited from the CLI", Git(_a, "log", "-1", "--format=%s").Trim());
     }
 
     private static string Git(string cwd, params string[] args)
