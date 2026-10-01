@@ -49,6 +49,8 @@ public sealed class WindowManager : IAsyncDisposable
     /// <summary>What the desk looked like at the last redraw, to say what changed.</summary>
     private readonly GlazeEvents _events = new();
     private readonly ConfigPaths? _paths;
+    private ConfigWatcher? _configWatcher;
+    private string? _configFingerprint;
 
     /// <param name="manage">
     /// False leaves AkuWM watching: the model is kept up to date and every
@@ -239,6 +241,15 @@ public sealed class WindowManager : IAsyncDisposable
     {
         _loop.Start();
         _server.Start();
+
+        // Edits that arrive on disk -- a git pull into the clone, an editor,
+        // the settings window -- reload without anyone asking. The settings
+        // window still sends wm-reload-config itself; the fingerprint in
+        // Reload makes the second of the two a no-op.
+        if (_paths is not null && Directory.Exists(_paths.ConfigDir))
+        {
+            _configWatcher = new ConfigWatcher(_paths.ConfigDir, () => _loop.Post("configuration changed on disk", Reload));
+        }
 
         _hooks.Event += _loop.Enqueue;
         _hooks.Start();
@@ -620,12 +631,23 @@ public sealed class WindowManager : IAsyncDisposable
             return ExecResult.Fail(why);
         }
 
+        // The same effective configuration as last time is not a reload: the
+        // settings window's own wm-reload-config lands right after the file
+        // watcher's, and an editor's save of an unchanged file is nothing.
+        string fingerprint = System.Text.Json.JsonSerializer.Serialize(loaded.Effective);
+        if (fingerprint == _configFingerprint)
+        {
+            Log.Debug("configuration unchanged; nothing to reload");
+            return ExecResult.Ok(data: new JsonObject { ["unchanged"] = true });
+        }
+
         foreach (ValidationIssue issue in loaded.Validation.Warnings)
         {
             Log.Warn(issue.ToString());
         }
 
         Desk.ReloadResult result = _desk.Reload(loaded.Effective);
+        _configFingerprint = fingerprint;
         _dirty = true;
         Log.Info($"configuration reloaded: {result}");
 
@@ -667,6 +689,7 @@ public sealed class WindowManager : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _configWatcher?.Dispose();
         _reassert?.Dispose();
         _settle?.Dispose();
         _buttons?.Dispose();

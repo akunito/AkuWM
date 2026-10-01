@@ -849,6 +849,22 @@ public sealed partial class Desk
                 Logging.Log.Warn(
                     $"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" will not go to {frame} "
                     + $"(it is at {window.Snapshot.FrameBounds}); AkuWM has stopped asking");
+
+                // A tile that keeps its own size leaves a hole in the layout
+                // and sits on top of whatever the hole was meant to show:
+                // NordVPN, a fixed-size WPF window, stayed at 1230x952 inside
+                // a 1914x2118 slot and its modal ended up cloaked under it
+                // (handoff 2026-09-22). It is floated where it is, like a
+                // window that cannot be resized; the tree closes over the slot.
+                if (window.State == WindowState.Tiling && !LooksLikeAGame(window))
+                {
+                    window.FloatingRect = window.Snapshot.FrameBounds;
+                    if (SetFloating(window.Handle, floating: true, centred: false))
+                    {
+                        Logging.Log.Info($"{window.Snapshot.ProcessName} \"{window.Snapshot.Title}\" is floating where it is; the layout closes over its slot");
+                        Unsettled = true;
+                    }
+                }
             }
 
             return;

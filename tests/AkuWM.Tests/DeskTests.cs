@@ -527,9 +527,15 @@ public class DeskTests
         _fixture.Turn();
 
         // Asking again every time is an argument the window always wins, at
-        // the cost of a window manager that never stops working.
-        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
+        // the cost of a window manager that never stops working. The window
+        // is floated where it is and the layout closes over its slot: one
+        // more redraw gives the other tile the whole workspace, then quiet.
         Assert.True(_fixture.Managed(2)!.PlacementRefused);
+        Assert.Equal(WindowState.Floating, _fixture.Managed(2)!.State);
+        Assert.Equal(_fixture.FrameOf(2), _fixture.Managed(2)!.FloatingRect);
+        _fixture.Turn();
+        Assert.Equal(new Rect(0, 42, 3840, 2118), _fixture.FrameOf(1));
+        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
     }
 
     [Fact]
@@ -552,8 +558,12 @@ public class DeskTests
             _fixture.Turn();
         }
 
-        Assert.True(Desk.Compute().IsNothing, Desk.Compute().ToString());
-        Assert.True(_fixture.Managed(2)!.PlacementRefused);
+        Redraw quiet = Desk.Compute();
+        Assert.True(quiet.IsNothing, quiet.ToString());
+        // Floated where it is, the window IS where it should be: the refusal
+        // resolved itself, and the flag is clear for the next real request.
+        Assert.Equal(WindowState.Floating, _fixture.Managed(2)!.State);
+        Assert.False(_fixture.Managed(2)!.PlacementRefused);
     }
 
     [Fact]
