@@ -185,10 +185,29 @@ if (Test-Path $Shim) {
 # entry name. Defaults: the siblings of the daemon being installed.
 if (-not $Cli) { $Cli = Join-Path (Split-Path $Source -Parent) 'akuwm-cli.exe' }
 if (-not $Gui) { $Gui = Join-Path (Split-Path $Source -Parent) 'akuwm-gui.exe' }
+# A copy over a running exe fails with "being used by another process". On
+# 2026-10-01 11:51 that was akuwm-cli.exe, run every five seconds by a script
+# waiting for the install to finish: the error was terminating, the installer
+# stopped before Startup and the restart, and the desk had no window manager
+# for eleven minutes. The two side files are retried and never fatal; the
+# daemon above is what matters, and it is stopped before it is copied.
+function CopyWithPatience([string] $from, [string] $to, [string] $what) {
+    for ($try = 1; $try -le 20; $try++) {
+        try {
+            Copy-Item $from $to -Force -ErrorAction Stop
+            Good "installed $to"
+            return $true
+        } catch [System.IO.IOException] {
+            if ($try -eq 1) { Note "$what is in use ($($_.Exception.Message.Trim())); waiting for it" }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    Note "$what could not be replaced after 10 s; the previous one stays at $to (run the installer again when nothing uses it)"
+    return $false
+}
 Step 'Installing akuwm-cli and the settings window'
 if (Test-Path $Cli) {
-    Copy-Item $Cli (Join-Path $Destination 'akuwm-cli.exe') -Force
-    Good "installed $(Join-Path $Destination 'akuwm-cli.exe')"
+    CopyWithPatience $Cli (Join-Path $Destination 'akuwm-cli.exe') 'akuwm-cli.exe' | Out-Null
 } else {
     Note "no akuwm-cli.exe at $Cli; skipped"
 }
@@ -198,8 +217,7 @@ if (Test-Path $Gui) {
     $guiTarget = Join-Path $guiDir 'akuwm-gui.exe'
     Get-Process -Name akuwm-gui -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
-    Copy-Item $Gui $guiTarget -Force
-    Good "installed $guiTarget"
+    CopyWithPatience $Gui $guiTarget 'akuwm-gui.exe' | Out-Null
 } else {
     Note "no akuwm-gui.exe at $Gui; the settings window is not installed"
 }

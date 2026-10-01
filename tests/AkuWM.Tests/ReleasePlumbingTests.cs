@@ -67,6 +67,16 @@ public class ReleasePlumbingTests
         string installer = Text("tools/install-uiaccess.ps1");
         Assert.Contains("'akuwm-cli.exe'", installer);
         Assert.Contains("'akuwm-gui.exe'", installer);
+        // The side files are copied with patience and never fatally: a
+        // client running at the wrong moment ended the install before the
+        // restart (2026-10-01 11:51), and the staging script restarts the
+        // daemon in a finally.
+        Assert.Contains("function CopyWithPatience", installer);
+        Assert.Contains("CopyWithPatience $Cli", installer);
+        Assert.Contains("CopyWithPatience $Gui", installer);
+        string uiaInstall = Text("tools/uia-install.ps1");
+        Assert.Contains("} finally {", uiaInstall);
+        Assert.Contains("Startup\\AkuWM.lnk", uiaInstall);
         Assert.Contains("Programs\\AkuWM", installer);
         string staging = Text("tools/publish-uia.sh");
         Assert.Contains("publish src/AkuWM.Gui akuwm-gui.exe false", staging);

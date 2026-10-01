@@ -24,9 +24,17 @@ if (Get-Process akuwm -ErrorAction SilentlyContinue) {
     $t = 0; while ((Get-Process akuwm -ErrorAction SilentlyContinue) -and $t -lt 60) { Start-Sleep -Milliseconds 500; $t++ }
     "daemon gone after {0} ms" -f ($t * 500)
 }
-& "$here\tools\install-uiaccess.ps1" -Source "$here\akuwm.exe" -Shim "$here\glazewm.exe" -Force
-"installer exit code $LASTEXITCODE"
-explorer.exe "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\AkuWM.lnk"
+# Whatever the installer does, the daemon comes back: a terminating error
+# inside it (a locked akuwm-cli.exe, 2026-10-01 11:51) ended this script
+# before the restart and left the desk without a window manager.
+try {
+    & "$here\tools\install-uiaccess.ps1" -Source "$here\akuwm.exe" -Shim "$here\glazewm.exe" -Force
+    "installer exit code $LASTEXITCODE"
+} catch {
+    "installer failed: $_"
+} finally {
+    explorer.exe "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\AkuWM.lnk"
+}
 $t = 0; while (-not (Get-Process akuwm -ErrorAction SilentlyContinue) -and $t -lt 60) { Start-Sleep -Milliseconds 500; $t++ }
 Start-Sleep -Seconds 5
 Get-Process akuwm -ErrorAction SilentlyContinue | Select-Object Id, Path | Format-Table -AutoSize | Out-String
