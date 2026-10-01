@@ -16,9 +16,20 @@ param(
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$api = if ($Tag) { "https://api.github.com/repos/$Repo/releases/tags/$Tag" } else { "https://api.github.com/repos/$Repo/releases/latest" }
-Write-Host "==> Asking GitHub for $(if ($Tag) { $Tag } else { 'the latest release' }) of $Repo" -ForegroundColor Cyan
-$release = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'akuwm-bootstrap' }
+# Not /releases/latest: eighteen minutes after v0.2.4 was published it still
+# answered v0.2.3 (2026-10-01 13:03), and the desk reinstalled the old one.
+# The list is current; the newest published, non-draft, non-prerelease wins.
+$headers = @{ 'User-Agent' = 'akuwm-bootstrap'; 'Cache-Control' = 'no-cache' }
+Write-Host "==> Asking GitHub for $(if ($Tag) { $Tag } else { 'the newest release' }) of $Repo" -ForegroundColor Cyan
+if ($Tag) {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag" -Headers $headers
+} else {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=10" -Headers $headers |
+        Where-Object { -not $_.draft -and -not $_.prerelease } |
+        Sort-Object { [datetime]$_.published_at } -Descending |
+        Select-Object -First 1
+    if (-not $release) { throw "no published release found for $Repo" }
+}
 $asset = $release.assets | Where-Object { $_.name -like 'akuwm-*-win-x64.zip' } | Select-Object -First 1
 if (-not $asset) { throw "release $($release.tag_name) has no akuwm-*-win-x64.zip asset" }
 Write-Host "    $($release.tag_name): $($asset.name) ($([math]::Round($asset.size / 1MB)) MB)"
@@ -29,7 +40,7 @@ if (Test-Path $Into) { Remove-Item $Into -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $Into | Out-Null
 $zip = Join-Path $env:TEMP $asset.name
 Write-Host "==> Downloading to $zip" -ForegroundColor Cyan
-Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ 'User-Agent' = 'akuwm-bootstrap' }
+Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers $headers
 Write-Host "==> Unpacking into $Into" -ForegroundColor Cyan
 Expand-Archive -Path $zip -DestinationPath $Into -Force
 Remove-Item $zip -ErrorAction SilentlyContinue
