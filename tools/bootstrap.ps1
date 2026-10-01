@@ -24,7 +24,9 @@ Write-Host "==> Asking GitHub for $(if ($Tag) { $Tag } else { 'the newest releas
 if ($Tag) {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag" -Headers $headers
 } else {
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=10" -Headers $headers |
+    # PowerShell 5.1 hands a JSON array to the pipeline as ONE object; @() unrolls it.
+    $all = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=10" -Headers $headers
+    $release = @($all) |
         Where-Object { -not $_.draft -and -not $_.prerelease } |
         Sort-Object { [datetime]$_.published_at } -Descending |
         Select-Object -First 1
