@@ -9,7 +9,7 @@ Built for one desk, and shaped by it: three monitors of three DPIs, a Sway
 keymap to keep, games with anti-cheat, and a NixOS in WSL where the
 configuration lives and the tests run.
 
-**Release: [v0.2.0](https://github.com/akunito/AkuWM/releases/latest)** (2026-09-30).
+**Release: [v0.2.1](https://github.com/akunito/AkuWM/releases/latest)** (2026-09-30).
 
 ## What it does
 
@@ -59,7 +59,7 @@ irm https://raw.githubusercontent.com/akunito/AkuWM/main/tools/bootstrap.ps1 | i
 ```
 
 The same line updates an existing install. From a checkout,
-`tools\bootstrap.ps1 [-Tag v0.2.0]` picks a release. What lands where:
+`tools\bootstrap.ps1 [-Tag v0.2.1]` picks a release. What lands where:
 
 | file | where | what |
 |---|---|---|
