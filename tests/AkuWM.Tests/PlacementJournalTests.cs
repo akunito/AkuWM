@@ -170,3 +170,41 @@ public class PlacementJournalTests
         Assert.Equal(1, journal.Count);
     }
 }
+
+/// <summary>
+/// Windows recycles window handles within seconds. On 2026-10-01 a fliptest
+/// born with a dead fliptest's handle recalled the dead one's workspace from
+/// the journal and went fullscreen on the vertical monitor (tests/fullscreen
+/// 8-gamelike, four red). A closed window's place dies with it.
+/// </summary>
+public class RecycledHandleTests
+{
+    [Fact]
+    public void A_new_window_with_a_dead_windows_handle_opens_under_the_pointer_not_where_the_dead_one_was()
+    {
+        using var dir = new TempDir();
+        var journal = new PlacementJournal(dir.File("placements.bin"));
+        var f = new DeskFixture();
+        f.Desk.RemembersPlacementsWith(journal);
+        f.Open(1);
+        f.Turn();
+        // The first fliptest is moved to the vertical monitor's workspace and
+        // the journal writes that down.
+        f.Open(7, "fliptest", className: "FlipTestWnd", title: "fliptest");
+        f.Turn();
+        Assert.True(f.Desk.MoveToWorkspace(new WindowHandle(7), "22"));
+        f.Turn();
+        Assert.Equal("22", f.Managed(7)!.Workspace);
+        Assert.NotNull(journal.Recall(new WindowHandle(7), "fliptest"));
+
+        // It closes; a second fliptest gets the same handle while the pointer
+        // rests on the main monitor.
+        f.Close(7);
+        Assert.Null(journal.Recall(new WindowHandle(7), "fliptest"));
+        f.Platform.Cursor = (100, 100);
+        f.Open(7, "fliptest", className: "FlipTestWnd", title: "fliptest");
+        f.Turn();
+
+        Assert.Equal("11", f.Managed(7)!.Workspace);
+    }
+}

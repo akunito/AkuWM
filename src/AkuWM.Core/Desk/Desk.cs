@@ -906,6 +906,7 @@ public sealed partial class Desk
             && _placements?.Recall(snapshot.Handle, snapshot.ProcessName) is { } remembered
             && Recall(window, remembered))
         {
+            Log.Debug(() => $"  recalled {snapshot.Handle} {snapshot.ProcessName} to {(remembered.StickyTo is { } s ? "sticky on " + s : "workspace " + remembered.Workspace)} from the journal");
             return window;
         }
 
@@ -1598,6 +1599,12 @@ public sealed partial class Desk
         }
 
         RememberApp(window);
+
+        // Its place dies with it. Windows recycles handles within seconds: a
+        // fliptest born with a dead fliptest's handle recalled the dead one's
+        // workspace and went fullscreen on the vertical monitor (tests/fullscreen
+        // 8-gamelike, 2026-10-01: four red, 0% direct, rect 3840,-991 1440x2560).
+        _placements?.Forget(handle);
 
         // Said out loud: a window closing while AkuWM had it hidden is a
         // window the person may not know is gone.
