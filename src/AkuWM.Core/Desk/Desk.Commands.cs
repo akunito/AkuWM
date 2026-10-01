@@ -567,6 +567,7 @@ public sealed partial class Desk
         {
             workspace.Floating.Remove(handle);
             window.State = WindowState.Tiling;
+            EvictFromOtherTrees(window, workspace);
             workspace.Tiling.Add(handle, workspace.LastFocused, DirectionFor(workspace));
         }
 

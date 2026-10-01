@@ -783,6 +783,8 @@ public sealed partial class Desk
             }
         }
 
+        AuditTrees();
+
         // Only now is "where the person is looking" a question with an
         // answer: before the first sync every window is new.
         if (first)
@@ -1500,6 +1502,89 @@ public sealed partial class Desk
     }
 
     /// <summary>Lets go of a window that has closed.</summary>
+    /// <summary>
+    /// A window lives in one tiling tree: the one of the workspace it says it
+    /// is on. On 2026-10-01 Notepad++ sat in the trees of 12 and 14 at once
+    /// (laid out with 14's windows, listed under 12 by the compat view, which
+    /// dedupes): two windows opened on 14 got the right two thirds of the
+    /// monitor, three full runs of tests/wm in a row. No unit scenario
+    /// reproduces the path, so the invariant is enforced where a slot is
+    /// taken and re-checked at every Sync, and the log names the trees.
+    /// </summary>
+    private void EvictFromOtherTrees(DeskWindow window, Workspace keep)
+    {
+        foreach (Workspace other in _workspaces.Values)
+        {
+            if (!ReferenceEquals(other, keep) && other.Tiling.Contains(window.Handle))
+            {
+                other.Tiling.Remove(window.Handle);
+                Log.Warn($"layout: {window.Handle} {window.Snapshot.ProcessName} was still in the tiling tree of {other.Name} while taking a slot on {keep.Name}; evicted");
+            }
+        }
+    }
+
+    private void AuditTrees()
+    {
+        foreach (Workspace workspace in _workspaces.Values)
+        {
+            List<WindowHandle>? wrong = null;
+            foreach (WindowHandle handle in workspace.Tiling.Windows)
+            {
+                DeskWindow? window = Window(handle);
+                if (window is null)
+                {
+                    Log.Warn($"layout: {handle} is in the tiling tree of {workspace.Name} but is no window of this desk; removed");
+                    (wrong ??= []).Add(handle);
+                }
+                else if (window.Workspace is { } says && !string.Equals(says, workspace.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Warn($"layout: {handle} {window.Snapshot.ProcessName} is in the tiling tree of {workspace.Name} but says it is on {says}; removed from {workspace.Name}");
+                    (wrong ??= []).Add(handle);
+                }
+            }
+
+            if (wrong is not null)
+            {
+                for (int i = 0; i < wrong.Count; i++)
+                {
+                    workspace.Tiling.Remove(wrong[i]);
+                }
+            }
+        }
+    }
+
+    /// <summary>Every workspace's layers, for <c>debug layout</c>.</summary>
+    public object LayoutDump()
+    {
+        var workspaces = new List<object>();
+        foreach (Workspace workspace in _workspaces.Values)
+        {
+            var tiling = new List<object>();
+            foreach (WindowHandle handle in workspace.Tiling.Windows)
+            {
+                DeskWindow? window = Window(handle);
+                tiling.Add(new { handle = handle.Value, process = window?.Snapshot.ProcessName, title = window?.Snapshot.Title, says = window?.Workspace, managed = window?.Managed, state = window?.State.ToString() });
+            }
+
+            if (tiling.Count == 0 && workspace.Floating.Count == 0 && workspace.Fullscreen.IsNone)
+            {
+                continue;
+            }
+
+            workspaces.Add(new
+            {
+                name = workspace.Name,
+                monitor = workspace.MonitorRole,
+                displayed = workspace.Displayed,
+                tiling,
+                floating = workspace.Floating.Select(h => new { handle = h.Value, process = Window(h)?.Snapshot.ProcessName, says = Window(h)?.Workspace }).ToList(),
+                fullscreen = workspace.Fullscreen.IsNone ? null : (long?)workspace.Fullscreen.Value,
+            });
+        }
+
+        return new { workspaces };
+    }
+
     public void Forget(WindowHandle handle)
     {
         if (!_windows.Remove(handle, out DeskWindow? window))
@@ -1922,6 +2007,7 @@ public sealed partial class Desk
         }
 
         window.Workspace = workspace.Name;
+        EvictFromOtherTrees(window, workspace);
 
         switch (window.State)
         {

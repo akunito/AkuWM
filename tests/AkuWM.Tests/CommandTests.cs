@@ -223,6 +223,14 @@ public class DebugCommandTests
             Assert.False(AkuWM.Core.Logging.Log.DebugOn);
             Assert.False(router.Execute("debug sideways").Success);
             Assert.False(new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => false)).Execute("debug on").Success);
+            // layout: the desk's trees, only where there is a desk to ask.
+            CommandResponse noDesk = router.Execute("debug layout");
+            Assert.False(noDesk.Success);
+            Assert.Contains("needs the daemon", noDesk.Error);
+            var withDesk = new CommandRouter(new ConfigCommands(paths), new DoctorCommand(paths, () => false), debug: new DebugCommand(paths, () => new { workspaces = new[] { new { name = "11" } } }));
+            CommandResponse layout = withDesk.Execute("debug layout");
+            Assert.True(layout.Success, layout.Error);
+            Assert.Equal("11", layout.Data!["workspaces"]![0]!["name"]!.GetValue<string>());
         }
         finally
         {

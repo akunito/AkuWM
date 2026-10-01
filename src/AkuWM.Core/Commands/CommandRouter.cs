@@ -179,7 +179,7 @@ public sealed class CommandRouter
         "config import glazewm [--from <config.yaml>] [--ahk <hyper-desktops.ahk>] [--startup-dir <dir>] [--dry-run] [--force]",
         .. OpsCommands.Help,
         "doctor",
-        "debug on|off|status          (the daemon's log level, live, and the marker its next start reads)",
+        "debug on|off|status|layout   (the daemon's log level, live, and the marker its next start reads; layout = every workspace's trees)",
         "version",
         "help",
         "exit",

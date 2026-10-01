@@ -165,6 +165,7 @@ public sealed class DeskFixture
     public Redraw Turn()
     {
         Redraw redraw = Desk.Compute();
+        AssertOneTreePerWindow();
 
         // Before the placements, exactly as DeskApplier does it.
         foreach (WindowHandle handle in redraw.Restore)
@@ -282,6 +283,35 @@ public sealed class DeskFixture
         Platform.Window(new WindowHandle(handle))!.Cloak.HasFlag(CloakKind.Shell);
 
     public DeskWindow? Managed(long handle) => Desk.Window(new WindowHandle(handle));
+
+    /// <summary>
+    /// A window lives in at most one workspace's tiling tree, and in the tree
+    /// of the workspace it says it is on. On the desk (2026-10-01) Notepad++
+    /// sat in the trees of 12 and 14 at once: laid out with 14's windows,
+    /// listed under 12 by the compat view (which dedupes), two test windows
+    /// on 14 got two thirds of the monitor and nobody could see why.
+    /// </summary>
+    public void AssertOneTreePerWindow()
+    {
+        var seen = new Dictionary<WindowHandle, string>();
+        foreach (Workspace workspace in Desk.Workspaces)
+        {
+            foreach (WindowHandle handle in workspace.Tiling.Windows)
+            {
+                if (seen.TryGetValue(handle, out string? other))
+                {
+                    throw new Xunit.Sdk.XunitException($"window {handle} is in the tiling trees of both {other} and {workspace.Name}");
+                }
+
+                seen[handle] = workspace.Name;
+                string? says = Desk.Window(handle)?.Workspace;
+                if (says is not null && !string.Equals(says, workspace.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Xunit.Sdk.XunitException($"window {handle} is in the tiling tree of {workspace.Name} but says it is on {says}");
+                }
+            }
+        }
+    }
 
     public static WindowHandle W(long handle) => new(handle);
 }
