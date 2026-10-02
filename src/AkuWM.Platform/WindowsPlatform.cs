@@ -4,6 +4,7 @@ using AkuWM.Core.Platform;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.HiDpi;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace AkuWM.Platform;
 
@@ -172,6 +173,28 @@ public sealed class WindowsPlatform : IPlatform, IPlatformActions, IDisposable
     }
 
     public WindowHandle Foreground() => new(PInvoke.GetForegroundWindow().Value);
+
+    public bool IsLightDismissPopup(WindowHandle handle) => Win32Windows.IsLightDismissPopup(new HWND((IntPtr)handle.Value));
+
+    /// <summary>
+    /// Session-only (fWinIni 0): the registry keeps what the person set with
+    /// focus-follows-mouse.ps1, and a daemon that dies mid-pause leaves no
+    /// permanent trace -- the next logon reads the registry again.
+    /// </summary>
+    public unsafe bool ActiveWindowTracking
+    {
+        get
+        {
+            BOOL on = false;
+            return PInvoke.SystemParametersInfo(SYSTEM_PARAMETERS_INFO_ACTION.SPI_GETACTIVEWINDOWTRACKING, 0, &on, 0) && on;
+        }
+
+        set
+        {
+            // For SPI_SETACTIVEWINDOWTRACKING the value travels IN the pointer.
+            PInvoke.SystemParametersInfo(SYSTEM_PARAMETERS_INFO_ACTION.SPI_SETACTIVEWINDOWTRACKING, 0, (void*)(nint)(value ? 1 : 0), 0);
+        }
+    }
 
     public (int X, int Y) CursorPosition() =>
         PInvoke.GetCursorPos(out System.Drawing.Point point) ? (point.X, point.Y) : (0, 0);

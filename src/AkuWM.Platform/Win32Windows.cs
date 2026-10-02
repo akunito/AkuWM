@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using AkuWM.Core.Logging;
 using AkuWM.Core.Model;
 using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
@@ -121,6 +122,37 @@ public static class Win32Windows
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The shape of a light-dismiss surface: a visible, owner-less, top-level
+    /// window that is topmost AND a tool window (so never a candidate for the
+    /// desk). The "Open with" dialog measured 2026-10-02: style 0x14c00000 =
+    /// VISIBLE|CLIPSIBLINGS|CAPTION (not a WS_POPUP -- the first version asked
+    /// for that and never matched), ex-style 0x200188 =
+    /// NOREDIRECTIONBITMAP|WINDOWEDGE|TOOLWINDOW|TOPMOST, owner 0, class
+    /// "Open With". Menus (#32768) are popups with the same ex-style.
+    /// </summary>
+    internal static bool IsLightDismissPopup(HWND hwnd)
+    {
+        // Not IsWindowVisible: the foreground event arrives before the dialog
+        // is shown (measured 2026-10-02 13:33: no shape at all for it, the
+        // early return), and the foreground window is about to be visible by
+        // definition.
+        if (hwnd.IsNull || !PInvoke.IsWindow(hwnd))
+        {
+            return false;
+        }
+
+        var style = (WINDOW_STYLE)(uint)PInvoke.GetWindowLongPtr(hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+        var exStyle = (WINDOW_EX_STYLE)(uint)PInvoke.GetWindowLongPtr(hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        HWND owner = PInvoke.GetWindow(hwnd, GET_WINDOW_CMD.GW_OWNER);
+        bool popup = !style.HasFlag(WINDOW_STYLE.WS_CHILD)
+            && exStyle.HasFlag(WINDOW_EX_STYLE.WS_EX_TOPMOST)
+            && exStyle.HasFlag(WINDOW_EX_STYLE.WS_EX_TOOLWINDOW)
+            && owner.IsNull;
+        Log.Debug(() => $"  shape of 0x{hwnd.Value:x}: style 0x{(uint)style:x} ex 0x{(uint)exStyle:x} owner 0x{owner.Value:x} -> light-dismiss {popup}");
+        return popup;
     }
 
     internal static WindowSnapshot? Read(HWND hwnd)

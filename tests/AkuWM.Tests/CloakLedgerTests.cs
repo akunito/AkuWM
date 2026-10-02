@@ -8,6 +8,8 @@ namespace AkuWM.Tests;
 /// <summary>A platform whose cloak calls can be made to succeed or refuse.</summary>
 internal sealed class FakeActions : IPlatformActions
 {
+    public bool ActiveWindowTracking { get; set; } = true;
+
     private readonly FakePlatform _platform;
 
     public FakeActions(FakePlatform platform) => _platform = platform;

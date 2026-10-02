@@ -195,6 +195,8 @@ public class LedgerAuditTests
     /// <summary>Actions whose first cloak makes the window vanish.</summary>
     private sealed class ClosesOnCloak(FakePlatform platform, long handle) : Core.Platform.IPlatformActions
     {
+        public bool ActiveWindowTracking { get; set; } = true;
+
         public string? SetCloak(WindowHandle window, bool cloaked)
         {
             if (window.Value == handle)

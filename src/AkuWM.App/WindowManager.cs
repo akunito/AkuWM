@@ -50,6 +50,7 @@ public sealed class WindowManager : IAsyncDisposable
     private readonly GlazeEvents _events = new();
     private readonly ConfigPaths? _paths;
     private ConfigWatcher? _configWatcher;
+    private readonly LightDismissGuard _lightDismiss;
     private string? _configFingerprint;
 
     /// <param name="manage">
@@ -70,6 +71,10 @@ public sealed class WindowManager : IAsyncDisposable
     {
         _paths = paths;
         _platform = platform;
+        _lightDismiss = new LightDismissGuard(
+            platform.IsLightDismissPopup,
+            () => platform.ActiveWindowTracking,
+            on => platform.ActiveWindowTracking = on);
         _journal = journal;
         _applier = new DeskApplier(
             platform, platform, ledger, journal, _taskbar, ImmersiveShell.EveryUncloak);
@@ -79,6 +84,8 @@ public sealed class WindowManager : IAsyncDisposable
         {
             CanPositionElevated = Win32Token.HasUiAccess(),
         };
+
+        _desk.Forgotten += _lightDismiss.WindowGone;
 
         _applier.ReadsFrom(h => _desk.Window(h)?.Snapshot);
 
@@ -350,6 +357,12 @@ public sealed class WindowManager : IAsyncDisposable
                 // Dirty either way: a focus change moves nothing, and the bar
                 // still has to be told. Desk.Focus has already asked for the
                 // keyboard back when it refused.
+                // A light-dismiss popup (the "Open with" dialog, a menu) in
+                // front: Windows' own focus-follows-mouse would close it the
+                // moment the pointer crossed another window, so it is paused
+                // until the foreground moves on (2026-10-02).
+                _lightDismiss.ForegroundChanged(platformEvent.Handle, _desk.Window(platformEvent.Handle) is { Managed: true });
+
                 if (!_desk.Focus(platformEvent.Handle))
                 {
                     Log.Debug(() => $"refused the focus for {platformEvent.Handle} (hidden, or a window moved under a still pointer)");
@@ -692,6 +705,7 @@ public sealed class WindowManager : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _lightDismiss.Resume();
         _configWatcher?.Dispose();
         _reassert?.Dispose();
         _settle?.Dispose();

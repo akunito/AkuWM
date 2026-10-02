@@ -43,6 +43,12 @@ public sealed class FakePlatform : IPlatform, IPlatformActions
 
     public (int X, int Y) CursorPosition() => Cursor;
 
+    public HashSet<long> LightDismiss { get; } = [];
+
+    public bool IsLightDismissPopup(WindowHandle handle) => LightDismiss.Contains(handle.Value);
+
+    public bool ActiveWindowTracking { get; set; } = true;
+
     // ---- the half that changes things -------------------------------------
     // It really changes them: the fake desk is mutated, so a test can assert
     // where a window ended up instead of which calls were made. A restore that

@@ -37,6 +37,14 @@ public interface IPlatform
 
     /// <summary>Where the pointer is, in virtual-screen pixels.</summary>
     (int X, int Y) CursorPosition();
+
+    /// <summary>
+    /// A visible, owner-less top-level window that is topmost and a tool window: the
+    /// shape of a light-dismiss surface (the "Open with" dialog, menus, the
+    /// shell's flyouts). Such a window closes when it loses the foreground,
+    /// so the desk pauses native focus-follows-mouse while it has it.
+    /// </summary>
+    bool IsLightDismissPopup(WindowHandle handle);
 }
 
 /// <summary>
@@ -50,6 +58,9 @@ public interface IPlatform
 /// </remarks>
 public interface IPlatformActions
 {
+    /// <summary>Windows' own focus-follows-mouse (SPI_[GS]ETACTIVEWINDOWTRACKING), for the session only.</summary>
+    bool ActiveWindowTracking { get; set; }
+
     /// <summary>Hides or shows a window through the shell's cloak.</summary>
     /// <returns>Null on success, or why it failed.</returns>
     string? SetCloak(WindowHandle window, bool cloaked);
