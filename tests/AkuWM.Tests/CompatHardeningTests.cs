@@ -16,6 +16,7 @@ namespace AkuWM.Tests;
 /// The bar's socket and the pipe against a client that is hostile, or merely
 /// broken (security audit 2026-09-22).
 /// </summary>
+[Collection("LoopbackPorts")] // each probes a free port and binds it a moment later: in parallel two classes got the same one (CI 2026-10-02, "Address already in use")
 public class CompatHardeningTests
 {
     private static int FreePort()

@@ -13,6 +13,7 @@ namespace AkuWM.Tests;
 /// WebSocket client -- which is the only way to know the handshake, written by
 /// hand here, is one a client will accept.
 /// </summary>
+[Collection("LoopbackPorts")] // each probes a free port and binds it a moment later: in parallel two classes got the same one (CI 2026-10-02, "Address already in use")
 public class GlazeIpcServerTests
 {
     private static int FreePort()

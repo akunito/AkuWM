@@ -14,6 +14,7 @@ namespace AkuWM.Tests;
 /// read from Zebar's source. A change that stops answering one of them fails
 /// here, on Linux, instead of on the desk.
 /// </summary>
+[Collection("LoopbackPorts")] // each probes a free port and binds it a moment later: in parallel two classes got the same one (CI 2026-10-02, "Address already in use")
 public class ZebarCaptureTests
 {
     private readonly DeskFixture _fixture = new();

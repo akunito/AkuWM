@@ -13,6 +13,7 @@ namespace AkuWM.Tests;
 /// The capture that turns what the bar asks for into a file the tests can
 /// replay.
 /// </summary>
+[Collection("LoopbackPorts")] // each probes a free port and binds it a moment later: in parallel two classes got the same one (CI 2026-10-02, "Address already in use")
 public class TrafficCaptureTests : IDisposable
 {
     private readonly string _dir = Path.Combine(
