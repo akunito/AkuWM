@@ -490,6 +490,11 @@ public static class ConfigValidator
                 {
                     issues.Add(ValidationIssue.Error(path + ".actions", "'float' and 'tile' contradict each other"));
                 }
+
+                if (rule.Actions.Contains("center") && rule.Actions.Contains("tile"))
+                {
+                    issues.Add(ValidationIssue.Error(path + ".actions", "'center' floats the window, so it contradicts 'tile'"));
+                }
             }
 
             if (rule.Target is { } target)

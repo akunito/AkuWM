@@ -901,7 +901,8 @@ public sealed partial class Desk
 
         // What the previous run had it as, unless a rule names a workspace:
         // the desk a person arranged survives a restart of the daemon.
-        if (decision.Target?.Workspace is not { Length: > 0 }
+        if (!decision.Centre
+            && decision.Target?.Workspace is not { Length: > 0 }
             && decision.Target?.Monitor is not { Length: > 0 }
             && _placements?.Recall(snapshot.Handle, snapshot.ProcessName) is { } remembered
             && Recall(window, remembered))
@@ -921,7 +922,18 @@ public sealed partial class Desk
         // The second level of rules: what the person did to the last window
         // of this application, when no rule of theirs speaks. Not during the
         // first sync -- those windows are where they are.
-        if (Settled && workspace is not null && MonitorOf(workspace) is { } on)
+        if (decision.Centre && workspace is not null && MonitorOf(workspace) is { } looking)
+        {
+            // Its own size, in the middle of the screen the person is on --
+            // never the app memory's last place, never the corner its host
+            // gave it on another monitor.
+            window.FloatingRect = CentredAtItsOwnSize(looking.TilingArea, snapshot.FrameBounds);
+            if (MonitorByHandle(snapshot.Monitor) is { } born && !ReferenceEquals(born, looking))
+            {
+                window.CrossedAt = Now; // another DPI: the rescale that follows is not a resize
+            }
+        }
+        else if (Settled && workspace is not null && MonitorOf(workspace) is { } on)
         {
             RecallApp(window, snapshot, on);
         }
@@ -932,6 +944,13 @@ public sealed partial class Desk
         }
 
         return window;
+    }
+
+    private static Rect CentredAtItsOwnSize(Rect area, Rect frame)
+    {
+        int width = Math.Min(frame.Width, area.Width);
+        int height = Math.Min(frame.Height, area.Height);
+        return new Rect(area.X + ((area.Width - width) / 2), area.Y + ((area.Height - height) / 2), width, height);
     }
 
     private State.PlacementJournal? _placements;

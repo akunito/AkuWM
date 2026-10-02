@@ -34,6 +34,15 @@ public sealed record ManagedWindow
 
     /// <summary>A rule with the <c>anticheat</c> action fired: the hotkey process stays away while it exists.</summary>
     public bool AntiCheat { get; init; }
+
+    /// <summary>
+    /// A rule with the <c>center</c> action fired: the window floats at its
+    /// own size, centred on the monitor the person is looking at. For dialogs
+    /// that are born wherever their host puts them -- the WSLg sudo askpass
+    /// (msrdc) appeared on the portrait monitor, was tiled to the whole
+    /// screen, and Diego never saw it (2026-10-02).
+    /// </summary>
+    public bool Centre { get; init; }
 }
 
 /// <summary>The whole desk, as AkuWM sees it at one instant.</summary>
@@ -135,6 +144,7 @@ public static class ShadowModel
             Rules = fired.Select(r => r.Name ?? r.Id ?? "?").ToList(),
             Target = fired.FirstOrDefault(r => r.Target is not null)?.Target,
             AntiCheat = actions.Contains("anticheat"),
+            Centre = actions.Contains("center"),
         };
     }
 
@@ -234,7 +244,7 @@ public static class ShadowModel
             return WindowState.Fullscreen;
         }
 
-        if (actions.Contains("float"))
+        if (actions.Contains("float") || actions.Contains("center"))
         {
             return WindowState.Floating;
         }
