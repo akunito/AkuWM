@@ -51,6 +51,7 @@ public sealed class WindowManager : IAsyncDisposable
     private readonly ConfigPaths? _paths;
     private ConfigWatcher? _configWatcher;
     private readonly LightDismissGuard _lightDismiss;
+    private readonly ElevationPromptRaiser _elevation;
     private string? _configFingerprint;
 
     /// <param name="manage">
@@ -86,6 +87,19 @@ public sealed class WindowManager : IAsyncDisposable
         };
 
         _desk.Forgotten += _lightDismiss.WindowGone;
+
+        // The UAC prompts nobody saw (a shield on the other monitor's taskbar):
+        // raised as they appear, except into a game.
+        _elevation = new ElevationPromptRaiser(
+            Win32Windows.IsPendingElevationPrompt,
+            () => _desk.Window(_platform.Foreground()) is { } front && (_desk.LooksLikeAGame(front) || front.Marked),
+            handle =>
+            {
+                if (!Win32Windows.RaiseElevationPrompt(handle))
+                {
+                    Log.Warn($"elevation prompt {handle}: the restore message was refused");
+                }
+            });
 
         _applier.ReadsFrom(h => _desk.Window(h)?.Snapshot);
 
@@ -271,8 +285,18 @@ public sealed class WindowManager : IAsyncDisposable
             IReadOnlyList<MonitorSnapshot> screens = _platform.Monitors();
             _desk.SetMonitors(screens);
             _screens.Prime(screens);
-            _desk.Sync(_platform.Windows());
+            IReadOnlyList<WindowSnapshot> windows = _platform.Windows();
+            _desk.Sync(windows);
             _desk.Focus(_platform.Foreground());
+
+            // A prompt parked before the daemon started is still waiting.
+            for (int i = 0; i < windows.Count; i++)
+            {
+                if (windows[i].IsMinimized)
+                {
+                    _elevation.Seen(windows[i].Handle);
+                }
+            }
 
             Log.Info($"adopted {_desk}");
             foreach (DeskMonitor monitor in _desk.Monitors)
@@ -302,6 +326,21 @@ public sealed class WindowManager : IAsyncDisposable
             }
 
             return;
+        }
+
+        // Before the gates below: the parked prompt is minimised, and what
+        // the desk does with it does not matter.
+        switch (platformEvent.Kind)
+        {
+            case PlatformEventKind.WindowShown or PlatformEventKind.WindowMinimizeStart:
+                _elevation.Seen(platformEvent.Handle);
+                break;
+            case PlatformEventKind.WindowDestroyed when _elevation.Watching:
+                _elevation.WindowGone(platformEvent.Handle);
+                break;
+            case PlatformEventKind.ForegroundChanged:
+                _elevation.ForegroundChanged();
+                break;
         }
 
         switch (WmEvents.Decide(platformEvent.Kind))

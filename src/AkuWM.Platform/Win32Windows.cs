@@ -155,6 +155,33 @@ public static class Win32Windows
         return popup;
     }
 
+    /// <summary>The class of the window consent.exe parks on the taskbar instead of showing the prompt.</summary>
+    private const string InterimElevationClass = "$$$Secure UAP Dummy Window Class For Interim Dialog";
+
+    /// <summary>
+    /// An elevation prompt that Windows kept off the secure desktop because
+    /// the request came with a window that was not in front: minimised, of
+    /// consent.exe's interim class. IsIconic first: this runs on every show
+    /// event, and almost nothing is shown minimised.
+    /// </summary>
+    public static bool IsPendingElevationPrompt(WindowHandle handle)
+    {
+        var hwnd = new HWND((IntPtr)handle.Value);
+        return PInvoke.IsIconic(hwnd) && ClassOf(hwnd) == InterimElevationClass;
+    }
+
+    /// <summary>
+    /// What a click on the shield does. ShowWindow(SW_RESTORE) and
+    /// SetForegroundWindow leave it minimised (measured 2026-10-02, with and
+    /// without uiAccess); this message brought the secure desktop in 250 ms.
+    /// </summary>
+    public static bool RaiseElevationPrompt(WindowHandle handle)
+    {
+        const uint WmSysCommand = 0x0112;
+        const nuint ScRestore = 0xF120;
+        return PInvoke.PostMessage(new HWND((IntPtr)handle.Value), WmSysCommand, new WPARAM(ScRestore), default);
+    }
+
     internal static WindowSnapshot? Read(HWND hwnd)
     {
         if (!PInvoke.IsWindow(hwnd))
