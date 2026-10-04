@@ -30,6 +30,23 @@ internal sealed class FakeDeskPlatform : IDeskPlatform
     public void Close(WindowHandle window) => Calls.Add($"close {window.Value}");
 
     public void Exec(string command) => Calls.Add($"exec {command}");
+
+    /// <summary>Null = no capture device on this fake.</summary>
+    public bool? Microphone { get; set; } = false;
+
+    public bool? ToggleMicrophone(out string? error)
+    {
+        Calls.Add("toggle-mic");
+        if (Microphone is null)
+        {
+            error = "there is no capture device";
+            return null;
+        }
+
+        error = null;
+        Microphone = !Microphone.Value;
+        return Microphone;
+    }
 }
 
 /// <summary>
@@ -47,6 +64,36 @@ public class CompatTests
 
     private static string Compact(JsonNode? node) =>
         node?.ToJsonString(new JsonSerializerOptions { WriteIndented = false }) ?? "null";
+
+    // ---- the microphone ---------------------------------------------------
+
+    [Fact]
+    public void Toggle_mic_flips_the_microphone_and_says_so()
+    {
+        ExecResult off = _executor.Command("toggle-mic");
+        ExecResult on = _executor.Command("toggle-mic");
+
+        Assert.True(off.Success);
+        Assert.True(on.Success);
+        Assert.Equal(2, _platform.Calls.Count(c => c == "toggle-mic"));
+        Assert.True(off.Data!["muted"]!.GetValue<bool>());
+        Assert.Equal("Microphone off", off.Data!["osd"]!.GetValue<string>());
+        Assert.False(on.Data!["muted"]!.GetValue<bool>());
+        Assert.Equal("Microphone on", on.Data!["osd"]!.GetValue<string>());
+        Assert.False(_platform.Microphone);
+    }
+
+    [Fact]
+    public void Toggle_mic_fails_with_the_reason_when_there_is_no_microphone()
+    {
+        _platform.Microphone = null;
+
+        ExecResult result = _executor.Command("toggle-mic");
+
+        Assert.False(result.Success);
+        Assert.Contains("no capture device", result.Error);
+        Assert.Null(result.Data);
+    }
 
     // ---- the drag verbs ---------------------------------------------------
 

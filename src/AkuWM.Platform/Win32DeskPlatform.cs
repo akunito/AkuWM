@@ -50,4 +50,6 @@ public sealed class Win32DeskPlatform : IDeskPlatform
             Log.Warn($"could not run '{command}': {ex.Message}");
         }
     }
+
+    public bool? ToggleMicrophone(out string? error) => Win32Audio.ToggleMicrophone(out error);
 }

@@ -153,3 +153,12 @@ SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS
 FindWindowW
 FindWindowExW
 GetMenu
+
+// --- the microphone (toggle-mic) -----------------------------------------
+MMDeviceEnumerator
+IMMDeviceEnumerator
+IMMDevice
+IAudioEndpointVolume
+EDataFlow
+ERole
+CLSCTX

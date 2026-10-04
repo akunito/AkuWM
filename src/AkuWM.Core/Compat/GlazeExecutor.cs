@@ -18,6 +18,13 @@ public interface IDeskPlatform
     void Close(WindowHandle window);
 
     void Exec(string command);
+
+    /// <summary>
+    /// Mutes the default microphone if it is live, unmutes it if it is muted.
+    /// Returns the new state, or null with the reason when there is no capture
+    /// device or Core Audio refused.
+    /// </summary>
+    bool? ToggleMicrophone(out string? error);
 }
 
 /// <param name="Success">Whether the command was carried out.</param>
@@ -280,6 +287,20 @@ public sealed class GlazeExecutor
             case "shell-exec":
                 _platform.Exec(string.Join(' ', parsed.Positional));
                 return ExecResult.Ok();
+
+            // AkuWM's own: Windows has no key and no on-screen sign for the
+            // microphone (Win+Alt+K only works inside a call app that opted
+            // in), so the chord asks the daemon and the AutoHotkey shows the
+            // "osd" text of the reply.
+            case "toggle-mic":
+                bool? muted = _platform.ToggleMicrophone(out string? micError);
+                return muted is null
+                    ? ExecResult.Fail(micError ?? "the microphone could not be toggled")
+                    : ExecResult.Ok(data: new JsonObject
+                    {
+                        ["muted"] = muted.Value,
+                        ["osd"] = muted.Value ? "Microphone off" : "Microphone on",
+                    });
 
             case "wm-redraw":
                 // The redraw happens because the command ran at all: every
